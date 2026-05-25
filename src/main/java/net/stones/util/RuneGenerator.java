@@ -128,9 +128,6 @@ public class RuneGenerator {
             loot.add(combinedVanillaLoot.get(i));
         }
 
-        // ==========================================
-        // 3. KRIMINELLER LOOT (Tier 10+)
-        // ==========================================
         if (tier >= 10) {
             // Lade ALLE registrierten Items (Minecraft Vanilla + Alle Mods)
             List<Item> allItems = ForgeRegistries.ITEMS.getValues().stream()
@@ -150,12 +147,14 @@ public class RuneGenerator {
                     crazyStack.setCount(1 + random.nextInt(maxSize));
                 }
 
-                // Wenn das zufällige Item verzauberbar ist (Rüstung/Waffen/Werkzeuge),
-                // hauen wir richtig drauf.
-                if (crazyStack.isEnchantable()) {
+				if (crazyStack.isEnchantable()) {
                     // Verzauberungs-Level skaliert absurd in die Höhe (30 bis 100+)
-                    int crazyEnchantLevel = 30 + random.nextInt(tier * 5); 
-                    crazyStack = EnchantmentHelper.enchantItem(random, crazyStack, crazyEnchantLevel, true);
+                    int crazyEnchantLevel = 30 + random.nextInt(tier * 5);
+                    try {
+                        // FIX: Try-Catch fängt kaputte Fremd-Mods ab, die keine hohen Level vertragen
+                        crazyStack = EnchantmentHelper.enchantItem(random, crazyStack, crazyEnchantLevel, true);
+                    } catch (Exception e) {
+                    }
                 }
                 
                 loot.add(crazyStack);

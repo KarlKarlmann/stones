@@ -44,6 +44,14 @@ import net.stones.logic.RuneCalculator;
 import net.stones.util.ClusterTooltipHandler;
 import org.joml.Matrix4f;
 
+// --- NEUE IMPORTS FÜR DEN BINDUNGS-CHECK ---
+import net.stones.cap.PlayerShrineCapProvider;
+import net.stones.block.entity.RunestoneBlockEntity;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.core.GlobalPos;
+import net.minecraft.world.phys.Vec3;
+
 import java.awt.Color;
 import java.util.*;
 
@@ -51,6 +59,7 @@ public class RunestoneScreen extends AbstractContainerScreen<RunestoneMenu> {
 
     // Texturen
     private static final ResourceLocation BG_NEBULA = new ResourceLocation("stones", "textures/gui/shrine_nebula.png");
+    private static final ResourceLocation BG_STONE = new ResourceLocation("stones", "textures/block/runestone.png"); // Block Textur
     private static final ResourceLocation SLOT_MINOR = new ResourceLocation("stones", "textures/gui/slot_minor.png");
     private static final ResourceLocation SLOT_MAJOR = new ResourceLocation("stones", "textures/gui/slot_major.png");
     private static final ResourceLocation SLOT_MILESTONE = new ResourceLocation("stones", "textures/gui/slot_milestone.png");
@@ -66,6 +75,7 @@ public class RunestoneScreen extends AbstractContainerScreen<RunestoneMenu> {
     private static final float STAR_FIELD_RADIUS = 1200.0f; 
 
     private List<Vec2> cachedPositions;
+    private List<int[]> cachedConnections; // Cache für die Ley-Linien
     private List<Integer> sortedIndices;
     private double scrollX = 0;
     private double scrollY = 0;
@@ -82,6 +92,28 @@ public class RunestoneScreen extends AbstractContainerScreen<RunestoneMenu> {
     private ResourceLocation lightNoiseLocation;
 
     private SimpleSoundInstance menuMusic;
+    
+    // Status der Seelenbindung
+    private boolean isBound = false;
+    private UUID viewedShrineId = null;
+
+    // --- KRYPTISCHE NACHRICHTEN (Erweitert auf 8 Übersetzungsschlüssel) ---
+    private static final String[] CRYPTIC_WHISPER_KEYS = {
+        "gui.stones.shrine.whisper.1",
+        "gui.stones.shrine.whisper.2",
+        "gui.stones.shrine.whisper.3",
+        "gui.stones.shrine.whisper.4",
+        "gui.stones.shrine.whisper.5",
+        "gui.stones.shrine.whisper.6",
+        "gui.stones.shrine.whisper.7",
+        "gui.stones.shrine.whisper.8"
+    };
+    private Component activeWhisper = Component.empty();
+
+    // --- Schreibmaschinen-Effekt Variablen ---
+    private int visibleChars = 0;
+    private long lastTickTime = 0;
+    private String rawWhisperText = "";
 
     public RunestoneScreen(RunestoneMenu menu, Inventory playerInventory, Component title) {
         super(menu, playerInventory, title);
@@ -97,8 +129,49 @@ public class RunestoneScreen extends AbstractContainerScreen<RunestoneMenu> {
             this.minecraft.getMusicManager().stopPlaying();
         }
 
+        // Einen zufälligen Spruch aus den Schlüsseln auswählen und als Roh-Text vorbereiten
+        String selectedKey = CRYPTIC_WHISPER_KEYS[new Random().nextInt(CRYPTIC_WHISPER_KEYS.length)];
+        this.rawWhisperText = Component.translatable(selectedKey).getString();
+        this.visibleChars = 0;
+        this.lastTickTime = System.currentTimeMillis();
+        this.activeWhisper = Component.literal("§7\"");
+
+        // --- 1. BINDUNGS-CHECK & SCHREIN ID ---
+        this.isBound = false;
+        this.viewedShrineId = null;
+        
+        if (this.minecraft != null && this.minecraft.player != null && this.minecraft.level != null) {
+            
+            // Raytrace, um die UUID des angeschauten Schreins zu holen
+            if (this.minecraft.hitResult instanceof BlockHitResult hit) {
+                BlockEntity be = this.minecraft.level.getBlockEntity(hit.getBlockPos());
+                if (be instanceof RunestoneBlockEntity rbe) {
+                    this.viewedShrineId = rbe.getShrineId();
+                }
+            }
+            
+            this.minecraft.player.getCapability(PlayerShrineCapProvider.SHRINE_LINK).ifPresent(cap -> {
+                UUID linkedId = cap.getLinkedShrine();
+                if (linkedId != null) {
+                    // Variante A: Stimmt die angeschaute ID überein?
+                    if (this.viewedShrineId != null && linkedId.equals(this.viewedShrineId)) {
+                        this.isBound = true;
+                    }
+                    // Variante B: Fallback (Steht er direkt an seinem eigenen Schrein?)
+                    if (!this.isBound) {
+                        GlobalPos shrinePos = cap.getShrinePos();
+                        if (shrinePos != null && shrinePos.dimension().equals(this.minecraft.level.dimension())) {
+                            double distSq = this.minecraft.player.distanceToSqr(Vec3.atCenterOf(shrinePos.pos()));
+                            if (distSq < 16.0) this.isBound = true; // Innerhalb von 4 Blöcken
+                        }
+                    }
+                }
+            });
+        }
+
         int runeCount = this.menu.layoutData.size();
         this.cachedPositions = ShrineLayout.generateSpiralPositions(runeCount);
+        this.cachedConnections = ShrineLayout.generateConnections(this.cachedPositions); // Linien cachen
         
         this.sortedIndices = new ArrayList<>(runeCount);
         for (int i = 0; i < runeCount; i++) this.sortedIndices.add(i);
@@ -139,7 +212,8 @@ public class RunestoneScreen extends AbstractContainerScreen<RunestoneMenu> {
             this.lightNoiseLocation = this.minecraft.getTextureManager().register("shrine_light_noise", this.lightNoiseTexture);
         }
 
-        if (this.menuMusic == null) {
+        // NUR MUSIK ABSPIELEN, WENN GEBUNDEN
+        if (this.menuMusic == null && this.isBound) {
             this.minecraft.getSoundManager().stop(null, SoundSource.MUSIC);
             this.menuMusic = new SimpleSoundInstance(
                 new ResourceLocation("stones", "music.shrine_ambient"),
@@ -163,9 +237,19 @@ public class RunestoneScreen extends AbstractContainerScreen<RunestoneMenu> {
             
             float requiredDiameter = (float)(2 * maxRadius); 
             this.zoom = minDimension / requiredDiameter;
+            
+            // Wenn der Spieler ungebunden ist, verkleinern wir das Layout leicht, damit es nicht mit dem Text oben kollidiert
+            if (!this.isBound) {
+                this.zoom *= 0.75f;
+            }
             this.zoom = Mth.clamp(this.zoom, 0.4f, 1.3f);
 
             double pixelOffset = (INVENTORY_TOP_Y / 2.0) - (this.imageHeight / 2.0);
+            
+            // Layout im ungebundenen Zustand für ein besseres Gesamtbild leicht nach unten schieben
+            if (!this.isBound) {
+                pixelOffset += 15.0;
+            }
             this.scrollY = pixelOffset / this.zoom;
         } else {
             this.zoom = DEFAULT_ZOOM;
@@ -194,7 +278,6 @@ public class RunestoneScreen extends AbstractContainerScreen<RunestoneMenu> {
 
     @Override
     public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
-        
         this.hoveredSlot = null;
         this.updateResonance(mouseX, mouseY);
 
@@ -222,8 +305,10 @@ public class RunestoneScreen extends AbstractContainerScreen<RunestoneMenu> {
             guiGraphics.pose().popPose();
         }
 
-        // 6. Stat Panel
-        this.renderStatsPanel(guiGraphics);
+        // 6. Stat Panel (Nur wenn gebunden)
+        if (this.isBound) {
+            this.renderStatsPanel(guiGraphics);
+        }
     }
 
     private void renderExperienceBar(GuiGraphics guiGraphics) {
@@ -269,13 +354,9 @@ public class RunestoneScreen extends AbstractContainerScreen<RunestoneMenu> {
         Map<Attribute, Boolean> isPercentage = new HashMap<>();
         List<Component> activeMilestones = new ArrayList<>();
         
-        // Wir erstellen einen temporären ItemHandler-Wrapper um die Slots des Menüs
-        // Damit können wir die zentrale Logik im RuneCalculator nutzen
         IItemHandler menuWrapper = new IItemHandler() {
             @Override public int getSlots() { return menu.slots.size(); }
             @Override public ItemStack getStackInSlot(int slot) { 
-                // Wir müssen aufpassen: menu.slots enthält auch Player Inventory!
-                // Das Layout Data definiert, welche Slots zum Schrein gehören.
                 if (slot < menu.layoutData.size()) return menu.slots.get(slot).getItem();
                 return ItemStack.EMPTY;
             }
@@ -285,22 +366,15 @@ public class RunestoneScreen extends AbstractContainerScreen<RunestoneMenu> {
             @Override public boolean isItemValid(int slot, ItemStack stack) { return true; }
         };
 
-        // ZENTRALE LOGIK AUFRUFEN
         RuneCalculator.collectActiveRunes(menuWrapper, this.menu.layoutData, playerLevel, 
             (runeEnch, runeLevel, socketLevel, mult, mainSlot, subSlot) -> {
-                
-                // FALL A: Attribut
                 if (runeEnch.targetAttribute != null) {
                     try {
                         double val = RuneCalculator.calculateAttributeBonus(runeEnch, runeLevel, playerLevel, socketLevel, mult);
                         totals.put(runeEnch.targetAttribute, totals.getOrDefault(runeEnch.targetAttribute, 0.0) + val);
-                        
-                        if (runeEnch.operation != AttributeModifier.Operation.ADDITION) {
-                            isPercentage.put(runeEnch.targetAttribute, true);
-                        }
+                        if (runeEnch.operation != AttributeModifier.Operation.ADDITION) isPercentage.put(runeEnch.targetAttribute, true);
                     } catch (Exception ignored) {}
                 }
-                // FALL B: Milestone
                 else {
                     activeMilestones.add(runeEnch.getFullname(runeLevel));
                 }
@@ -315,86 +389,23 @@ public class RunestoneScreen extends AbstractContainerScreen<RunestoneMenu> {
         gui.drawString(this.font, Component.translatable("tooltip.stones.active_effects").withStyle(ChatFormatting.GOLD, ChatFormatting.BOLD), x, y, 0xFFFFFF);
         y += 12;
         
-        // 1. Attribute rendern
         for (Map.Entry<Attribute, Double> entry : totals.entrySet()) {
             double val = entry.getValue();
             boolean percent = isPercentage.getOrDefault(entry.getKey(), false);
-            
             String valStr;
             if (percent) valStr = String.format("+%.0f%%", val * 100);
             else valStr = String.format("+%.1f", val);
             
             Component name = Component.translatable(entry.getKey().getDescriptionId());
-            
             gui.drawString(this.font, "§a" + valStr + " §7" + name.getString(), x, y, 0xFFFFFF);
             y += 10;
         }
         
-        // 2. Milestones rendern
         if (!activeMilestones.isEmpty()) {
             if (!totals.isEmpty()) y += 4;
             for (Component milestoneName : activeMilestones) {
                 gui.drawString(this.font, "§d✦ " + milestoneName.getString(), x, y, 0xFFFFFF);
                 y += 10;
-            }
-        }
-    }
-
-    // --- HELPER FÜR STATS (Rekursiv) ---
-    
-    private void processClusterForStats(ItemStack stack, int playerLevel, int socketLevel, Map<Attribute, Double> totals, Map<Attribute, Boolean> isPercentage, List<Component> activeMilestones) {
-        // Lese Cluster Inventar (NBT oder Capability)
-        // Im GUI haben wir direkten Zugriff auf den Client-Stack, der hoffentlich gesynct ist (ClusterInventory NBT)
-        if (stack.hasTag() && stack.getTag().contains("ClusterInventory")) {
-            CompoundTag invTag = stack.getTag().getCompound("ClusterInventory");
-            ItemStackHandler handler = new ItemStackHandler();
-            handler.deserializeNBT(invTag);
-            
-            // Check Cluster Level Requirement
-            int clusterReq = getClusterRequirement(handler);
-            if (playerLevel < clusterReq) return;
-
-            for (int i = 0; i < handler.getSlots(); i++) {
-                ItemStack sub = handler.getStackInSlot(i);
-                if (!sub.isEmpty()) {
-                    processRuneForStats(sub, playerLevel, socketLevel, totals, isPercentage, activeMilestones);
-                }
-            }
-        }
-    }
-    
-    private int getClusterRequirement(ItemStackHandler handler) {
-        int maxLvl = 0;
-        int count = 0;
-        for(int i=0; i < handler.getSlots(); i++) {
-            ItemStack s = handler.getStackInSlot(i);
-            if(!s.isEmpty()) {
-                count++;
-                maxLvl = Math.max(maxLvl, RuneCalculator.getRequiredLevel(s));
-            }
-        }
-        return maxLvl + (count * 2);
-    }
-
-    private void processRuneForStats(ItemStack stack, int playerLevel, int socketLevel, Map<Attribute, Double> totals, Map<Attribute, Boolean> isPercentage, List<Component> activeMilestones) {
-        Map<Enchantment, Integer> enchants = EnchantmentHelper.getEnchantments(stack);
-        double mult = RuneCalculator.getAmplifyMultiplier(stack);
-
-        for (Map.Entry<Enchantment, Integer> entry : enchants.entrySet()) {
-            if (entry.getKey() instanceof RuneEnchantment runeEnch) {
-                if (runeEnch.targetAttribute != null) {
-                    try {
-                        double val = RuneCalculator.calculateAttributeBonus(runeEnch, entry.getValue(), playerLevel, socketLevel, mult);
-                        if (val != 0) {
-                            totals.put(runeEnch.targetAttribute, totals.getOrDefault(runeEnch.targetAttribute, 0.0) + val);
-                            if (runeEnch.operation != AttributeModifier.Operation.ADDITION) {
-                                isPercentage.put(runeEnch.targetAttribute, true);
-                            }
-                        }
-                    } catch (Exception ignored) {}
-                } else {
-                    activeMilestones.add(runeEnch.getFullname(entry.getValue()));
-                }
             }
         }
     }
@@ -415,6 +426,22 @@ public class RunestoneScreen extends AbstractContainerScreen<RunestoneMenu> {
         pose.translate(centerX, centerY, 0);
         pose.scale(zoom, zoom, 1.0f);
         pose.translate(scrollX, scrollY, 0);
+
+        // --- UNGEBUNDEN: TEXTUR DES BLOCKS ZEICHNEN ---
+        if (!this.isBound && this.viewedShrineId != null) {
+            ResourceLocation overlayTex = net.stones.client.renderer.ClientRunestoneTextureManager.getOrCreate(this.viewedShrineId);
+            if (overlayTex != null) {
+                RenderSystem.enableBlend();
+                RenderSystem.defaultBlendFunc();
+                RenderSystem.setShaderColor(1.0f, 1.0f, 1.0f, 1.0f);
+                
+                // Skaliere die 256px Textur passend auf die GUI-Geometrie (Scale 0.85 vom Block-Renderer kompensieren)
+                int texSize = (int)(256.0f / 0.85f);
+                int offset = -texSize / 2;
+                
+                gui.blit(overlayTex, offset, offset, 0, 0, texSize, texSize, texSize, texSize);
+            }
+        }
 
         int runeCount = this.menu.layoutData.size();
         long time = System.currentTimeMillis();
@@ -437,55 +464,62 @@ public class RunestoneScreen extends AbstractContainerScreen<RunestoneMenu> {
             boolean isResonating = activeResonanceIndices.contains(i);
             boolean isMilestone = (cfg.type == SlotType.MILESTONE);
 
-            ResourceLocation tex = SLOT_MINOR;
-            float baseScale = 1.0f;
-            switch (cfg.type) {
-                case MINOR -> { tex = SLOT_MINOR; baseScale = 1.0f; }
-                case MAJOR -> { tex = SLOT_MAJOR; baseScale = 1.2f; }
-                case MILESTONE -> { tex = SLOT_MILESTONE; baseScale = 1.5f; }
-            }
-
-            float baseBreath = (float) Math.sin(timeLoop * 0.002 + logicIndex * 0.1); 
-            float baseScaleMod = baseBreath * 0.02f; 
-            double wavePhase = timeLoop * 0.0006 - (logicIndex * 0.15);
-            double flareSine = Math.sin(wavePhase); 
-            float flare = (float) Math.pow((flareSine + 1.0) / 2.0, 60.0); 
-            float flareScaleMod = flare * 0.25f; 
-
-            float twinkleScale = 1.0f + baseScaleMod + flareScaleMod;
-            float resonanceScale = isHovered ? 1.15f : (isResonating ? 1.05f : 1.0f);
-            float finalScale = baseScale * resonanceScale * twinkleScale;
-
             pose.pushPose();
             pose.translate(pos.x, pos.y, 0.2f); 
-            pose.scale(finalScale, finalScale, 1.0f);
 
-            if (isHovered || isResonating || slot.hasItem() || isMilestone) {
-                float glowIntensity = isMilestone ? 1.5f : 1.0f;
-                if (isHovered) glowIntensity += 0.8f;
-                if (isResonating) glowIntensity += 0.4f;
-                if (flare > 0.1f) glowIntensity += flare * 1.0f;
-
-                float r = 0.0f, g = 0.8f, b = 1.0f;
-                if (isHovered || isResonating) {
-                    float hue = 0.5f + 0.15f * (float)Math.sin(time * 0.001); 
-                    int rgb = Color.HSBtoRGB(hue, 0.8f, 1.0f);
-                    r = ((rgb >> 16) & 0xFF) / 255f;
-                    g = ((rgb >> 8) & 0xFF) / 255f;
-                    b = (rgb & 0xFF) / 255f;
+            if (this.isBound) {
+                ResourceLocation tex = SLOT_MINOR;
+                float baseScale = 1.0f;
+                switch (cfg.type) {
+                    case MINOR -> { tex = SLOT_MINOR; baseScale = 1.0f; }
+                    case MAJOR -> { tex = SLOT_MAJOR; baseScale = 1.2f; }
+                    case MILESTONE -> { tex = SLOT_MILESTONE; baseScale = 1.5f; }
                 }
-                renderGlow(gui, 0, 0, glowIntensity, r, g, b);
+
+                // Animationen 
+                float baseBreath = (float) Math.sin(timeLoop * 0.002 + logicIndex * 0.1); 
+                float baseScaleMod = baseBreath * 0.02f; 
+                double wavePhase = timeLoop * 0.0006 - (logicIndex * 0.15);
+                double flareSine = Math.sin(wavePhase); 
+                float flare = (float) Math.pow((flareSine + 1.0) / 2.0, 60.0); 
+                float flareScaleMod = flare * 0.25f; 
+
+                float twinkleScale = 1.0f + baseScaleMod + flareScaleMod;
+                float resonanceScale = isHovered ? 1.15f : (isResonating ? 1.05f : 1.0f);
+                
+                float finalScale = baseScale * resonanceScale * twinkleScale;
+
+                pose.scale(finalScale, finalScale, 1.0f);
+
+                // Glow nur wenn gebunden!
+                if (isHovered || isResonating || slot.hasItem() || isMilestone) {
+                    float glowIntensity = isMilestone ? 1.5f : 1.0f;
+                    if (isHovered) glowIntensity += 0.8f;
+                    if (isResonating) glowIntensity += 0.4f;
+                    if (flare > 0.1f) glowIntensity += flare * 1.0f;
+
+                    float r = 0.0f, g = 0.8f, b = 1.0f;
+                    if (isHovered || isResonating) {
+                        float hue = 0.5f + 0.15f * (float)Math.sin(time * 0.001); 
+                        int rgb = Color.HSBtoRGB(hue, 0.8f, 1.0f);
+                        r = ((rgb >> 16) & 0xFF) / 255f;
+                        g = ((rgb >> 8) & 0xFF) / 255f;
+                        b = (rgb & 0xFF) / 255f;
+                    }
+                    renderGlow(gui, 0, 0, glowIntensity, r, g, b);
+                }
+
+                gui.blit(tex, -9, -9, 0, 0, 18, 18, 18, 18);
             }
 
-            gui.blit(tex, -9, -9, 0, 0, 18, 18, 18, 18);
-            
+            // Eingesetzte Steine zeichnen (IMMER, egal ob gebunden oder nicht)
             if (slot.hasItem()) {
                 ItemStack stack = slot.getItem();
                 gui.renderItem(stack, -8, -8);
                 gui.renderItemDecorations(this.font, stack, -8, -8);
             }
 
-            if (isHovered) {
+            if (isHovered && this.isBound) {
                 RenderSystem.disableDepthTest();
                 gui.fill(-8, -8, 8, 8, 0x80FFFFFF);
                 RenderSystem.enableDepthTest();
@@ -494,6 +528,26 @@ public class RunestoneScreen extends AbstractContainerScreen<RunestoneMenu> {
             pose.popPose();
         }
         pose.popPose();
+    }
+    
+    // Hilfsmethode zum Zeichnen der Linien
+    private void drawLine(GuiGraphics gui, float x1, float y1, float x2, float y2, int color) {
+        float a = ((color >> 24) & 0xFF) / 255.0F;
+        float r = ((color >> 16) & 0xFF) / 255.0F;
+        float g = ((color >> 8) & 0xFF) / 255.0F;
+        float b = (color & 0xFF) / 255.0F;
+
+        Tesselator tesselator = Tesselator.getInstance();
+        BufferBuilder bufferbuilder = tesselator.getBuilder();
+        RenderSystem.enableBlend();
+        RenderSystem.defaultBlendFunc();
+        RenderSystem.setShader(GameRenderer::getPositionColorShader);
+        Matrix4f matrix = gui.pose().last().pose();
+        bufferbuilder.begin(VertexFormat.Mode.DEBUG_LINES, DefaultVertexFormat.POSITION_COLOR);
+        bufferbuilder.vertex(matrix, x1, y1, 0).color(r, g, b, a).endVertex();
+        bufferbuilder.vertex(matrix, x2, y2, 0).color(r, g, b, a).endVertex();
+        tesselator.end();
+        RenderSystem.disableBlend();
     }
     
     private void renderPlayerInventory(GuiGraphics gui, int mx, int my) {
@@ -515,6 +569,29 @@ public class RunestoneScreen extends AbstractContainerScreen<RunestoneMenu> {
     }
     
     private void renderCosmos(GuiGraphics gui, int mx, int my) {
+        // --- UNGEBUNDEN: MATT-SCHWARZER HINTERGRUND ---
+        if (!this.isBound) {
+            gui.fill(0, 0, this.width, this.height, 0xFF050505);
+            
+            // Schreibmaschinen-Effekt Logik
+            long currentTime = System.currentTimeMillis();
+            if (visibleChars < rawWhisperText.length() && currentTime - lastTickTime > 40) {
+                visibleChars++;
+                lastTickTime = currentTime;
+                if (this.minecraft != null && this.minecraft.player != null) {
+                    this.minecraft.player.playSound(net.minecraft.sounds.SoundEvents.ENDERMAN_AMBIENT, 0.05f, 1.8f + (float) Math.random() * 0.4f);
+                }
+            }
+            
+            String currentText = rawWhisperText.substring(0, visibleChars);
+            this.activeWhisper = Component.literal("§7\"" + currentText + "\"");
+            
+            // Düsteres, geisterhaftes Text-Feedback via Language File
+            gui.drawCenteredString(this.font, Component.translatable("gui.stones.shrine.whisper_intro"), this.width / 2, 20, 0xFFFFFF);
+            gui.drawCenteredString(this.font, this.activeWhisper, this.width / 2, 35, 0xFFFFFF);
+            return;
+        }
+
         PoseStack pose = gui.pose();
         float cx = this.width / 2.0f;
         float cy = this.height / 2.0f;
@@ -685,16 +762,13 @@ public class RunestoneScreen extends AbstractContainerScreen<RunestoneMenu> {
                  
                  if (slot.hasItem()) {
                      ItemStack stack = slot.getItem();
-                     // FIX: Cluster Jewels speziell behandeln
                      if (stack.getItem() instanceof ClusterJewelItem) {
                          ClusterTooltipHandler.appendClusterInfo(stack, tooltip);
                      } else {
-                         // DELEGATION: Wir übergeben den spezifischen Sockel-Level.
                          StoneItem.addFullRuneTooltip(stack, tooltip, cfg.requiredLevel);
                      }
                  }
                  
-                 // Slot Informationen (immer sichtbar)
                  tooltip.add(Component.literal("Slot: ").withStyle(net.minecraft.ChatFormatting.GRAY)
                      .append(Component.literal(cfg.type.name()).withStyle(net.minecraft.ChatFormatting.GOLD))
                      .append(Component.literal(" (Lvl " + cfg.requiredLevel + ")").withStyle(net.minecraft.ChatFormatting.AQUA)));

@@ -125,9 +125,10 @@ public class RunestoneBlockEntity extends BlockEntity implements MenuProvider {
     public boolean isTextureDirty() { return textureDirty; }
     public void markTextureClean() { this.textureDirty = false; }
 
-    @Override
-    public Component getDisplayName() { return Component.literal("Runenschrein"); }
-
+@Override
+public Component getDisplayName() { 
+    return Component.translatable("container.stones.runestone"); 
+}
     @Nullable
     @Override
     public AbstractContainerMenu createMenu(int containerId, Inventory playerInventory, Player player) {

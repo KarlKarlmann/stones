@@ -3,17 +3,20 @@ package net.stones.client.gui;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.EditBox; 
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.stones.StonesMod;
 import net.stones.data.GlobalLeaderboardData;
 import net.stones.network.PacketClaimReward;
+import net.stones.network.PacketUpdateEpitaph;
 
 import java.util.List;
 
 /**
  * Der native Leaderboard-Screen.
- * Markiert den AKTUELLEN Run (den letzten Tod) im globalen Vergleich.
+ * Zeigt das Epitaph-Feld rechts auf der Zeile, wenn platziert.
+ * Zeigt links Infos zur Benötigten Punktzahl an, wenn nicht platziert.
  */
 public class ResonanceLeaderboardScreen extends Screen {
 
@@ -22,14 +25,26 @@ public class ResonanceLeaderboardScreen extends Screen {
     private final String currentPlayerName;
     private final int lastRunScore;
 
-    public ResonanceLeaderboardScreen(List<Integer> personal, List<GlobalLeaderboardData.LeaderboardEntry> global) {
-        super(Component.literal("Hall of Resonance"));
+    private EditBox epitaphBox;
+    private Button saveButton;
+    private String currentEpitaph = "";
+    private boolean isOnLeaderboard = false; 
+
+    public ResonanceLeaderboardScreen(List<Integer> personal, List<GlobalLeaderboardData.LeaderboardEntry> global, int lastRunScore) {
+        super(Component.translatable("gui.stones.leaderboard.title"));
         this.pendingScores = personal;
         this.globalEntries = global;
         this.currentPlayerName = Minecraft.getInstance().getUser().getName();
-        
-        // Der letzte Eintrag in der persönlichen Liste ist der Score des gerade beendeten Runs
-        this.lastRunScore = personal.isEmpty() ? -1 : personal.get(personal.size() - 1);
+        this.lastRunScore = lastRunScore;
+
+        boolean highlightedCurrent = false;
+        for (GlobalLeaderboardData.LeaderboardEntry entry : global) {
+            if (!highlightedCurrent && entry.name().equals(currentPlayerName) && entry.score() == lastRunScore) {
+                this.currentEpitaph = entry.deathReason();
+                this.isOnLeaderboard = true;
+                highlightedCurrent = true;
+            }
+        }
     }
 
     @Override
@@ -37,16 +52,50 @@ public class ResonanceLeaderboardScreen extends Screen {
         super.init();
         int centerX = this.width / 2;
         int centerY = this.height / 2;
+        int startY = centerY - 105; 
 
-        if (!pendingScores.isEmpty()) {
-            this.addRenderableWidget(Button.builder(Component.literal("§d§lALLES BEANSPRUCHEN"), (btn) -> {
-                StonesMod.PACKET_HANDLER.sendToServer(new PacketClaimReward());
-                this.onClose();
-            }).bounds(centerX - 100, centerY + 80, 200, 20).build());
+        if (this.isOnLeaderboard && this.lastRunScore != -1) {
+            boolean highlightedCurrent = false;
+            for (int i = 0; i < Math.min(globalEntries.size(), 10); i++) {
+                GlobalLeaderboardData.LeaderboardEntry entry = globalEntries.get(i);
+                boolean isCurrentRun = !highlightedCurrent && entry.name().equals(currentPlayerName) && entry.score() == lastRunScore;
+                
+                if (isCurrentRun) {
+                    highlightedCurrent = true;
+                    int entryY = startY + 15 + (i * 22);
+                    
+                    this.epitaphBox = this.addRenderableWidget(new EditBox(this.font, centerX + 25, entryY + 10, 110, 12, Component.translatable("gui.stones.leaderboard.epitaph_placeholder")));
+                    this.epitaphBox.setMaxLength(45);
+                    this.epitaphBox.setValue(this.currentEpitaph);
+
+                    this.saveButton = this.addRenderableWidget(Button.builder(Component.translatable("gui.stones.leaderboard.save_btn"), (btn) -> {
+                        String text = this.epitaphBox.getValue();
+                        StonesMod.PACKET_HANDLER.sendToServer(new PacketUpdateEpitaph(text, this.lastRunScore));
+                        btn.setMessage(Component.translatable("gui.stones.leaderboard.saved_marker")); 
+                        btn.active = false;
+                    }).bounds(centerX + 140, entryY + 9, 22, 12).build());
+                    
+                    break;
+                }
+            }
         }
 
-        this.addRenderableWidget(Button.builder(Component.literal("Zurück"), (btn) -> this.onClose())
-            .bounds(centerX - 100, centerY + 105, 200, 20).build());
+        if (!pendingScores.isEmpty()) {
+            this.addRenderableWidget(Button.builder(Component.translatable("gui.stones.leaderboard.claim_all"), (btn) -> {
+                if (this.isOnLeaderboard && this.saveButton != null && this.saveButton.active) {
+                    StonesMod.PACKET_HANDLER.sendToServer(new PacketUpdateEpitaph(this.epitaphBox.getValue(), this.lastRunScore));
+                }
+                StonesMod.PACKET_HANDLER.sendToServer(new PacketClaimReward());
+                this.onClose();
+            }).bounds(centerX - 150, centerY + 45, 140, 20).build());
+        }
+
+        this.addRenderableWidget(Button.builder(Component.translatable("gui.stones.leaderboard.back"), (btn) -> {
+            if (this.isOnLeaderboard && this.saveButton != null && this.saveButton.active) {
+                StonesMod.PACKET_HANDLER.sendToServer(new PacketUpdateEpitaph(this.epitaphBox.getValue(), this.lastRunScore));
+            }
+            this.onClose();
+        }).bounds(centerX - 150, centerY + 70, 140, 20).build());
     }
 
     @Override
@@ -54,50 +103,60 @@ public class ResonanceLeaderboardScreen extends Screen {
         this.renderBackground(gui);
         int centerX = this.width / 2;
         int centerY = this.height / 2;
+        int startY = centerY - 105;
 
-        gui.drawCenteredString(this.font, "§6§l=== HALL OF RESONANCE ===", centerX, centerY - 100, 0xFFFFFF);
+        gui.drawCenteredString(this.font, Component.translatable("gui.stones.leaderboard.header"), centerX, centerY - 120, 0xFFFFFF);
 
         // --- LINKS: DEINE BELOHNUNGEN ---
-        int startY = centerY - 60;
-        gui.drawString(this.font, "§dDeine Legacy-Boxen:", centerX - 140, startY, 0xFFFFFF);
+        gui.drawString(this.font, Component.translatable("gui.stones.leaderboard.personal_boxes"), centerX - 150, startY, 0xFFFFFF);
         if (pendingScores.isEmpty()) {
-            gui.drawString(this.font, "§8Keine Belohnungen.", centerX - 130, startY + 15, 0xFFFFFF);
+            gui.drawString(this.font, Component.translatable("gui.stones.leaderboard.no_rewards"), centerX - 140, startY + 15, 0xFFFFFF);
         } else {
-            for (int i = 0; i < Math.min(pendingScores.size(), 8); i++) {
+            for (int i = 0; i < Math.min(pendingScores.size(), 6); i++) {
                 int score = pendingScores.get(pendingScores.size() - 1 - i);
-                // Markierung für den allerneuesten Run in der persönlichen Liste
                 String prefix = (i == 0) ? "§b§l> " : "§7- ";
-                gui.drawString(this.font, prefix + score + " Pkt. §8(T" + (Math.min(5, (score/1000)+1)) + ")", centerX - 130, startY + 15 + (i * 10), 0xFFFFFF);
+                gui.drawString(this.font, Component.translatable("gui.stones.leaderboard.score_entry", prefix, score, (Math.min(5, (score / 1000) + 1))), centerX - 140, startY + 15 + (i * 10), 0xFFFFFF);
             }
         }
 
+        // Info-Text auf der linken Seite
+        if (this.isOnLeaderboard && this.epitaphBox != null) {
+            // Spieler ist auf dem Leaderboard
+            gui.drawString(this.font, Component.translatable("gui.stones.leaderboard.immortalized"), centerX - 150, centerY - 10, 0xFFFFFF);
+            gui.drawString(this.font, Component.translatable("gui.stones.leaderboard.write_inscription_line1"), centerX - 150, centerY, 0x888888);
+            gui.drawString(this.font, Component.translatable("gui.stones.leaderboard.write_inscription_line2"), centerX - 150, centerY + 10, 0x888888);
+        } else if (this.lastRunScore > 0) {
+            // Spieler hat einen Score, ist aber NICHT auf dem Leaderboard
+            gui.drawString(this.font, Component.translatable("gui.stones.leaderboard.not_placed_title"), centerX - 150, centerY - 10, 0xFF5555); 
+            gui.drawString(this.font, Component.translatable("gui.stones.leaderboard.your_score", this.lastRunScore), centerX - 150, centerY, 0xAAAAAA);
+            gui.drawString(this.font, Component.translatable("gui.stones.leaderboard.hint_boxes_1"), centerX - 150, centerY + 15, 0x666666);
+            gui.drawString(this.font, Component.translatable("gui.stones.leaderboard.hint_boxes_2"), centerX - 150, centerY + 25, 0x666666);
+        }
+
         // --- RECHTS: GLOBALE TOP 10 ---
-        gui.drawString(this.font, "§6Ewige Helden (Top 10):", centerX + 10, startY, 0xFFFFFF);
+        gui.drawString(this.font, Component.translatable("gui.stones.leaderboard.global_title"), centerX + 10, startY, 0xFFFFFF);
         
-        // Variable um sicherzustellen, dass wir nur EINEN Eintrag als "Current Run" markieren
         boolean highlightedCurrent = false;
 
         for (int i = 0; i < Math.min(globalEntries.size(), 10); i++) {
             GlobalLeaderboardData.LeaderboardEntry entry = globalEntries.get(i);
             
-            // Prüfung: Ist dies der Run, den wir gerade eben erzielt haben?
-            // (Name muss stimmen UND der Score muss exakt der des letzten Todes sein)
             boolean isCurrentRun = !highlightedCurrent && entry.name().equals(currentPlayerName) && entry.score() == lastRunScore;
             if (isCurrentRun) highlightedCurrent = true;
 
             String prefix = isCurrentRun ? "§b§l>> " : "§7";
             String nameColor = isCurrentRun ? "§b" : (i == 0 ? "§e" : (i == 1 ? "§f" : (i == 2 ? "§6" : "§7")));
             
-            // Name und Rang (Current Run blinkt oder ist hellblau)
-            gui.drawString(this.font, prefix + (i + 1) + ". " + nameColor + entry.name(), centerX + 15, startY + 15 + (i * 12), 0xFFFFFF);
+            int entryY = startY + 15 + (i * 22);
+            gui.drawString(this.font, prefix + (i + 1) + ". " + nameColor + entry.name(), centerX + 15, entryY, 0xFFFFFF);
             
-            // Score
-            gui.drawString(this.font, nameColor + entry.score(), centerX + 120, startY + 15 + (i * 12), 0xFFFFFF);
+            gui.drawString(this.font, nameColor + entry.score(), centerX + 165, entryY, 0xFFFFFF);
             
-            // Todesgrund (kleiner drunter)
-            String reason = entry.deathReason();
-            if (reason.length() > 30) reason = reason.substring(0, 27) + "...";
-            gui.drawString(this.font, "§8" + reason, centerX + 25, startY + 23 + (i * 12), 0xFFFFFF);
+            if (!isCurrentRun) {
+                String reason = entry.deathReason();
+                if (reason.length() > 30) reason = reason.substring(0, 27) + "...";
+                gui.drawString(this.font, Component.translatable("gui.stones.leaderboard.epitaph_display", reason), centerX + 25, entryY + 10, 0xFFFFFF);
+            }
         }
 
         super.render(gui, mouseX, mouseY, partialTicks);

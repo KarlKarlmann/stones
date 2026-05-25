@@ -4,6 +4,7 @@ import com.mojang.blaze3d.systems.RenderSystem;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.core.GlobalPos;
+import net.minecraft.network.chat.Component;
 import net.minecraft.util.Mth;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
@@ -40,7 +41,7 @@ public class ClientAttunementHandler {
         boolean isRightClickDown = mc.options.keyUse.isDown();
         boolean lookingAtRunestone = false;
         
-        // Raytrace checken
+        // Raytrace checken, ob der Spieler auf den Runenschrein blickt
         if (mc.hitResult instanceof BlockHitResult blockHit) {
              if (mc.level.getBlockState(blockHit.getBlockPos()).getBlock() instanceof RunestoneBlock) {
                  lookingAtRunestone = true;
@@ -52,12 +53,22 @@ public class ClientAttunementHandler {
             if (lookingAtRunestone) {
                 holdTicks++;
                 
-                // Trigger Bindung nach 3 Sekunden
+                // Sende Zwischen-Ticks an den Server, um den progressiven 
+                // Seelenentzug (Herzen schrumpfen, Nausea/Dunkelheit steigt) live zu triggern!
+                if (holdTicks == 10 || holdTicks == 30 || holdTicks == 50) {
+                    if (mc.hitResult instanceof BlockHitResult blockHit) {
+                        StonesMod.PACKET_HANDLER.sendToServer(new PacketBindShrine(blockHit.getBlockPos(), holdTicks));
+                    }
+                }
+                
+                // Trigger Bindung nach exakt 3 Sekunden (60 Ticks)
                 if (holdTicks == REQUIRED_TICKS) {
                     if (mc.hitResult instanceof BlockHitResult blockHit) {
-                        StonesMod.PACKET_HANDLER.sendToServer(new PacketBindShrine(blockHit.getBlockPos()));
-                        // Clientseitiges Feedback (Server sendet auch eins, aber Latenz minimieren)
-                        mc.player.playSound(net.minecraft.sounds.SoundEvents.UI_TOAST_CHALLENGE_COMPLETE, 1.0f, 1.0f);
+                        // Sende finalen Überlastungs-Aufruf an den Server
+                        StonesMod.PACKET_HANDLER.sendToServer(new PacketBindShrine(blockHit.getBlockPos(), REQUIRED_TICKS));
+                        
+                        // Der schauerlich-schöne, tiefe Saturn-Sound ertönt
+                        mc.player.playSound(StonesMod.SHRINE_BIND.get(), 1.0f, 1.0f);
                     }
                 }
             } else {
@@ -67,9 +78,8 @@ public class ClientAttunementHandler {
         } else {
             // Taste losgelassen
             if (wasDown) {
-                // War es ein kurzer Klick auf den Stein?
+                // War es ein kurzer Klick auf den Stein? (Öffnen des Schreins)
                 if (holdTicks > 0 && holdTicks < CLICK_THRESHOLD && lookingAtRunestone) {
-                     // GUI Öffnen
                      if (mc.hitResult instanceof BlockHitResult blockHit) {
                          StonesMod.PACKET_HANDLER.sendToServer(new PacketOpenShrine(blockHit.getBlockPos()));
                      }
@@ -117,25 +127,26 @@ public class ClientAttunementHandler {
                 // Fortschritt
                 float progress = (float) holdTicks / (float) REQUIRED_TICKS;
                 int filledWidth = (int) (barWidth * progress);
-                int color = 0xFF00FFCC; // Magisches Cyan
+                
+                // Passend zum unheimlichen Void-Thema: Ein tiefes, düsteres Lila statt Cyan
+                int color = 0xFF550055; 
                 
                 graphics.fill(x, y, x + filledWidth, y + barHeight, color);
 
-                String text = "Seelenbindung...";
-                graphics.drawCenteredString(mc.font, text, width / 2, y + 8, 0xFFFFFF);
+                // Lokalisierter Ausrichtungs-Text
+                graphics.drawCenteredString(mc.font, Component.translatable("gui.stones.shrine_binding"), width / 2, y + 8, 0x888888);
             }
             // Info Text wenn wir nur draufschauen
             else if (holdTicks <= 5) {
                 int y = (height / 2) + 15;
-                graphics.drawCenteredString(mc.font, "§6Runestone Schrein", width / 2, y, 0xFFFFFF);
+                graphics.drawCenteredString(mc.font, Component.translatable("gui.stones.runestone_shrine_hud"), width / 2, y, 0xFFFFFF);
                 
                 float scale = 0.75f;
                 graphics.pose().pushPose();
                 graphics.pose().translate(width / 2.0, y + 12, 0);
                 graphics.pose().scale(scale, scale, scale);
                 
-                String info = "§7[Rechtsklick] Öffnen   §7[Halten] Binden";
-                graphics.drawCenteredString(mc.font, info, 0, 0, 0xFFFFFF);
+                graphics.drawCenteredString(mc.font, Component.translatable("gui.stones.shrine_interaction_info"), 0, 0, 0xFFFFFF);
                 
                 graphics.pose().popPose();
             }
@@ -161,8 +172,7 @@ public class ClientAttunementHandler {
     private static void renderCompass(GuiGraphics graphics, Minecraft mc, int w, int h, GlobalPos target) {
         // Dimension Check
         if (!target.dimension().equals(mc.level.dimension())) {
-            String txt = "§dUnbekannte Dimension";
-            graphics.drawCenteredString(mc.font, txt, w / 2, h - 65, 0xFFFFFF);
+            graphics.drawCenteredString(mc.font, Component.translatable("gui.stones.unknown_dimension"), w / 2, h - 65, 0xFFFFFF);
             return;
         }
 
@@ -172,21 +182,20 @@ public class ClientAttunementHandler {
         double dist = Math.sqrt(dx * dx + dz * dz);
 
         // Winkelberechnung relativ zum Spielerblick
-        // atan2 gibt Winkel in Radians (-PI bis PI). Umrechnen in Grad.
-        // Minecraft Yaw ist 0 = Süden, wir müssen das korrigieren.
         double angleToTarget = Math.toDegrees(Math.atan2(dz, dx)) - 90;
         double playerYaw = mc.player.getYRot();
         double relativeAngle = Mth.wrapDegrees(angleToTarget - playerYaw);
 
-        // Render
-        String distStr = String.format("§b%.0fm", dist);
         String dirArrow = getDirectionArrow(relativeAngle);
         
         // Positionieren über der Hotbar (etwas höher als der Info-Text)
         int y = h - 65;
         
-        graphics.drawCenteredString(mc.font, "§6✦ Schrein Resonanz ✦", w / 2, y - 10, 0xFFFFFF);
-        graphics.drawCenteredString(mc.font, dirArrow + " " + distStr + " " + dirArrow, w / 2, y, 0xFFFFFF);
+        graphics.drawCenteredString(mc.font, Component.translatable("gui.stones.compass_title"), w / 2, y - 10, 0xFFFFFF);
+        
+        Component distanceText = Component.translatable("gui.stones.compass_distance", String.format(java.util.Locale.ROOT, "%.0f", dist));
+        Component layoutText = Component.translatable("gui.stones.compass_layout", dirArrow, distanceText);
+        graphics.drawCenteredString(mc.font, layoutText, w / 2, y, 0xFFFFFF);
     }
 
     // Wandelt den relativen Winkel in einen Pfeil um

@@ -10,7 +10,7 @@ import net.minecraft.world.item.enchantment.Enchantment;
 import net.minecraft.world.item.enchantment.EnchantmentCategory;
 import net.stones.enchantment.behavior.RuneBehavior;
 import net.stones.item.StoneItem;
-
+import java.lang.StackWalker;
 import javax.annotation.Nullable;
 import java.util.ArrayList;
 import java.util.List;
@@ -35,7 +35,7 @@ public class RuneEnchantment extends Enchantment {
     private final String customName;
     private final String customDescription;
     private final String iconPath;
-    
+    private static final StackWalker STACK_WALKER = StackWalker.getInstance();
     private final List<RuneStat> stats = new ArrayList<>();
     private final List<RuneBehavior> behaviors = new ArrayList<>();
     private int maxLevel = 20;
@@ -155,17 +155,14 @@ public class RuneEnchantment extends Enchantment {
 
     @Override public boolean isTradeable() { return false; }
     
-    @Override
+	@Override
     public boolean isDiscoverable() {
-        // Schließt Runen aus der zufälligen Loot-Generierung aus (z.B. Angeln, Kisten)
-        StackTraceElement[] stackTrace = Thread.currentThread().getStackTrace();
-        for (StackTraceElement element : stackTrace) {
-            if (element.getClassName().contains("LootItemEnchantRandomlyFunction") || 
-                element.getClassName().contains("EnchantRandomly")) {
-                return false; 
-            }
-        }
-        return true;
+        // Hochperformanter Stack-Check: Sobald Loot-Klassen gefunden werden, wird false zurückgegeben.
+        return STACK_WALKER.walk(frames -> frames.noneMatch(frame -> {
+            String className = frame.getClassName();
+            return className.contains("LootItemEnchantRandomlyFunction") || 
+                   className.contains("EnchantRandomly");
+        }));
     }
 
     public void setMaxLevel(int maxLevel) {

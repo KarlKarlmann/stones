@@ -13,16 +13,19 @@ import java.util.function.Supplier;
 public class PacketOpenLeaderboard {
     public final List<Integer> personalScores;
     public final List<GlobalLeaderboardData.LeaderboardEntry> globalEntries;
+    public final int lastRunScore; // Zwingend erforderlich für den neuen Screen
 
-    public PacketOpenLeaderboard(List<Integer> personal, List<GlobalLeaderboardData.LeaderboardEntry> global) {
+    public PacketOpenLeaderboard(List<Integer> personal, List<GlobalLeaderboardData.LeaderboardEntry> global, int lastRunScore) {
         this.personalScores = personal;
         this.globalEntries = global;
+        this.lastRunScore = lastRunScore;
     }
 
     public PacketOpenLeaderboard(FriendlyByteBuf buf) {
         this.personalScores = buf.readCollection(ArrayList::new, FriendlyByteBuf::readInt);
         this.globalEntries = buf.readCollection(ArrayList::new, b -> 
             new GlobalLeaderboardData.LeaderboardEntry(b.readUtf(), b.readInt(), b.readUtf()));
+        this.lastRunScore = buf.readInt();
     }
 
     public void toBytes(FriendlyByteBuf buf) {
@@ -32,21 +35,20 @@ public class PacketOpenLeaderboard {
             b.writeInt(e.score());
             b.writeUtf(e.deathReason());
         });
+        buf.writeInt(this.lastRunScore);
     }
 
     public static void handle(PacketOpenLeaderboard msg, Supplier<NetworkEvent.Context> ctx) {
         ctx.get().enqueueWork(() -> {
-            // Isolierter Client-Code Aufruf (Firewall gegen Server-Crashes)
             DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> ClientHandler.handlePacket(msg));
         });
         ctx.get().setPacketHandled(true);
     }
 
-    // Interne Klasse, die nur vom Client geladen wird
     private static class ClientHandler {
         public static void handlePacket(PacketOpenLeaderboard msg) {
             net.minecraft.client.Minecraft.getInstance().setScreen(
-                new net.stones.client.gui.ResonanceLeaderboardScreen(msg.personalScores, msg.globalEntries)
+                new net.stones.client.gui.ResonanceLeaderboardScreen(msg.personalScores, msg.globalEntries, msg.lastRunScore)
             );
         }
     }

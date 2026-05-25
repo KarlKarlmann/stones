@@ -59,11 +59,14 @@ public class StonesAttributeEvents {
             recalculateAttributes(player);
         }
     }
-    @SubscribeEvent
+	@SubscribeEvent
     public static void onPlayerLoggedOut(PlayerEvent.PlayerLoggedOutEvent event) {
-        // Memory Leak verhindern
-        LAST_KNOWN_LEVELS.remove(event.getEntity().getUUID());
-        DIRTY_PLAYERS.remove(event.getEntity().getUUID());
+        UUID uuid = event.getEntity().getUUID();
+        // Memory Leaks verhindern
+        LAST_KNOWN_LEVELS.remove(uuid);
+        DIRTY_PLAYERS.remove(uuid);
+        // NEU: Alte Meilensteine aus dem RAM werfen!
+        RuneCalculator.ACTIVE_MILESTONES.remove(uuid); 
     }
     @SubscribeEvent
     public static void onDimensionChange(PlayerEvent.PlayerChangedDimensionEvent event) {

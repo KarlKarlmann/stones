@@ -34,9 +34,11 @@ public class ScoreRewardSystem {
             int currentRunScore = player.getScore();
             if (currentRunScore <= 0) return;
 
+            // NEU: Wir speichern den Score des Todes IMMER zwischen, 
+            // völlig unabhängig davon, ob er eine Kiste wert ist!
+            player.getPersistentData().putInt("stones_last_death_score", currentRunScore);
+
             // Todesgrund parsen
-            // Hinweis: Wird vom Server in seiner Sprache als String aufgelöst.
-            // Für echtes i18n müssten wir hier den JSON-String der Component speichern.
             String deathReason = player.getCombatTracker().getDeathMessage().getString();
             
             // Globales Leaderboard abrufen, um Platzierung zu checken
@@ -67,8 +69,13 @@ public class ScoreRewardSystem {
     @SubscribeEvent
     public static void onPlayerClone(PlayerEvent.Clone event) {
         CompoundTag oldData = event.getOriginal().getPersistentData();
+        // Kopiere Legacy Runs
         if (oldData.contains(NBT_LIST_KEY)) {
             event.getEntity().getPersistentData().put(NBT_LIST_KEY, oldData.get(NBT_LIST_KEY).copy());
+        }
+        // NEU: Kopiere letzten Todes-Score in den neuen Körper
+        if (oldData.contains("stones_last_death_score")) {
+            event.getEntity().getPersistentData().putInt("stones_last_death_score", oldData.getInt("stones_last_death_score"));
         }
     }
 
@@ -81,8 +88,12 @@ public class ScoreRewardSystem {
 
             List<GlobalLeaderboardData.LeaderboardEntry> global = GlobalLeaderboardData.get(player.serverLevel()).getEntries();
 
+            // NEU: Hole den Wert des gerade passierten Todes!
+            int lastDeathScore = player.getPersistentData().getInt("stones_last_death_score");
+
+            // FIX: Jetzt werden korrekterweise 3 Argumente (inklusive lastDeathScore) übergeben!
             StonesMod.PACKET_HANDLER.send(PacketDistributor.PLAYER.with(() -> player), 
-                new PacketOpenLeaderboard(personalScores, global));
+                new PacketOpenLeaderboard(personalScores, global, lastDeathScore));
         }
     }
 

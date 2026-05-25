@@ -47,6 +47,22 @@ public class GlobalLeaderboardData extends SavedData {
         this.setDirty();
     }
 
+    /**
+     * Sucht den letzten Eintrag des Spielers mit dem exakten Score und überschreibt die Todesursache.
+     * Ermöglicht das nachträgliche Speichern des benutzerdefinierten Epitaphs.
+     */
+    public void updateLastRunReason(String playerName, int score, String newReason) {
+        for (int i = 0; i < entries.size(); i++) {
+            LeaderboardEntry entry = entries.get(i);
+            if (entry.name().equals(playerName) && entry.score() == score) {
+                // Ersetze den Eintrag mit der neuen Inschrift
+                entries.set(i, new LeaderboardEntry(playerName, score, newReason));
+                this.setDirty();
+                break;
+            }
+        }
+    }
+
     public List<LeaderboardEntry> getEntries() {
         return new ArrayList<>(entries);
     }

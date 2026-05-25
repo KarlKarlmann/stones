@@ -24,6 +24,22 @@ import net.minecraft.world.level.Level;
 import net.minecraft.server.level.ServerLevel;
 import net.stones.data.ShrineSavedData;
 import net.stones.data.ShrineInstance;
+
+// Zusätzliche Imports für NBT-Erhaltung, Abbau-Restriktionen, Item-Erhalt und Explosionen
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.item.enchantment.EnchantmentHelper;
+import net.minecraft.world.item.enchantment.Enchantments;
+import net.minecraft.world.Containers;
+import net.minecraft.world.level.storage.loot.LootParams;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.sounds.SoundEvents;
+import net.minecraft.sounds.SoundSource;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraftforge.items.IItemHandler;
+import org.jetbrains.annotations.Nullable;
+import java.util.Collections;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -42,7 +58,8 @@ public class RunestoneBlock extends Block implements EntityBlock {
                 .strength(50.0f, 50.0f) 
                 .requiresCorrectToolForDrops()
                 .sound(SoundType.GLASS) 
-                .noOcclusion()); // Ermöglicht Transparenz und das Rendern des Inhalts
+                .noOcclusion()
+                .noLootTable()); // Deaktiviert die Standard-Loot-Table, da wir playerWillDestroy nutzen
         
         this.registerDefaultState(this.stateDefinition.any().setValue(ACTIVE, false));
     }
@@ -60,6 +77,93 @@ public class RunestoneBlock extends Block implements EntityBlock {
     @Override
     public BlockEntity newBlockEntity(BlockPos pos, BlockState state) {
         return new RunestoneBlockEntity(pos, state);
+    }
+
+    @Override
+    public List<ItemStack> getDrops(BlockState state, LootParams.Builder params) {
+        return Collections.emptyList();
+    }
+
+    @Override
+    public void playerWillDestroy(Level level, BlockPos pos, BlockState state, Player player) {
+        if (!level.isClientSide) {
+            BlockEntity be = level.getBlockEntity(pos);
+            if (be instanceof RunestoneBlockEntity runeBe) {
+                UUID id = runeBe.getShrineId();
+                if (id != null) {
+                    ServerLevel serverLevel = (ServerLevel) level;
+                    ShrineInstance shrine = ShrineSavedData.get(serverLevel).getShrine(id);
+                    
+                    if (shrine != null) {
+                        // 1. SCANNAUFTRAG: Suchen nach "Fluch der Bindung" (Curse of Binding)
+                        boolean hasBindingCurse = false;
+                        IItemHandler inv = shrine.getInventory();
+                        for (int i = 0; i < inv.getSlots(); i++) {
+                            ItemStack stackInSlot = inv.getStackInSlot(i);
+                            if (!stackInSlot.isEmpty() && EnchantmentHelper.getItemEnchantmentLevel(Enchantments.BINDING_CURSE, stackInSlot) > 0) {
+                                hasBindingCurse = true;
+                                break;
+                            }
+                        }
+
+                        // Falls ein Fluch aktiv ist, geht der Altar hoch!
+                        if (hasBindingCurse) {
+                            // Wir löschen den Schrein sofort aus dem System (absoluter Datenverlust)
+                            ShrineSavedData.get(serverLevel).removeShrine(id);
+                            
+                            // BOOM! (Erzeugt eine mächtige Explosion, die auch Feuer legen kann)
+                            level.explode(null, pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5, 4.0F, true, Level.ExplosionInteraction.BLOCK);
+                        } 
+                        else if (!player.isCreative()) {
+                            // 2. CHECK AUF DIAMOND/NETHERITE PICKAXE + SILK TOUCH
+                            ItemStack mainHandItem = player.getMainHandItem();
+                            boolean isCorrectPickaxe = mainHandItem.is(Items.DIAMOND_PICKAXE) || mainHandItem.is(Items.NETHERITE_PICKAXE);
+                            boolean hasSilkTouch = EnchantmentHelper.getItemEnchantmentLevel(Enchantments.SILK_TOUCH, mainHandItem) > 0;
+
+                            if (isCorrectPickaxe && hasSilkTouch) {
+                                // Behutsamer Abbau geglückt: Altar wird mit seiner UUID als NBT gedroppt
+                                ItemStack dropStack = new ItemStack(this);
+                                CompoundTag tag = dropStack.getOrCreateTag();
+                                tag.putUUID("shrineId", id);
+                                Containers.dropItemStack(level, pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5, dropStack);
+                            } else {
+                                // Kein Silk Touch: Der Altar zerbricht!
+                                // Runen werden fallen gelassen, damit sie nicht im Nirgendwo verschwinden
+                                for (int i = 0; i < inv.getSlots(); i++) {
+                                    ItemStack stackInSlot = inv.getStackInSlot(i);
+                                    if (!stackInSlot.isEmpty()) {
+                                        Containers.dropItemStack(level, pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5, stackInSlot.copy());
+                                    }
+                                }
+                                
+                                // Wir löschen den Schrein aus der Registrierung
+                                ShrineSavedData.get(serverLevel).removeShrine(id);
+                                
+                                // Lauter Glas-Zerbrechen-Sound
+                                level.playSound(null, pos, SoundEvents.GLASS_BREAK, SoundSource.BLOCKS, 1.0F, 0.8F);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        super.playerWillDestroy(level, pos, state, player);
+    }
+
+    @Override
+    public void setPlacedBy(Level level, BlockPos pos, BlockState state, @Nullable LivingEntity placer, ItemStack stack) {
+        super.setPlacedBy(level, pos, state, placer, stack);
+        if (!level.isClientSide) {
+            BlockEntity be = level.getBlockEntity(pos);
+            if (be instanceof RunestoneBlockEntity runeBe) {
+                if (stack.hasTag() && stack.getTag().contains("shrineId")) {
+                    UUID id = stack.getTag().getUUID("shrineId");
+                    runeBe.setShrineId(id);
+                    // Den Block beim Platzieren direkt wieder aktivieren (Lichtdurchlässigkeit & transparentes Rendern)
+                    level.setBlock(pos, state.setValue(ACTIVE, true), 3);
+                }
+            }
+        }
     }
 
     @Override

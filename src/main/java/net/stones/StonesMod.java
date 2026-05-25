@@ -62,7 +62,8 @@ public class StonesMod {
 	public static final DeferredRegister<SoundEvent> SOUNDS = DeferredRegister.create(ForgeRegistries.SOUND_EVENTS, MODID);
 	public static final RegistryObject<SoundEvent> ECHO_TRADER_EMERGE = SOUNDS.register("echo_trader_emerge",
 		() -> SoundEvent.createVariableRangeEvent(new ResourceLocation(MODID, "echo_trader_emerge")));
-
+	public static final RegistryObject<SoundEvent> SHRINE_BIND = SOUNDS.register("shrine_bind",
+		() -> SoundEvent.createVariableRangeEvent(new ResourceLocation(MODID, "shrine_bind")));
 	public StonesMod() {
 		IEventBus bus = FMLJavaModLoadingContext.get().getModEventBus();
 
@@ -90,6 +91,7 @@ public class StonesMod {
 		addNetworkMessage(PacketPerformAction.class, PacketPerformAction::encode, PacketPerformAction::new, PacketPerformAction::handle);	
 		addNetworkMessage(PacketClaimReward.class, PacketClaimReward::toBytes, PacketClaimReward::new, PacketClaimReward::handle);
 		addNetworkMessage(PacketBuyEcho.class, PacketBuyEcho::toBytes, PacketBuyEcho::new, PacketBuyEcho::handle);
+		addNetworkMessage(PacketUpdateEpitaph.class, PacketUpdateEpitaph::toBytes, PacketUpdateEpitaph::new, PacketUpdateEpitaph::handle); // Registrierung des Epitaph-Netzwerkpakets
 
 		// --- S2C ---
 		addNetworkMessage(PacketSyncPlayerShrine.class, PacketSyncPlayerShrine::toBytes, PacketSyncPlayerShrine::new, PacketSyncPlayerShrine::handle);
