@@ -1,0 +1,279 @@
+{
+  "type": "MILESTONE",
+  "name": "DICT:milestone.stones.midas_touch.name",
+  "description": "DICT:milestone.stones.midas_touch.description",
+  "icon": "stones:textures/gui/skills/midastouch.png",
+  "required_level": 1,
+  "stats": [
+    {
+      "id": "midas_reach",
+      "label": "DICT:stat.stones.midas_reach",
+      "base": 4.5,
+      "scaling": "RUNE_LEVEL",
+      "per_level": 1.5,
+      "suffix": "DICT:stat.stones.suffix.meters"
+    },
+    {
+      "id": "midas_cooldown",
+      "label": "DICT:stat.stones.pyro_recharge",
+      "base": 600.0,
+      "scaling": "PLAYER_LEVEL",
+      "per_level": -2.0,
+      "min": 60.0,
+      "display_factor": 0.05,
+      "suffix": "DICT:stat.stones.suffix.seconds"
+    },
+    {
+      "id": "midas_cost",
+      "label": "DICT:stat.stones.midas_cost",
+      "base": 25.0,
+      "scaling": "RUNE_LEVEL",
+      "per_level": -1.0,
+      "suffix": "DICT:stat.stones.suffix.xp"
+    }
+  ],
+  "behaviors": [
+    {
+      "trigger": "ON_ACTION_BUTTON",
+      "conditions": [
+        {
+          "type": "stones:is_ready"
+        },
+        {
+          "type": "stones:block_check",
+          "distance": "$midas_reach",
+          "tags": [
+            "minecraft:base_stone_overworld",
+            "minecraft:base_stone_nether",
+            "minecraft:dirt"
+          ]
+        }
+      ],
+      "actions": [
+        {
+          "type": "stones:cooldown",
+          "ticks": "$midas_cooldown"
+        },
+        {
+          "type": "stones:invoke",
+          "call": "player.pick(double, float, boolean)",
+          "args": [
+            "$midas_reach",
+            "0.0",
+            "false"
+          ],
+          "save_result_to": "hit"
+        },
+        {
+          "type": "stones:set_variable",
+          "name": "blockPos",
+          "value": "$hit.getBlockPos"
+        },
+        {
+          "type": "stones:set_variable",
+          "name": "neg_cost",
+          "value": "$midas_cost"
+        },
+        {
+          "type": "stones:math",
+          "variable": "neg_cost",
+          "operation": "multiply",
+          "value": -1.0
+        },
+        {
+          "type": "stones:invoke",
+          "call": "player.giveExperiencePoints(int)",
+          "args": [
+            "$neg_cost"
+          ]
+        },
+        {
+          "type": "stones:play_sound",
+          "sound": "minecraft:block.brewing_stand.brew",
+          "pitch": 0.5
+        },
+        {
+          "type": "stones:spawn_particles",
+          "particle": "minecraft:enchant",
+          "count": 20,
+          "spread": 0.3,
+          "pos": "$blockPos"
+        },
+        {
+          "type": "stones:delay",
+          "ticks": 40,
+          "actions": [
+            {
+              "type": "stones:get_attribute",
+              "attribute": "minecraft:generic.luck",
+              "into": "myLuck"
+            },
+            {
+              "type": "stones:random",
+              "into": "roll"
+            },
+            {
+              "type": "stones:set_variable",
+              "name": "threshold",
+              "value": 0.15
+            },
+            {
+              "type": "stones:math",
+              "variable": "threshold",
+              "operation": "add",
+              "value": "$myLuck * 0.05"
+            },
+            {
+              "type": "stones:math",
+              "variable": "threshold",
+              "operation": "add",
+              "value": "$SockLevel * 0.005"
+            },
+            {
+              "type": "stones:set_variable",
+              "name": "t_gilded",
+              "value": "$threshold * 0.05"
+            },
+            {
+              "type": "stones:set_variable",
+              "name": "t_block",
+              "value": "$threshold * 0.15"
+            },
+            {
+              "type": "stones:set_variable",
+              "name": "t_raw",
+              "value": "$threshold * 0.35"
+            },
+            {
+              "type": "stones:case",
+              "cases": [
+                {
+                  "condition": {
+                    "type": "stones:variable_compare",
+                    "variable": "roll",
+                    "operator": "<",
+                    "value": "$t_gilded"
+                  },
+                  "actions": [
+                    {
+                      "type": "stones:set_block",
+                      "block": "minecraft:gilded_blackstone",
+                      "pos": "$blockPos"
+                    },
+                    {
+                      "type": "stones:play_sound",
+                      "sound": "minecraft:ui.toast.challenge_complete",
+                      "pitch": 2.0
+                    },
+                    {
+                      "type": "stones:spawn_particles",
+                      "particle": "minecraft:recovering_hp",
+                      "count": 40,
+                      "pos": "$blockPos"
+                    }
+                  ]
+                },
+                {
+                  "condition": {
+                    "type": "stones:variable_compare",
+                    "variable": "roll",
+                    "operator": "<",
+                    "value": "$t_block"
+                  },
+                  "actions": [
+                    {
+                      "type": "stones:set_block",
+                      "block": "minecraft:gold_block",
+                      "pos": "$blockPos"
+                    },
+                    {
+                      "type": "stones:play_sound",
+                      "sound": "minecraft:ui.toast.challenge_complete",
+                      "pitch": 1.2
+                    },
+                    {
+                      "type": "stones:spawn_particles",
+                      "particle": "minecraft:totem_of_undying",
+                      "count": 30,
+                      "pos": "$blockPos"
+                    }
+                  ]
+                },
+                {
+                  "condition": {
+                    "type": "stones:variable_compare",
+                    "variable": "roll",
+                    "operator": "<",
+                    "value": "$t_raw"
+                  },
+                  "actions": [
+                    {
+                      "type": "stones:set_block",
+                      "block": "minecraft:raw_gold_block",
+                      "pos": "$blockPos"
+                    },
+                    {
+                      "type": "stones:play_sound",
+                      "sound": "minecraft:block.gold.place",
+                      "pitch": 1.0
+                    },
+                    {
+                      "type": "stones:spawn_particles",
+                      "particle": "minecraft:electric_spark",
+                      "count": 20,
+                      "pos": "$blockPos"
+                    }
+                  ]
+                },
+                {
+                  "condition": {
+                    "type": "stones:variable_compare",
+                    "variable": "roll",
+                    "operator": "<",
+                    "value": "$threshold"
+                  },
+                  "actions": [
+                    {
+                      "type": "stones:set_block",
+                      "block": "minecraft:gold_ore",
+                      "pos": "$blockPos"
+                    },
+                    {
+                      "type": "stones:play_sound",
+                      "sound": "minecraft:block.gold.step",
+                      "pitch": 1.2
+                    },
+                    {
+                      "type": "stones:spawn_particles",
+                      "particle": "minecraft:glow",
+                      "count": 15,
+                      "pos": "$blockPos"
+                    }
+                  ]
+                }
+              ],
+              "default": [
+                {
+                  "type": "stones:set_block",
+                  "block": "minecraft:nether_gold_ore",
+                  "pos": "$blockPos"
+                },
+                {
+                  "type": "stones:play_sound",
+                  "sound": "minecraft:block.gold.place",
+                  "pitch": 0.8
+                },
+                {
+                  "type": "stones:spawn_particles",
+                  "particle": "minecraft:electric_spark",
+                  "count": 10,
+                  "pos": "$blockPos"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,131 @@
+{
+  "type": "MILESTONE",
+  "name": "DICT:milestone.stones.storm_caller.name",
+  "description": "DICT:milestone.stones.storm_caller.description",
+  "icon": "minecraft:lightning_rod",
+  "stats": [
+    {
+      "id": "max_charge",
+      "label": "DICT:stat.stones.max_charge",
+      "base": 8.0,
+      "scaling": "RUNE_LEVEL",
+      "per_level": -0.4,
+      "min": 3.0,
+      "suffix": "DICT:stat.stones.suffix.strikes"
+    },
+    {
+      "id": "blast_radius",
+      "label": "DICT:stat.stones.blast_radius",
+      "base": 3.0,
+      "scaling": "SOCK_LEVEL",
+      "per_level": 0.2,
+      "suffix": "m"
+    }
+  ],
+  "behaviors": [
+    {
+      "trigger": "ON_ATTACK",
+      "actions": [
+        {
+          "type": "stones:get_persistent_var",
+          "name": "lightning_charge",
+          "into": "current_charge"
+        },
+        {
+          "type": "stones:math",
+          "variable": "current_charge",
+          "operation": "add",
+          "value": 1.0
+        },
+        {
+          "type": "stones:case",
+          "cases": [
+            {
+              "condition": {
+                "type": "stones:variable_compare",
+                "variable": "current_charge",
+                "operator": ">=",
+                "value": "$max_charge"
+              },
+              "actions": [
+                {
+                  "type": "stones:set_persistent_var",
+                  "name": "lightning_charge",
+                  "value": 0.0
+                },
+                {
+                  "type": "stones:update_combo",
+                  "id": "storm_caller",
+                  "count": 0
+                },
+                {
+                  "type": "stones:explode",
+                  "radius": "$blast_radius",
+                  "fire": false
+                },
+                {
+                  "type": "stones:apply_effect",
+                  "effect": "minecraft:speed",
+                  "duration": 140,
+                  "amplifier": 1
+                },
+                {
+                  "type": "stones:play_sound",
+                  "sound": "minecraft:entity.lightning_bolt.thunder",
+                  "pitch": 1.2
+                },
+                {
+                  "type": "stones:play_sound",
+                  "sound": "minecraft:entity.lightning_bolt.impact",
+                  "pitch": 0.8
+                },
+                {
+                  "type": "stones:spawn_particles",
+                  "particle": "minecraft:electric_spark",
+                  "count": 40,
+                  "spread": 0.8
+                },
+                {
+                  "type": "stones:spawn_particles",
+                  "particle": "minecraft:flash",
+                  "count": 1
+                }
+              ]
+            }
+          ],
+          "default": [
+            {
+              "type": "stones:set_persistent_var",
+              "name": "lightning_charge",
+              "value": "$current_charge"
+            },
+            {
+              "type": "stones:play_sound",
+              "sound": "minecraft:block.amethyst_block.chime",
+              "pitch": 2.0,
+              "volume": 0.4
+            },
+            {
+              "type": "stones:spawn_particles",
+              "particle": "minecraft:electric_spark",
+              "count": 3,
+              "spread": 0.2
+            },
+            {
+              "type": "stones:update_combo",
+              "id": "storm_caller",
+              "count": "$current_charge",
+              "max": "$max_charge",
+              "texture": "stones:textures/gui/orb.png",
+              "size": 0.4,
+              "radius": 1.5,
+              "speed": 0.15,
+              "color": "#00FFFF",
+              "timeout": 140
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

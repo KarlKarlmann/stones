@@ -1,0 +1,512 @@
+package net.stones.util;
+
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonObject;
+import net.minecraftforge.fml.loading.FMLPaths;
+
+import java.io.File;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+
+public class JsonExporter {
+    
+    private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
+    
+    public static void main(String[] args) {
+        Path configDir;
+        try {
+            configDir = FMLPaths.CONFIGDIR.get();
+        } catch (Exception e) {
+            configDir = Paths.get("run/config");
+        }
+
+        Path outputDir = configDir.resolve("stones").resolve("v1").resolve("enchantments");
+        File folder = outputDir.toFile();
+        if (!folder.exists()) folder.mkdirs();
+        
+        System.out.println("Exporting to: " + folder.getAbsolutePath());
+        
+        exportAttributeRune(folder, "minor_armor", "minor", "minecraft:generic.armor", "ADDITION", 1.0, "Rune of Hardness", "Increases Armor rating.");
+        exportAttributeRune(folder, "major_wrath", "major", "minecraft:generic.attack_damage", "MULTIPLY_TOTAL", 0.01, "Rune of Wrath", "Scales damage with your level.");
+        
+        exportDrownedWarrior(folder);
+        exportBerserker(folder);
+        exportNightHunter(folder);
+        exportBloodMage(folder);
+        exportStormCaller(folder);
+        exportPhoenix(folder);
+        exportGladiator(folder);
+        exportNecromancer(folder);
+        exportGamblersRuin(folder);
+        
+        System.out.println("Export complete!");
+    }
+
+    private static void exportAttributeRune(File folder, String name, String type, String attr, String op, double factor, String displayName, String desc) {
+        JsonObject json = new JsonObject();
+        json.addProperty("type", type.toUpperCase());
+        json.addProperty("attribute", attr);
+        json.addProperty("operation", op);
+        json.addProperty("factor", factor);
+        json.addProperty("name", displayName);
+        json.addProperty("description", desc);
+        writeToFile(folder, name + ".json", json);
+    }
+
+    private static void exportGamblersRuin(File folder) {
+        JsonObject json = new JsonObject();
+        json.addProperty("type", "MILESTONE");
+        json.addProperty("name", "Gambler's Ruin");
+        json.addProperty("description", "Deal massive damage (400% + sacrificed level), but sacrifice a random enchantment.");
+        
+        JsonArray behaviors = new JsonArray();
+        JsonObject behavior = new JsonObject();
+        behavior.addProperty("trigger", "ON_ATTACK");
+        
+        // 1. Condition: Hat der Spieler ein Enchantment? (Damit der Bonus nicht "umsonst" ist)
+        JsonArray conds = new JsonArray();
+        JsonObject c1 = new JsonObject();
+        c1.addProperty("type", "stones:has_enchantment");
+        c1.addProperty("target", "attacker");
+        conds.add(c1);
+        behavior.add("conditions", conds);
+        
+        JsonArray acts = new JsonArray();
+        
+        // 2. Entfernen & Level speichern
+        JsonObject a1 = new JsonObject();
+        a1.addProperty("type", "stones:remove_random_enchantment");
+        a1.addProperty("save_level_to", "sacrificed_power");
+        acts.add(a1);
+        
+        // 3. Multiplier Damage (400%)
+        JsonObject a2 = new JsonObject();
+        a2.addProperty("type", "stones:modify_damage");
+        a2.addProperty("multiplier", 4.0);
+        acts.add(a2);
+        
+        // 4. Flat Damage (+Level) - Hier nutzen wir das gespeicherte Level für Schaden!
+        JsonObject a3 = new JsonObject();
+        a3.addProperty("type", "stones:modify_damage");
+        a3.addProperty("add_var", "sacrificed_power");
+        acts.add(a3);
+        
+        // 5. Partikel
+        JsonObject a4 = new JsonObject();
+        a4.addProperty("type", "stones:spawn_particles");
+        a4.addProperty("particle", "minecraft:witch");
+        a4.addProperty("count", 20);
+        acts.add(a4);
+
+        behavior.add("actions", acts);
+        behaviors.add(behavior);
+        json.add("behaviors", behaviors);
+        
+        writeToFile(folder, "milestone_gamblers_ruin.json", json);
+    }
+
+    private static void exportDrownedWarrior(File folder) {
+        JsonObject json = new JsonObject();
+        json.addProperty("type", "MILESTONE");
+        json.addProperty("name", "Drowned Warrior");
+        json.addProperty("description", "Your attacks consume air but deal massive damage. Don't suffocate!");
+        JsonArray behaviors = new JsonArray();
+        JsonObject bSwing = new JsonObject();
+        bSwing.addProperty("trigger", "ON_SWING");
+        JsonArray condsSwing = new JsonArray();
+        JsonObject cond1 = new JsonObject();
+        cond1.addProperty("type", "stones:has_air");
+        cond1.addProperty("min", 60); 
+        condsSwing.add(cond1);
+        bSwing.add("conditions", condsSwing);
+        JsonArray actsSwing = new JsonArray();
+        JsonObject actAir = new JsonObject();
+        actAir.addProperty("type", "stones:modify_air");
+        actAir.addProperty("add", -100); 
+        actsSwing.add(actAir);
+        bSwing.add("actions", actsSwing);
+        behaviors.add(bSwing);
+        JsonObject bAttack = new JsonObject();
+        bAttack.addProperty("trigger", "ON_ATTACK");
+        JsonArray condsAttack = new JsonArray();
+        JsonObject cond2 = new JsonObject();
+        cond2.addProperty("type", "stones:has_air");
+        cond2.addProperty("min", 60); 
+        condsAttack.add(cond2);
+        bAttack.add("conditions", condsAttack);
+        JsonArray actsAttack = new JsonArray();
+        JsonObject actDmg = new JsonObject();
+        actDmg.addProperty("type", "stones:modify_damage");
+        actDmg.addProperty("multiplier", 1.5);
+        actDmg.addProperty("add", 5.0);
+        actsAttack.add(actDmg);
+        bAttack.add("actions", actsAttack);
+        behaviors.add(bAttack);
+        json.add("behaviors", behaviors);
+        writeToFile(folder, "milestone_drowned_warrior.json", json);
+    }
+    
+    private static void exportBerserker(File folder) {
+        JsonObject json = new JsonObject();
+        json.addProperty("type", "MILESTONE");
+        json.addProperty("name", "Berserker");
+        json.addProperty("description", "Deal more damage at low health. Heal on kills.");
+        JsonArray behaviors = new JsonArray();
+        JsonObject beh1 = new JsonObject();
+        beh1.addProperty("trigger", "ON_ATTACK");
+        JsonArray conds1 = new JsonArray();
+        JsonObject cond1 = new JsonObject();
+        cond1.addProperty("type", "stones:health_below");
+        cond1.addProperty("percent", 0.3);
+        conds1.add(cond1);
+        beh1.add("conditions", conds1);
+        JsonArray acts1 = new JsonArray();
+        JsonObject act1 = new JsonObject();
+        act1.addProperty("type", "stones:modify_damage");
+        act1.addProperty("multiplier", 2.0);
+        acts1.add(act1);
+        JsonObject act2 = new JsonObject();
+        act2.addProperty("type", "stones:apply_effect");
+        act2.addProperty("effect", "minecraft:strength");
+        act2.addProperty("duration", 60);
+        act2.addProperty("amplifier", 0);
+        acts1.add(act2);
+        beh1.add("actions", acts1);
+        behaviors.add(beh1);
+        JsonObject beh2 = new JsonObject();
+        beh2.addProperty("trigger", "ON_KILL");
+        JsonArray acts2 = new JsonArray();
+        JsonObject act3 = new JsonObject();
+        act3.addProperty("type", "stones:heal");
+        act3.addProperty("percent_of_max_health", 0.2);
+        acts2.add(act3);
+        beh2.add("actions", acts2);
+        behaviors.add(beh2);
+        json.add("behaviors", behaviors);
+        writeToFile(folder, "milestone_berserker.json", json);
+    }
+    
+    private static void exportNightHunter(File folder) {
+        JsonObject json = new JsonObject();
+        json.addProperty("type", "MILESTONE");
+        json.addProperty("name", "Night Hunter");
+        json.addProperty("description", "Gain power during night. Weakened during day.");
+        JsonArray behaviors = new JsonArray();
+        JsonObject beh1 = new JsonObject();
+        beh1.addProperty("trigger", "ON_ATTACK");
+        JsonArray conds1 = new JsonArray();
+        JsonObject cond1 = new JsonObject();
+        cond1.addProperty("type", "stones:is_day");
+        conds1.add(cond1);
+        beh1.add("conditions", conds1);
+        JsonArray acts1 = new JsonArray();
+        JsonObject act1 = new JsonObject();
+        act1.addProperty("type", "stones:modify_damage");
+        act1.addProperty("multiplier", 0.5);
+        acts1.add(act1);
+        beh1.add("actions", acts1);
+        behaviors.add(beh1);
+        JsonObject beh2 = new JsonObject();
+        beh2.addProperty("trigger", "ON_ATTACK");
+        JsonArray conds2 = new JsonArray();
+        JsonObject cond2 = new JsonObject();
+        cond2.addProperty("type", "stones:chance");
+        cond2.addProperty("value", 0.3);
+        conds2.add(cond2);
+        beh2.add("conditions", conds2);
+        JsonArray acts2 = new JsonArray();
+        JsonObject act2 = new JsonObject();
+        act2.addProperty("type", "stones:modify_damage");
+        act2.addProperty("multiplier", 1.5);
+        acts2.add(act2);
+        JsonObject act3 = new JsonObject();
+        act3.addProperty("type", "stones:apply_effect");
+        act3.addProperty("effect", "minecraft:invisibility");
+        act3.addProperty("duration", 40);
+        act3.addProperty("amplifier", 0);
+        acts2.add(act3);
+        beh2.add("actions", acts2);
+        behaviors.add(beh2);
+        json.add("behaviors", behaviors);
+        writeToFile(folder, "milestone_night_hunter.json", json);
+    }
+    
+    private static void exportBloodMage(File folder) {
+        JsonObject json = new JsonObject();
+        json.addProperty("type", "MILESTONE");
+        json.addProperty("name", "Blood Mage");
+        json.addProperty("description", "Convert health to power. Lifesteal on attacks.");
+        JsonArray behaviors = new JsonArray();
+        JsonObject behavior = new JsonObject();
+        behavior.addProperty("trigger", "ON_ATTACK");
+        JsonArray conditions = new JsonArray();
+        JsonObject cond1 = new JsonObject();
+        cond1.addProperty("type", "stones:health_below");
+        cond1.addProperty("percent", 0.95);
+        conditions.add(cond1);
+        behavior.add("conditions", conditions);
+        JsonArray actions = new JsonArray();
+        JsonObject act1 = new JsonObject();
+        act1.addProperty("type", "stones:set_variable");
+        act1.addProperty("name", "blood_cost");
+        act1.addProperty("value", 2.0);
+        actions.add(act1);
+        JsonObject act2 = new JsonObject();
+        act2.addProperty("type", "stones:modify_damage");
+        act2.addProperty("add", 8.0);
+        actions.add(act2);
+        JsonObject act3 = new JsonObject();
+        act3.addProperty("type", "stones:heal");
+        act3.addProperty("amount", -2.0);
+        actions.add(act3);
+        JsonObject act4 = new JsonObject();
+        act4.addProperty("type", "stones:heal");
+        act4.addProperty("percent_of_damage", 0.3);
+        actions.add(act4);
+        behavior.add("actions", actions);
+        behaviors.add(behavior);
+        json.add("behaviors", behaviors);
+        writeToFile(folder, "milestone_blood_mage.json", json);
+    }
+    
+    private static void exportStormCaller(File folder) {
+        JsonObject json = new JsonObject();
+        json.addProperty("type", "MILESTONE");
+        json.addProperty("name", "Storm Caller");
+        json.addProperty("description", "Build up charge with attacks. Release lightning at max charge.");
+        JsonArray behaviors = new JsonArray();
+        JsonObject beh1 = new JsonObject();
+        beh1.addProperty("trigger", "ON_ATTACK");
+        JsonArray acts1 = new JsonArray();
+        JsonObject act1 = new JsonObject();
+        act1.addProperty("type", "stones:math");
+        act1.addProperty("variable", "lightning_charge");
+        act1.addProperty("operation", "add");
+        act1.addProperty("value", 1.0);
+        acts1.add(act1);
+        beh1.add("actions", acts1);
+        behaviors.add(beh1);
+        JsonObject beh2 = new JsonObject();
+        beh2.addProperty("trigger", "ON_ATTACK");
+        JsonArray conds2 = new JsonArray();
+        JsonObject cond1 = new JsonObject();
+        cond1.addProperty("type", "stones:variable_compare");
+        cond1.addProperty("variable", "lightning_charge");
+        cond1.addProperty("operator", ">=");
+        cond1.addProperty("value", 5.0);
+        conds2.add(cond1);
+        beh2.add("conditions", conds2);
+        JsonArray acts2 = new JsonArray();
+        JsonObject act2 = new JsonObject();
+        act2.addProperty("type", "stones:explode");
+        act2.addProperty("radius", 3.0);
+        act2.addProperty("fire", false);
+        acts2.add(act2);
+        JsonObject act3 = new JsonObject();
+        act3.addProperty("type", "stones:apply_effect");
+        act3.addProperty("effect", "minecraft:speed");
+        act3.addProperty("duration", 100);
+        act3.addProperty("amplifier", 1);
+        acts2.add(act3);
+        JsonObject act4 = new JsonObject();
+        act4.addProperty("type", "stones:set_variable");
+        act4.addProperty("name", "lightning_charge");
+        act4.addProperty("value", 0.0);
+        acts2.add(act4);
+        beh2.add("actions", acts2);
+        behaviors.add(beh2);
+        json.add("behaviors", behaviors);
+        writeToFile(folder, "milestone_storm_caller.json", json);
+    }
+    
+    private static void exportPhoenix(File folder) {
+        JsonObject json = new JsonObject();
+        json.addProperty("type", "MILESTONE");
+        json.addProperty("name", "Phoenix");
+        json.addProperty("description", "Burning empowers you. Once per life, revive from ashes.");
+        JsonArray behaviors = new JsonArray();
+        JsonObject beh1 = new JsonObject();
+        beh1.addProperty("trigger", "ON_ATTACK");
+        JsonArray conds1 = new JsonArray();
+        JsonObject cond1 = new JsonObject();
+        cond1.addProperty("type", "stones:on_fire");
+        conds1.add(cond1);
+        beh1.add("conditions", conds1);
+        JsonArray acts1 = new JsonArray();
+        JsonObject act1 = new JsonObject();
+        act1.addProperty("type", "stones:modify_damage");
+        act1.addProperty("multiplier", 1.8);
+        acts1.add(act1);
+        JsonObject act2 = new JsonObject();
+        act2.addProperty("type", "stones:explode");
+        act2.addProperty("radius", 2.0);
+        act2.addProperty("fire", true);
+        acts1.add(act2);
+        beh1.add("actions", acts1);
+        behaviors.add(beh1);
+        JsonObject beh2 = new JsonObject();
+        beh2.addProperty("trigger", "ON_HURT");
+        JsonArray conds2 = new JsonArray();
+        JsonObject cond2 = new JsonObject();
+        cond2.addProperty("type", "stones:health_below");
+        cond2.addProperty("percent", 0.1);
+        conds2.add(cond2);
+        JsonObject cond3 = new JsonObject();
+        cond3.addProperty("type", "stones:variable_compare");
+        cond3.addProperty("variable", "phoenix_revived");
+        cond3.addProperty("operator", "<");
+        cond3.addProperty("value", 1.0);
+        conds2.add(cond3);
+        beh2.add("conditions", conds2);
+        JsonArray acts2 = new JsonArray();
+        JsonObject act3 = new JsonObject();
+        act3.addProperty("type", "stones:cancel");
+        acts2.add(act3);
+        JsonObject act4 = new JsonObject();
+        act4.addProperty("type", "stones:heal");
+        act4.addProperty("percent_of_max_health", 1.0);
+        acts2.add(act4);
+        JsonObject act5 = new JsonObject();
+        act5.addProperty("type", "stones:explode");
+        act5.addProperty("radius", 5.0);
+        act5.addProperty("fire", true);
+        acts2.add(act5);
+        JsonObject act6 = new JsonObject();
+        act6.addProperty("type", "stones:set_variable");
+        act6.addProperty("name", "phoenix_revived");
+        act6.addProperty("value", 1.0);
+        acts2.add(act6);
+        beh2.add("actions", acts2);
+        behaviors.add(beh2);
+        json.add("behaviors", behaviors);
+        writeToFile(folder, "milestone_phoenix.json", json);
+    }
+    
+    private static void exportGladiator(File folder) {
+        JsonObject json = new JsonObject();
+        json.addProperty("type", "MILESTONE");
+        json.addProperty("name", "Gladiator");
+        json.addProperty("description", "Combo attacks increase damage. Combo resets after 5s.");
+        JsonArray behaviors = new JsonArray();
+
+        // 1. ON_ATTACK: Combo erhöhen, Swirls auslösen, Timer setzen
+        JsonObject bAtk = new JsonObject();
+        bAtk.addProperty("trigger", "ON_ATTACK");
+        JsonArray aAtk = new JsonArray();
+        
+        // Combo Variable laden, erhöhen und speichern
+        JsonObject getC = new JsonObject(); getC.addProperty("type", "stones:get_persistent_var"); getC.addProperty("name", "combo"); getC.addProperty("into", "c"); aAtk.add(getC);
+        JsonObject addC = new JsonObject(); addC.addProperty("type", "stones:math"); addC.addProperty("variable", "c"); addC.addProperty("operation", "add"); addC.addProperty("value", 1.0); aAtk.add(addC);
+        JsonObject setC = new JsonObject(); setC.addProperty("type", "stones:set_persistent_var"); setC.addProperty("name", "combo"); setC.addProperty("value_var", "c"); aAtk.add(setC);
+        
+        // Timer auf 100 Ticks setzen (Persistent!)
+        JsonObject setT = new JsonObject(); setT.addProperty("type", "stones:set_persistent_var"); setT.addProperty("name", "timer"); setT.addProperty("value", 100.0); aAtk.add(setT);
+        
+        // Schaden basierend auf Combo
+        JsonObject dmg = new JsonObject(); dmg.addProperty("type", "stones:modify_damage"); dmg.addProperty("add_var", "c"); aAtk.add(dmg);
+        
+        bAtk.add("actions", aAtk); behaviors.add(bAtk);
+
+        // 2. ON_TICK: Timer verringern und Swirls anzeigen
+        JsonObject bTick = new JsonObject();
+        bTick.addProperty("trigger", "ON_TICK");
+        JsonArray aTick = new JsonArray();
+        
+        // Timer laden, subtrahieren, speichern
+        JsonObject getT = new JsonObject(); getT.addProperty("type", "stones:get_persistent_var"); getT.addProperty("name", "timer"); getT.addProperty("into", "t"); aTick.add(getT);
+        JsonObject subT = new JsonObject(); subT.addProperty("type", "stones:math"); subT.addProperty("variable", "t"); subT.addProperty("operation", "subtract"); subT.addProperty("value", 1.0); aTick.add(subT);
+        JsonObject saveT = new JsonObject(); saveT.addProperty("type", "stones:set_persistent_var"); saveT.addProperty("name", "timer"); saveT.addProperty("value_var", "t"); aTick.add(saveT);
+        
+        // Swirls basierend auf Combo Variable
+        JsonObject getC2 = new JsonObject(); getC2.addProperty("type", "stones:get_persistent_var"); getC2.addProperty("name", "combo"); getC2.addProperty("into", "c_swirl"); aTick.add(getC2);
+        JsonObject swirl = new JsonObject(); swirl.addProperty("type", "stones:particle_orbit"); swirl.addProperty("count_var", "c_swirl"); swirl.addProperty("particle", "minecraft:crit"); aTick.add(swirl);
+        
+        bTick.add("actions", aTick); behaviors.add(bTick);
+
+        // 3. ON_TICK: Reset wenn Timer <= 0
+        JsonObject bRes = new JsonObject(); bRes.addProperty("trigger", "ON_TICK");
+        JsonArray cRes = new JsonArray(); 
+        JsonObject checkT = new JsonObject(); checkT.addProperty("type", "stones:get_persistent_var"); checkT.addProperty("name", "timer"); checkT.addProperty("into", "t_check"); 
+        JsonObject cond = new JsonObject(); cond.addProperty("type", "stones:variable_compare"); cond.addProperty("variable", "t_check"); cond.addProperty("operator", "<="); cond.addProperty("value", 0.0);
+        cRes.add(cond); bRes.add("conditions", cRes);
+        
+        JsonArray aRes = new JsonArray();
+        JsonObject rC = new JsonObject(); rC.addProperty("type", "stones:set_persistent_var"); rC.addProperty("name", "combo"); rC.addProperty("value", 0.0); aRes.add(rC);
+        bRes.add("actions", aRes);
+        behaviors.add(bRes);
+
+        json.add("behaviors", behaviors);
+        writeToFile(folder, "milestone_gladiator.json", json);
+    }
+    
+    private static void exportNecromancer(File folder) {
+        JsonObject json = new JsonObject();
+        json.addProperty("type", "MILESTONE");
+        json.addProperty("name", "Necromancer");
+        json.addProperty("description", "Gain souls on kill. Spend souls to avoid death.");
+        JsonArray behaviors = new JsonArray();
+        JsonObject beh1 = new JsonObject();
+        beh1.addProperty("trigger", "ON_KILL");
+        JsonArray acts1 = new JsonArray();
+        JsonObject act1 = new JsonObject();
+        act1.addProperty("type", "stones:math");
+        act1.addProperty("variable", "souls");
+        act1.addProperty("operation", "add");
+        act1.addProperty("value", 1.0);
+        acts1.add(act1);
+        JsonObject act2 = new JsonObject();
+        act2.addProperty("type", "stones:apply_effect");
+        act2.addProperty("effect", "minecraft:regeneration");
+        act2.addProperty("duration", 40);
+        act2.addProperty("amplifier", 0);
+        acts1.add(act2);
+        beh1.add("actions", acts1);
+        behaviors.add(beh1);
+        JsonObject beh2 = new JsonObject();
+        beh2.addProperty("trigger", "ON_HURT");
+        JsonArray conds2 = new JsonArray();
+        JsonObject cond1 = new JsonObject();
+        cond1.addProperty("type", "stones:health_below");
+        cond1.addProperty("percent", 0.15);
+        conds2.add(cond1);
+        JsonObject cond2 = new JsonObject();
+        cond2.addProperty("type", "stones:variable_compare");
+        cond2.addProperty("variable", "souls");
+        cond2.addProperty("operator", ">=");
+        cond2.addProperty("value", 5.0);
+        conds2.add(cond2);
+        beh2.add("conditions", conds2);
+        JsonArray acts2 = new JsonArray();
+        JsonObject act3 = new JsonObject();
+        act3.addProperty("type", "stones:cancel");
+        acts2.add(act3);
+        JsonObject act4 = new JsonObject();
+        act4.addProperty("type", "stones:heal");
+        act4.addProperty("percent_of_max_health", 0.5);
+        acts2.add(act4);
+        JsonObject act5 = new JsonObject();
+        act5.addProperty("type", "stones:math");
+        act5.addProperty("variable", "souls");
+        act5.addProperty("operation", "subtract");
+        act5.addProperty("value", 5.0);
+        acts2.add(act5);
+        beh2.add("actions", acts2);
+        behaviors.add(beh2);
+        json.add("behaviors", behaviors);
+        writeToFile(folder, "milestone_necromancer.json", json);
+    }
+    
+    private static void writeToFile(File folder, String filename, JsonObject json) {
+        File file = new File(folder, filename);
+        try (FileWriter writer = new FileWriter(file)) {
+            GSON.toJson(json, writer);
+            System.out.println("✓ Created: " + filename);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+}

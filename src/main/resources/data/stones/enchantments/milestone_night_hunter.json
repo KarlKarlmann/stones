@@ -1,0 +1,105 @@
+{
+  "type": "MILESTONE",
+  "name": "DICT:milestone.stones.night_hunter.name",
+  "description": "DICT:milestone.stones.night_hunter.description",
+  "icon": "minecraft:mojang_banner_pattern",
+  "stats": [
+    {
+      "id": "night_buff",
+      "label": "DICT:stat.stones.night_buff",
+      "base": 1.25,
+      "scaling": "RUNE_LEVEL",
+      "per_level": 0.05,
+      "suffix": "DICT:stat.stones.suffix.multiplier"
+    },
+    {
+      "id": "invis_chance",
+      "label": "DICT:stat.stones.invis_chance",
+      "base": 0.15,
+      "scaling": "SOCK_LEVEL",
+      "per_level": 0.02,
+      "display_factor": 100.0,
+      "suffix": "DICT:stat.stones.suffix.percent"
+    }
+  ],
+  "behaviors": [
+    {
+      "trigger": "ON_ATTACK",
+      "actions": [
+        {
+          "type": "stones:case",
+          "cases": [
+            {
+              "condition": {
+                "type": "stones:is_day"
+              },
+              "actions": [
+                {
+                  "type": "stones:modify_damage",
+                  "multiplier": 0.5
+                },
+                {
+                  "type": "stones:spawn_particles",
+                  "particle": "minecraft:smoke",
+                  "count": 5
+                },
+                {
+                  "type": "stones:play_sound",
+                  "sound": "minecraft:entity.skeleton.ambient",
+                  "pitch": 1.5,
+                  "volume": 0.3
+                }
+              ]
+            }
+          ],
+          "default": [
+            {
+              "type": "stones:modify_damage",
+              "multiplier": "$night_buff"
+            },
+            {
+              "type": "stones:random",
+              "into": "night_roll"
+            },
+            {
+              "type": "stones:case",
+              "cases": [
+                {
+                  "condition": {
+                    "type": "stones:variable_compare",
+                    "variable": "night_roll",
+                    "operator": "<",
+                    "value": "$invis_chance"
+                  },
+                  "actions": [
+                    {
+                      "type": "stones:apply_effect",
+                      "effect": "minecraft:invisibility",
+                      "duration": 100,
+                      "amplifier": 0
+                    },
+                    {
+                      "type": "stones:play_sound",
+                      "sound": "minecraft:entity.phantom.flap",
+                      "pitch": 0.5
+                    },
+                    {
+                      "type": "stones:spawn_particles",
+                      "particle": "minecraft:squid_ink",
+                      "count": 20
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "stones:spawn_particles",
+              "particle": "minecraft:witch",
+              "count": 10
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

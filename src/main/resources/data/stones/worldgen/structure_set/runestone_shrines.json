@@ -1,0 +1,15 @@
+{
+  "structures": [
+    {
+      "structure": "stones:runestone_shrine",
+      "weight": 1
+    }
+  ],
+  "placement": {
+    "type": "minecraft:random_spread",
+    "spacing": 35,
+    "separation": 8,
+    "salt": 1435762,
+    "spread_type": "linear"
+  }
+}

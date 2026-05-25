@@ -1,0 +1,135 @@
+{
+  "type": "MILESTONE",
+  "name": "DICT:milestone.stones.void_walker.name",
+  "description": "DICT:milestone.stones.void_walker.description",
+  "icon": "stones:textures/gui/skills/voiddash.png",
+  "required_level": 5,
+  "stats": [
+    {
+      "id": "dash_power",
+      "label": "DICT:stat.stones.dash_power",
+      "base": 2.0,
+      "scaling": "SOCK_LEVEL",
+      "per_level": 0.2
+    },
+    {
+      "id": "dash_cooldown",
+      "label": "DICT:stat.stones.dash_cooldown",
+      "base": 60.0,
+      "scaling": "RUNE_LEVEL",
+      "per_level": -5.0,
+      "display_factor": 0.05,
+      "suffix": "DICT:stat.stones.suffix.seconds"
+    },
+    {
+      "id": "void_window",
+      "label": "DICT:stat.stones.void_duration",
+      "base": 1.0,
+      "scaling": "RUNE_LEVEL",
+      "per_level": 0.2,
+      "suffix": "DICT:stat.stones.suffix.seconds"
+    }
+  ],
+  "behaviors": [
+    {
+      "trigger": "ON_ACTION_BUTTON",
+      "conditions": [
+        {
+          "type": "stones:is_ready",
+          "name": "void_dash"
+        }
+      ],
+      "actions": [
+        {
+          "type": "stones:cooldown",
+          "name": "void_dash",
+          "ticks": "$dash_cooldown"
+        },
+        {
+          "type": "stones:invoke",
+          "call": "player.getLookAngle()",
+          "save_result_to": "look"
+        },
+        {
+          "type": "stones:add_velocity",
+          "vec": "$look",
+          "scale": "$dash_power"
+        },
+        {
+          "type": "stones:set_persistent_var",
+          "name": "is_void_walking",
+          "value": "$void_window"
+        },
+        {
+          "type": "stones:spawn_particles",
+          "particle": "minecraft:portal",
+          "count": 25,
+          "speed": 0.1
+        },
+        {
+          "type": "stones:play_sound",
+          "sound": "minecraft:entity.enderman.teleport",
+          "volume": 1.0,
+          "pitch": 1.2
+        }
+      ]
+    },
+    {
+      "trigger": "ON_TICK",
+      "actions": [
+        {
+          "type": "stones:get_persistent_var",
+          "name": "is_void_walking",
+          "into": "timer"
+        },
+        {
+          "type": "stones:math",
+          "variable": "timer",
+          "operation": "subtract",
+          "value": 0.05
+        },
+        {
+          "type": "stones:set_persistent_var",
+          "name": "is_void_walking",
+          "value": "$timer"
+        }
+      ]
+    },
+    {
+      "trigger": "ON_KILL",
+      "conditions": [
+        {
+          "type": "stones:persistent_var_compare",
+          "name": "is_void_walking",
+          "operator": ">",
+          "value": 0.0
+        }
+      ],
+      "actions": [
+        {
+          "type": "stones:apply_effect",
+          "effect": "minecraft:invisibility",
+          "duration": 200,
+          "amplifier": 0
+        },
+        {
+          "type": "stones:apply_effect",
+          "effect": "minecraft:speed",
+          "duration": 200,
+          "amplifier": 1
+        },
+        {
+          "type": "stones:play_sound",
+          "sound": "minecraft:block.amethyst_block.chime",
+          "volume": 1.0,
+          "pitch": 0.5
+        },
+        {
+          "type": "stones:spawn_particles",
+          "particle": "minecraft:dragon_breath",
+          "count": 15
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,84 @@
+{
+  "type": "MILESTONE",
+  "name": "DICT:milestone.stones.master_prospector.name",
+  "description": "DICT:milestone.stones.master_prospector.description",
+  "icon": "stones:textures/gui/skills/masterprospector.png",
+  "required_level": 15,
+  "stats": [
+    {
+      "id": "sonar_radius",
+      "label": "DICT:stat.stones.sonar_radius",
+      "base": 6.0,
+      "scaling": "RUNE_LEVEL",
+      "per_level": 2,
+      "suffix": "DICT:stat.stones.suffix.meters"
+    },
+    {
+      "id": "sonar_duration",
+      "label": "DICT:stat.stones.sonar_duration",
+      "base": 100.0,
+      "scaling": "RUNE_LEVEL",
+      "per_level": 40.0,
+      "display_factor": 0.05,
+      "suffix": "DICT:stat.stones.suffix.seconds"
+    },
+    {
+      "id": "sonar_cooldown",
+      "label": "DICT:stat.stones.pyro_recharge",
+      "base": 300.0,
+      "scaling": "SOCK_LEVEL",
+      "per_level": -10.0,
+      "display_factor": 0.05,
+      "suffix": "DICT:stat.stones.suffix.seconds"
+    }
+  ],
+  "behaviors": [
+    {
+      "trigger": "ON_ACTION_BUTTON",
+      "conditions": [
+        {
+          "type": "stones:is_ready"
+        }
+      ],
+      "actions": [
+        {
+          "type": "stones:cooldown",
+          "ticks_var": "sonar_cooldown"
+        },
+        {
+          "type": "stones:find_blocks",
+          "radius": "$sonar_radius",
+          "tags": [
+            "forge:ores"
+          ],
+          "save_to": "detected_ores"
+        },
+        {
+          "type": "stones:for_each",
+          "from": "$detected_ores",
+          "as": "current",
+          "actions": [
+            {
+              "type": "stones:marker",
+              "pos": "$current",
+              "mode": "box",
+              "duration": "$sonar_duration"
+            }
+          ]
+        },
+        {
+          "type": "stones:play_sound",
+          "sound": "minecraft:entity.warden.sonic_boom",
+          "volume": 0.8,
+          "pitch": 2.0
+        },
+        {
+          "type": "stones:spawn_particles",
+          "particle": "minecraft:sonic_boom",
+          "count": 1,
+          "speed": 0.05
+        }
+      ]
+    }
+  ]
+}

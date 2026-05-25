@@ -1,0 +1,99 @@
+{
+  "type": "MILESTONE",
+  "name": "DICT:milestone.stones.berserker.name",
+  "description": "DICT:milestone.stones.berserker.description",
+  "icon": "minecraft:netherite_axe",
+  "stats": [
+    {
+      "id": "berserk_threshold",
+      "label": "DICT:stat.stones.berserk_threshold",
+      "base": 0.25,
+      "scaling": "RUNE_LEVEL",
+      "per_level": 0.025,
+      "max": 0.6,
+      "display_factor": 100.0,
+      "suffix": "DICT:stat.stones.suffix.hp_percent"
+    },
+    {
+      "id": "berserk_mult",
+      "label": "DICT:stat.stones.berserk_mult",
+      "base": 1.5,
+      "scaling": "RUNE_LEVEL",
+      "per_level": 0.15,
+      "suffix": "DICT:stat.stones.suffix.multiplier"
+    },
+    {
+      "id": "kill_heal",
+      "label": "DICT:stat.stones.kill_heal",
+      "base": 0.1,
+      "scaling": "SOCK_LEVEL",
+      "per_level": 0.02,
+      "max": 0.5,
+      "display_factor": 100.0,
+      "suffix": "DICT:stat.stones.suffix.hp_percent"
+    }
+  ],
+  "behaviors": [
+    {
+      "trigger": "ON_ATTACK",
+      "actions": [
+        {
+          "type": "stones:case",
+          "cases": [
+            {
+              "condition": {
+                "type": "stones:health_below",
+                "percent": "$berserk_threshold"
+              },
+              "actions": [
+                {
+                  "type": "stones:modify_damage",
+                  "multiplier": "$berserk_mult"
+                },
+                {
+                  "type": "stones:apply_effect",
+                  "effect": "minecraft:strength",
+                  "duration": 100,
+                  "amplifier": 1
+                },
+                {
+                  "type": "stones:play_sound",
+                  "sound": "minecraft:entity.ravager.roar",
+                  "pitch": 1.8,
+                  "volume": 0.4
+                },
+                {
+                  "type": "stones:spawn_particles",
+                  "particle": "minecraft:angry_villager",
+                  "count": 5,
+                  "spread": 0.2
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "trigger": "ON_KILL",
+      "actions": [
+        {
+          "type": "stones:heal",
+          "percent_of_max_health": "$kill_heal"
+        },
+        {
+          "type": "stones:play_sound",
+          "sound": "minecraft:entity.player.attack.crit",
+          "pitch": 0.5
+        },
+        {
+          "type": "stones:spawn_particles",
+          "particle": "minecraft:damage_indicator",
+          "count": 12,
+          "speed": 0.1,
+          "spread": 0.4
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "parent": "item/generated",
+  "textures": {
+    "layer0": "stones:item/cluster_jewel_major_1"
+  },
+  "overrides": [
+    { "predicate": { "stones:amplify": 0.25 }, "model": "stones:item/cluster_jewel_major_2" },
+    { "predicate": { "stones:amplify": 0.50 }, "model": "stones:item/cluster_jewel_major_3" },
+    { "predicate": { "stones:amplify": 0.75 }, "model": "stones:item/cluster_jewel_major_4" },
+    { "predicate": { "stones:amplify": 1.00 }, "model": "stones:item/cluster_jewel_major_legendary" }
+  ]
+}

@@ -1,0 +1,79 @@
+{
+  "type": "MILESTONE",
+  "name": "DICT:milestone.stones.gravity_well.name",
+  "description": "DICT:milestone.stones.gravity_well.description",
+  "required_level": 25,
+  "icon": "stones:textures/gui/skills/gravitywell.png",
+  "stats": [
+    {
+      "id": "gravity_radius",
+      "label": "DICT:stat.stones.gravity_radius",
+      "base": 5.0,
+      "scaling": "RUNE_LEVEL",
+      "per_level": 1.0,
+      "suffix": "DICT:stat.stones.suffix.meters"
+    },
+    {
+      "id": "gravity_damage",
+      "label": "DICT:stat.stones.gravity_damage",
+      "base": 4.0,
+      "scaling": "SOCK_LEVEL",
+      "per_level": 2.0,
+      "suffix": "DICT:stat.stones.suffix.damage"
+    },
+    {
+      "id": "gravity_cooldown",
+      "label": "DICT:stat.stones.pyro_recharge",
+      "base": 300.0,
+      "scaling": "PLAYER_LEVEL",
+      "per_level": -2.0,
+      "display_factor": 0.05,
+      "suffix": "DICT:stat.stones.suffix.seconds"
+    }
+  ],
+  "behaviors": [
+    {
+      "trigger": "ON_ACTION_BUTTON",
+      "conditions": [
+        {
+          "type": "stones:is_ready"
+        }
+      ],
+      "actions": [
+        {
+          "type": "stones:cooldown",
+          "ticks": "$gravity_cooldown"
+        },
+        {
+          "type": "stones:play_sound",
+          "sound": "minecraft:block.end_portal.spawn",
+          "volume": 1.0,
+          "pitch": 0.5
+        },
+        {
+          "type": "stones:spawn_particles",
+          "particle": "minecraft:squid_ink",
+          "count": 50,
+          "speed": 0.2
+        },
+        {
+          "type": "stones:spawn_particles",
+          "particle": "minecraft:portal",
+          "count": 30,
+          "speed": 0.5
+        },
+        {
+          "type": "stones:explode",
+          "radius": "$gravity_radius",
+          "fire": false
+        },
+        {
+          "type": "stones:apply_effect",
+          "effect": "minecraft:slowness",
+          "duration": 40,
+          "amplifier": 2
+        }
+      ]
+    }
+  ]
+}

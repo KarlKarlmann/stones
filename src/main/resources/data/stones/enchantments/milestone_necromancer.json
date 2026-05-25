@@ -1,0 +1,147 @@
+{
+  "type": "MILESTONE",
+  "name": "DICT:milestone.stones.necromancer.name",
+  "description": "DICT:milestone.stones.necromancer.description",
+  "icon": "minecraft:wither_skeleton_skull",
+  "stats": [
+    {
+      "id": "soul_gain",
+      "label": "DICT:stat.stones.soul_gain",
+      "base": 1.0,
+      "scaling": "RUNE_LEVEL",
+      "per_level": 0.2,
+      "suffix": "DICT:stat.stones.suffix.souls"
+    },
+    {
+      "id": "soul_cost",
+      "label": "DICT:stat.stones.soul_cost",
+      "base": 6.0,
+      "scaling": "SOCK_LEVEL",
+      "per_level": -0.3,
+      "min": 2.0,
+      "suffix": "DICT:stat.stones.suffix.souls"
+    },
+    {
+      "id": "heal_power",
+      "label": "DICT:stat.stones.heal_power",
+      "base": 0.3,
+      "scaling": "RUNE_LEVEL",
+      "per_level": 0.05,
+      "max": 0.8,
+      "display_factor": 100.0,
+      "suffix": "DICT:stat.stones.suffix.hp_percent"
+    }
+  ],
+  "behaviors": [
+    {
+      "trigger": "ON_KILL",
+      "actions": [
+        {
+          "type": "stones:get_persistent_var",
+          "name": "souls",
+          "into": "current_souls"
+        },
+        {
+          "type": "stones:math",
+          "variable": "current_souls",
+          "operation": "add",
+          "value": "$soul_gain"
+        },
+        {
+          "type": "stones:set_persistent_var",
+          "name": "souls",
+          "value": "$current_souls"
+        },
+        {
+          "type": "stones:apply_effect",
+          "effect": "minecraft:regeneration",
+          "duration": 80,
+          "amplifier": 1
+        },
+        {
+          "type": "stones:play_sound",
+          "sound": "minecraft:entity.vex.ambient",
+          "pitch": 0.5,
+          "volume": 0.7
+        },
+        {
+          "type": "stones:spawn_particles",
+          "particle": "minecraft:soul",
+          "count": 15,
+          "speed": 0.05
+        }
+      ]
+    },
+    {
+      "trigger": "ON_HURT",
+      "conditions": [
+        {
+          "type": "stones:health_below",
+          "percent": 0.2
+        }
+      ],
+      "actions": [
+        {
+          "type": "stones:get_persistent_var",
+          "name": "souls",
+          "into": "check_souls"
+        },
+        {
+          "type": "stones:case",
+          "cases": [
+            {
+              "condition": {
+                "type": "stones:variable_compare",
+                "variable": "check_souls",
+                "operator": ">=",
+                "value": "$soul_cost"
+              },
+              "actions": [
+                {
+                  "type": "stones:cancel"
+                },
+                {
+                  "type": "stones:heal",
+                  "percent_of_max_health": "$heal_power"
+                },
+                {
+                  "type": "stones:math",
+                  "variable": "check_souls",
+                  "operation": "subtract",
+                  "value": "$soul_cost"
+                },
+                {
+                  "type": "stones:set_persistent_var",
+                  "name": "souls",
+                  "value": "$check_souls"
+                },
+                {
+                  "type": "stones:play_sound",
+                  "sound": "minecraft:entity.wither.death",
+                  "pitch": 1.2
+                },
+                {
+                  "type": "stones:spawn_particles",
+                  "particle": "minecraft:soul_fire_flame",
+                  "count": 50,
+                  "spread": 1.0
+                },
+                {
+                  "type": "stones:apply_effect",
+                  "effect": "minecraft:resistance",
+                  "duration": 100,
+                  "amplifier": 3
+                },
+                {
+                  "type": "stones:cooldown",
+                  "name": "necromancer_save",
+                  "ticks": 1200
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

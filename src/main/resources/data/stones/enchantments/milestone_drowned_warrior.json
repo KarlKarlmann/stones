@@ -1,0 +1,90 @@
+{
+  "type": "MILESTONE",
+  "name": "DICT:milestone.stones.drowned_warrior.name",
+  "description": "DICT:milestone.stones.drowned_warrior.description",
+  "icon": "minecraft:trident",
+  "stats": [
+    {
+      "id": "air_drain",
+      "label": "DICT:stat.stones.air_drain",
+      "base": 80.0,
+      "scaling": "RUNE_LEVEL",
+      "per_level": -5.0,
+      "suffix": "DICT:stat.stones.suffix.points"
+    },
+    {
+      "id": "damage_bonus",
+      "label": "DICT:stat.stones.damage_bonus",
+      "base": 5.0,
+      "scaling": "SOCKET_LEVEL",
+      "per_level": 0.3,
+      "suffix": "DICT:stat.stones.suffix.damage"
+    }
+  ],
+  "behaviors": [
+    {
+      "trigger": "ON_SWING",
+      "conditions": [
+        {
+          "type": "stones:has_air",
+          "min": 20
+        }
+      ],
+      "actions": [
+        {
+          "type": "stones:invoke",
+          "call": "player.getAirSupply()",
+          "save_result_to": "temp_air"
+        },
+        {
+          "type": "stones:math",
+          "variable": "temp_air",
+          "operation": "subtract",
+          "value": "$air_drain"
+        },
+        {
+          "type": "stones:invoke",
+          "call": "player.setAirSupply(int)",
+          "args": [
+            "$temp_air"
+          ]
+        },
+        {
+          "type": "stones:modify_damage",
+          "add": "$damage_bonus"
+        },
+        {
+          "type": "stones:spawn_particles",
+          "particle": "minecraft:bubble",
+          "count": 15,
+          "speed": 0.1
+        },
+        {
+          "type": "stones:play_sound",
+          "sound": "minecraft:entity.player.attack.sweep",
+          "volume": 0.7,
+          "pitch": 0.5
+        }
+      ]
+    },
+    {
+      "trigger": "ON_TICK",
+      "conditions": [
+        {
+          "type": "stones:variable_compare",
+          "variable": "RuneLevel",
+          "operator": ">",
+          "value": 9.0
+        }
+      ],
+      "actions": [
+        {
+          "type": "stones:apply_effect",
+          "effect": "minecraft:water_breathing",
+          "duration": 100,
+          "amplifier": 0
+        }
+      ]
+    }
+  ]
+}

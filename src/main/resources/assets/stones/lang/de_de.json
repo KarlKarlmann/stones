@@ -1,0 +1,20 @@
+{
+    "block.stones.runestone": "Runenstein",
+    "item.stones.stone": "Stein",
+    "item.stones.rune_minor": "Kleine Rune",
+    "item.stones.rune_major": "Große Rune",
+    "item.stones.rune_milestone": "Meilenstein-Rune",
+	"tooltip.stones.required_level": "Erforderliche Sockelstufe: %s",
+    "tooltip.stones.reduced_by_curse": " (Durch Fluch reduziert)",
+    "tooltip.stones.effect": "Effekt",
+    "tooltip.stones.active_bonus": "Aktiver Bonus",
+	"tooltip.stones.scales_with_level": "(Skaliert mit deinem Level)",
+    "tooltip.stones.empty": "⚠ Leer – Verwende Verzauberungstisch!",
+    "tooltip.stones.passive_effect": "Effekt",
+	"gui.stones.sock_level": "Sockelstufe",
+    "gui.stones.active_bonus": "Aktiver Bonus",
+    "scaling.stones.rune_level": "Verzauberungsstufe",
+    "scaling.stones.player_level": "Spielerstufe",
+	"item.stones.resonance_gift": "Resonanz-Geschenk (Tier %s)",
+	"tooltip.stones.score": "Ergebnis: %s"
+}

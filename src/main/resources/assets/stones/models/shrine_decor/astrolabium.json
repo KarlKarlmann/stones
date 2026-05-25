@@ -1,0 +1,124 @@
+{
+	"format_version": "1.9.0",
+	"credit": "Blanchitsu Style - Detailed Round Astrolabe Skeleton",
+	"textures": {
+		"0": "stones:block/astrolabium",
+		"particle": "stones:block/astrolabium"
+	},
+	"elements": [
+		{
+			"name": "Base_Foot",
+			"from": [5, 0, 5],
+			"to": [11, 2, 12],
+			"rotation": {"angle": 0, "axis": "y", "origin": [7.94355, 4.32933, 8.18106]},
+			"faces": {
+				"north": {"uv": [3.625, 0.1875, 7.3125, 3.625], "texture": "#0"},
+				"east": {"uv": [3.625, 0.1875, 7.3125, 3.625], "texture": "#0"},
+				"south": {"uv": [3.625, 0.1875, 7.3125, 3.625], "texture": "#0"},
+				"west": {"uv": [3.625, 0.1875, 7.3125, 3.625], "texture": "#0"},
+				"up": {"uv": [3.625, 0.1875, 7.3125, 3.625], "texture": "#0"},
+				"down": {"uv": [3.625, 0.1875, 7.3125, 3.625], "texture": "#0"}
+			}
+		},
+		{
+			"name": "Ring_Vertical",
+			"from": [7, 2, 8],
+			"to": [9, 3, 9],
+			"rotation": {"angle": 0, "axis": "x", "origin": [7.94355, 4.32933, 8.18106]},
+			"faces": {
+				"north": {"uv": [3.6875, 0.25, 7.25, 3.5625], "texture": "#0"},
+				"east": {"uv": [3.6875, 0.25, 7.3125, 3.5625], "texture": "#0"},
+				"south": {"uv": [3.6875, 0.25, 7.25, 3.5625], "texture": "#0"},
+				"west": {"uv": [3.6875, 0.25, 7.25, 3.5625], "texture": "#0"},
+				"up": {"uv": [3.6875, 0.25, 7.25, 3.5625], "texture": "#0"}
+			}
+		},
+		{
+			"name": "Mater_Backplate",
+			"from": [7.90533, 6.40865, 7.06255],
+			"to": [7.90533, 8.90865, 9.56255],
+			"rotation": {"angle": 22.5, "axis": "y", "origin": [7.94355, 4.32933, 8.18106]},
+			"faces": {
+				"east": {"uv": [0, 0.14089, 2.09534, 2.3697], "texture": "#0"},
+				"west": {"uv": [0, 0.14089, 2.12076, 2.39513], "texture": "#0"}
+			}
+		},
+		{
+			"name": "Zeigeding",
+			"from": [7.16189, 7.55514, 5.23931],
+			"to": [8.66189, 7.55514, 11.23931],
+			"rotation": {"angle": -22.5, "axis": "y", "origin": [7.94355, 4.32933, 8.18106]},
+			"faces": {
+				"up": {"uv": [2.125, 0, 3.47034, 7.97881], "rotation": 180, "texture": "#0"},
+				"down": {"uv": [2.125, 0, 3.49576, 8.00424], "texture": "#0"}
+			}
+		},
+		{
+			"name": "Sheet_Tympanum",
+			"from": [1.41824, 6.4102, 3.75],
+			"to": [10.41824, 6.4202, 12.75],
+			"rotation": {"angle": -45, "axis": "z", "origin": [7.94355, 4.32933, 8.18106]},
+			"faces": {
+				"up": {"uv": [7.77225, 0.125, 16, 8.03496], "texture": "#0"},
+				"down": {"uv": [7.77225, 0.09428, 16, 8.06674], "rotation": 180, "texture": "#0"}
+			}
+		},
+		{
+			"name": "Sheet_Rete",
+			"from": [3.5, 1.76653, 5.7878],
+			"to": [12.5, 10.76653, 5.7978],
+			"rotation": {"angle": 45, "axis": "x", "origin": [7.94355, 4.32933, 8.18106]},
+			"faces": {
+				"north": {"uv": [7.94809, 8.17267, 16, 16], "texture": "#0"},
+				"south": {"uv": [7.95339, 8.17267, 16, 16], "texture": "#0"}
+			}
+		},
+		{
+			"name": "Sheet_Pointer",
+			"from": [3.37365, 2.5, 8.19732],
+			"to": [12.37365, 11.75, 8.20732],
+			"rotation": {"angle": 22.5, "axis": "y", "origin": [7.94355, 4.32933, 8.18106]},
+			"faces": {
+				"north": {"uv": [0.15784, 8.54767, 7.66421, 16], "texture": "#0"},
+				"south": {"uv": [0.15784, 8.54767, 7.67373, 16], "texture": "#0"}
+			}
+		}
+	],
+	"display": {
+		"thirdperson_righthand": {
+			"rotation": [63, 0, 0],
+			"translation": [-2.5, 4.5, 5.5]
+		},
+		"gui": {
+			"rotation": [30, -135, 0],
+			"scale": [0.625, 0.625, 0.625]
+		},
+		"fixed": {
+			"rotation": [0, 90, 0],
+			"translation": [0, 2.5, 0],
+			"scale": [1.3, 1.3, 1.3]
+		}
+	},
+	"groups": [
+		{
+			"name": "astrolabium",
+			"origin": [8, 8, 8],
+			"color": 0,
+			"children": [
+				{
+					"name": "astrolabium",
+					"origin": [8, 8, 8],
+					"color": 0,
+					"children": [
+						{
+							"name": "astrolabium",
+							"origin": [8, 8, 8],
+							"color": 0,
+							"children": [0, 1, 2, 3, 4, 5, 6]
+						}
+					]
+				}
+			]
+		}
+	]
+}

@@ -1,0 +1,13 @@
+{
+  "parent": "item/generated",
+  "textures": {
+    "layer0": "stones:item/rune_minor"
+  },
+  "overrides": [
+    { "predicate": { "stones:amplify": 0.30 }, "model": "stones:item/rune_minor_1" },
+    { "predicate": { "stones:amplify": 0.60 }, "model": "stones:item/rune_minor_2" },
+    { "predicate": { "stones:amplify": 0.90 }, "model": "stones:item/rune_minor_3" },
+    { "predicate": { "stones:amplify": 0.99 }, "model": "stones:item/rune_minor_4" },
+    { "predicate": { "stones:amplify": 1.00 }, "model": "stones:item/rune_minor_legendary" }
+  ]
+}

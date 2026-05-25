@@ -1,0 +1,21 @@
+{
+  "music.shrine_ambient": {
+    "category": "music",
+    "subtitle": "subtitles.stones.shrine_ambient",
+    "sounds": [
+      {
+        "name": "stones:music/shrine_ambient",
+        "stream": true
+      }
+    ]
+  },
+  "echo_trader_emerge": {
+    "category": "neutral",
+    "subtitle": "subtitles.stones.echo_trader_emerge",
+    "sounds": [
+      {
+        "name": "stones:mob/echo_trader/emerge"
+      }
+    ]
+  }
+}

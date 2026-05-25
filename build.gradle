@@ -1,0 +1,89 @@
+plugins {
+    id 'eclipse'
+    id 'net.minecraftforge.gradle' version '[6.0.16,6.2)'
+}
+
+// Version aus gradle.properties laden (Fallback auf 1.0.0, falls nicht gefunden)
+version = project.hasProperty('mod_version') ? project.getProperty('mod_version') : '1.0.0'
+group = 'net.stones'
+archivesBaseName = 'stones'
+
+java.toolchain.languageVersion = JavaLanguageVersion.of(17)
+
+minecraft {
+    mappings channel: 'official', version: '1.20.1'
+
+    accessTransformer = file('src/main/resources/META-INF/accesstransformer.cfg')
+
+    copyIdeResources = true
+
+    runs {
+        client {
+        }
+
+        server {
+        }
+
+        configureEach {
+            workingDirectory project.file('run')
+
+            property 'forge.logging.markers', 'REGISTRIES'
+            property 'forge.logging.console.level', 'debug'
+
+            mods {
+                // HIER ANGEPASST: Mod-ID auf stones gesetzt
+                stones {
+                    source sourceSets.main
+                }
+            }
+        }
+    }
+}
+
+dependencies {
+    minecraft 'net.minecraftforge:forge:1.20.1-47.3.0'
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8' // Use the UTF-8 charset for Java compilation
+}
+
+// --- Anpassung 1: Dateinamen der JAR festlegen ---
+tasks.named('jar', Jar).configure {
+    archiveFileName = "stones_1.20.1_forge_${project.version}.jar"
+}
+
+// --- Anpassung 2: Version dynamisch in die mods.toml schreiben ---
+tasks.named('processResources', ProcessResources).configure {
+    def replaceProperties = [
+            version: project.version
+    ]
+    inputs.properties replaceProperties
+
+    filesMatching(['META-INF/mods.toml']) {
+        expand replaceProperties + [project: project]
+    }
+}
+
+// --- Anpassung 3: Git Push NUR wenn der Build erfolgreich war ---
+tasks.named('build').configure {
+    doLast {
+        println "--> Build erfolgreich! Starte automatischen Git Push zum Repository..."
+        
+        // 1. Alle geänderten Dateien stagen
+        exec { commandLine 'git', 'add', '.' }
+        
+        // 2. Committen (ignoreExitValue = true verhindert Abstürze, falls es keine Änderungen gibt)
+        exec { 
+            commandLine 'git', 'commit', '-m', "Auto-Build: Version ${project.version}"
+            ignoreExitValue = true 
+        }
+        
+        // 3. Auf GitHub pushen (Achte darauf, dass dein Branch wirklich 'main' heißt, sonst anpassen!)
+        exec { 
+            commandLine 'git', 'push', 'origin', 'main' 
+            ignoreExitValue = true // Verhindert Build-Abbruch bei fehlendem Internet/Auth-Problemen
+        }
+        println "--> Push(Versuch) abgeschlossen!"
+    }
+}

@@ -1,0 +1,166 @@
+{
+  "type": "MILESTONE",
+  "name": "DICT:milestone.stones.pyromancer.name",
+  "description": "DICT:milestone.stones.pyromancer.description",
+  "icon": "stones:textures/gui/skills/fireball.png",
+  "required_level": 10,
+  "stats": [
+    {
+      "id": "pyro_cooldown",
+      "label": "DICT:stat.stones.pyro_recharge",
+      "base": 40.0,
+      "scaling": "RUNE_LEVEL",
+      "per_level": -5.0,
+      "display_factor": 0.05,
+      "suffix": "DICT:stat.stones.suffix.seconds"
+    },
+    {
+      "id": "pyro_speed",
+      "label": "DICT:stat.stones.pyro_speed",
+      "base": 1.0,
+      "scaling": "PLAYER_LEVEL",
+      "per_level": 0.05,
+      "suffix": "DICT:stat.stones.suffix.multiplier"
+    }
+  ],
+  "behaviors": [
+    {
+      "trigger": "ON_ACTION_BUTTON",
+      "conditions": [
+        {
+          "type": "stones:is_ready",
+          "name": "pyro_shot"
+        }
+      ],
+      "actions": [
+        {
+          "type": "stones:cooldown",
+          "name": "pyro_shot",
+          "ticks": "$pyro_cooldown"
+        },
+        {
+          "type": "stones:invoke",
+          "call": "player.getLookAngle()",
+          "save_result_to": "look"
+        },
+        {
+          "type": "stones:invoke",
+          "call": "player.getEyePosition(float)",
+          "args": [
+            "1.0"
+          ],
+          "save_result_to": "eye"
+        },
+        {
+          "type": "stones:set_variable",
+          "name": "px",
+          "value": "$look.x"
+        },
+        {
+          "type": "stones:math",
+          "variable": "px",
+          "operation": "multiply",
+          "value": "$pyro_speed"
+        },
+        {
+          "type": "stones:set_variable",
+          "name": "py",
+          "value": "$look.y"
+        },
+        {
+          "type": "stones:math",
+          "variable": "py",
+          "operation": "multiply",
+          "value": "$pyro_speed"
+        },
+        {
+          "type": "stones:set_variable",
+          "name": "pz",
+          "value": "$look.z"
+        },
+        {
+          "type": "stones:math",
+          "variable": "pz",
+          "operation": "multiply",
+          "value": "$pyro_speed"
+        },
+        {
+          "type": "stones:new",
+          "class": "net.minecraft.world.entity.projectile.SmallFireball",
+          "args": [
+            "$level",
+            "$player",
+            "$px",
+            "$py",
+            "$pz"
+          ],
+          "save_to": "fb"
+        },
+        {
+          "type": "stones:invoke",
+          "call": "$fb.setPos(double, double, double)",
+          "args": [
+            "$eye.x",
+            "$eye.y",
+            "$eye.z"
+          ]
+        },
+        {
+          "type": "stones:invoke",
+          "call": "level.addFreshEntity(net.minecraft.world.entity.Entity)",
+          "args": [
+            "$fb"
+          ]
+        },
+        {
+          "type": "stones:play_sound",
+          "sound": "minecraft:entity.ghast.shoot",
+          "volume": 1.0,
+          "pitch": 1.2
+        },
+        {
+          "type": "stones:spawn_particles",
+          "particle": "minecraft:flame",
+          "count": 15,
+          "speed": 0.2
+        }
+      ]
+    },
+    {
+      "trigger": "ON_ACTION_BUTTON",
+      "conditions": [
+        {
+          "type": "stones:variable_compare",
+          "variable": "playerLevel",
+          "operator": ">=",
+          "value": 50.0
+        },
+        {
+          "type": "stones:is_ready",
+          "name": "pyro_shot_fx"
+        }
+      ],
+      "actions": [
+        {
+          "type": "stones:invoke",
+          "call": "level.explode(net.minecraft.world.entity.Entity, double, double, double, float, boolean, net.minecraft.world.level.Level.ExplosionInteraction)",
+          "args": [
+            "$player",
+            "$player.getX",
+            "$player.getY",
+            "$player.getZ",
+            "3.0",
+            "false",
+            "NONE"
+          ]
+        },
+        {
+          "type": "stones:play_sound",
+          "sound": "minecraft:entity.dragon_fireball.explode",
+          "volume": 0.5,
+          "pitch": 1.5
+        }
+      ]
+    }
+  ]
+}

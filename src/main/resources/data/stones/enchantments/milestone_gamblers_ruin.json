@@ -1,0 +1,140 @@
+{
+  "type": "MILESTONE",
+  "name": "DICT:milestone.stones.gamblers_ruin.name",
+  "description": "DICT:milestone.stones.gamblers_ruin.description",
+  "icon": "minecraft:gilded_blackstone",
+  "stats": [
+    {
+      "id": "risk_multiplier",
+      "label": "DICT:stat.stones.risk_multiplier",
+      "base": 4.0,
+      "scaling": "SOCK_LEVEL",
+      "per_level": 0.5,
+      "suffix": "DICT:stat.stones.suffix.multiplier"
+    },
+    {
+      "id": "power_conversion",
+      "label": "DICT:stat.stones.power_conversion",
+      "base": 2.0,
+      "scaling": "RUNE_LEVEL",
+      "per_level": 0.5,
+      "suffix": "DICT:stat.stones.suffix.dmg_per_lvl"
+    }
+  ],
+  "behaviors": [
+    {
+      "trigger": "ON_ATTACK",
+      "conditions": [
+        {
+          "type": "stones:has_enchantment",
+          "target": "player"
+        }
+      ],
+      "actions": [
+        {
+          "type": "stones:remove_random_enchantment",
+          "save_level_to": "sac_pow"
+        },
+        {
+          "type": "stones:set_variable",
+          "name": "flat_bonus",
+          "value": 0.0
+        },
+        {
+          "type": "stones:math",
+          "variable": "flat_bonus",
+          "operation": "add",
+          "value": "$sac_pow"
+        },
+        {
+          "type": "stones:math",
+          "variable": "flat_bonus",
+          "operation": "multiply",
+          "value": "$power_conversion"
+        },
+        {
+          "type": "stones:modify_damage",
+          "multiplier": "$risk_multiplier",
+          "add": "$flat_bonus"
+        },
+        {
+          "type": "stones:spawn_particles",
+          "particle": "minecraft:witch",
+          "count": 20,
+          "speed": 0.1
+        },
+        {
+          "type": "stones:play_sound",
+          "sound": "minecraft:entity.villager.no",
+          "volume": 1.0,
+          "pitch": 0.8
+        }
+      ]
+    },
+    {
+      "trigger": "ON_ATTACK",
+      "conditions": [
+        {
+          "type": "stones:variable_compare",
+          "variable": "playerLevel",
+          "operator": ">=",
+          "value": 60.0
+        },
+        {
+          "type": "stones:chance",
+          "value": 0.3
+        }
+      ],
+      "actions": [
+        {
+          "type": "stones:play_sound",
+          "sound": "minecraft:entity.player.levelup",
+          "volume": 1.0,
+          "pitch": 0.5
+        },
+        {
+          "type": "stones:spawn_particles",
+          "particle": "minecraft:totem_of_undying",
+          "count": 30
+        },
+        {
+          "type": "stones:invoke",
+          "call": "level.explode(net.minecraft.world.entity.Entity, double, double, double, float, boolean, net.minecraft.world.level.Level.ExplosionInteraction)",
+          "args": [
+            "$victim",
+            "$victim.getX",
+            "$victim.getY",
+            "$victim.getZ",
+            "3.0",
+            "false",
+            "NONE"
+          ]
+        }
+      ]
+    },
+    {
+      "trigger": "ON_TICK",
+      "conditions": [
+        {
+          "type": "stones:variable_compare",
+          "variable": "playerLevel",
+          "operator": ">=",
+          "value": 60.0
+        }
+      ],
+      "actions": [
+        {
+          "type": "stones:apply_effect",
+          "effect": "minecraft:luck",
+          "duration": 100,
+          "amplifier": 1
+        },
+        {
+          "type": "stones:particle_orbit",
+          "particle": "minecraft:electric_spark",
+          "count": 1
+        }
+      ]
+    }
+  ]
+}

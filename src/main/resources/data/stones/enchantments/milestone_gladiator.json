@@ -1,0 +1,135 @@
+{
+  "type": "MILESTONE",
+  "name": "DICT:milestone.stones.gladiator.name",
+  "description": "DICT:milestone.stones.gladiator.description",
+  "icon": "minecraft:iron_sword",
+  "stats": [
+    {
+      "id": "combo_dmg",
+      "label": "DICT:stat.stones.combo_damage",
+      "base": 0.5,
+      "scaling": "RUNE_LEVEL",
+      "per_level": 0.25,
+      "suffix": "DICT:stat.stones.suffix.damage"
+    },
+    {
+      "id": "combo_time",
+      "label": "DICT:stat.stones.combo_duration",
+      "base": 60.0,
+      "scaling": "SOCK_LEVEL",
+      "per_level": 10.0,
+      "display_factor": 0.05,
+      "suffix": "DICT:stat.stones.suffix.seconds"
+    }
+  ],
+  "behaviors": [
+    {
+      "trigger": "ON_ATTACK",
+      "actions": [
+        {
+          "type": "stones:get_persistent_var",
+          "name": "combo",
+          "into": "c"
+        },
+        {
+          "type": "stones:math",
+          "variable": "c",
+          "operation": "add",
+          "value": 1.0
+        },
+        {
+          "type": "stones:set_persistent_var",
+          "name": "combo",
+          "value": "$c"
+        },
+        {
+          "type": "stones:set_persistent_var",
+          "name": "combo_timer",
+          "value": "$combo_time"
+        },
+        {
+          "type": "stones:set_variable",
+          "name": "bonus_final",
+          "value": "$c"
+        },
+        {
+          "type": "stones:math",
+          "variable": "bonus_final",
+          "operation": "multiply",
+          "value": "$combo_dmg"
+        },
+        {
+          "type": "stones:modify_damage",
+          "add": "$bonus_final"
+        },
+        {
+          "type": "stones:play_sound",
+          "sound": "minecraft:entity.player.attack.crit",
+          "pitch": "$c",
+          "volume": 0.5
+        }
+      ]
+    },
+    {
+      "trigger": "ON_TICK",
+      "actions": [
+        {
+          "type": "stones:get_persistent_var",
+          "name": "combo_timer",
+          "into": "t"
+        },
+        {
+          "type": "stones:case",
+          "cases": [
+            {
+              "condition": {
+                "type": "stones:variable_compare",
+                "variable": "t",
+                "operator": ">",
+                "value": 0.0
+              },
+              "actions": [
+                {
+                  "type": "stones:math",
+                  "variable": "t",
+                  "operation": "subtract",
+                  "value": 1.0
+                },
+                {
+                  "type": "stones:set_persistent_var",
+                  "name": "combo_timer",
+                  "value": "$t"
+                },
+                {
+                  "type": "stones:get_persistent_var",
+                  "name": "combo",
+                  "into": "c_vis"
+                },
+                {
+                  "type": "stones:particle_orbit",
+                  "count": "$c_vis",
+                  "particle": "minecraft:crit"
+                }
+              ]
+            },
+            {
+              "condition": {
+                "type": "stones:variable_compare",
+                "variable": "t",
+                "operator": "<=",
+                "value": 0.0
+              },
+              "actions": [
+                {
+                  "type": "stones:set_persistent_var",
+                  "name": "combo",
+                  "value": 0.0
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

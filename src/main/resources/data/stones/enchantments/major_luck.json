@@ -1,0 +1,9 @@
+{
+  "type": "MAJOR",
+  "attribute": "minecraft:generic.luck",
+  "operation": "ADDITION",
+  "factor": 0.05,
+  "name": "Rune of Fortune",
+  "required_level": 0.1,
+  "description": "Your luck increases as you grow stronger."
+}

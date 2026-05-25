@@ -1,0 +1,17 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "RRR",
+    "RRR",
+    "RRR"
+  ],
+  "key": {
+    "R": {
+      "item": "stones:rune_milestone"
+    }
+  },
+  "result": {
+    "item": "stones:cluster_jewel_milestone",
+    "count": 1
+  }
+}

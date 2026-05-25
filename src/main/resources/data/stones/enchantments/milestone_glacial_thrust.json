@@ -1,0 +1,122 @@
+{
+  "type": "MILESTONE",
+  "name": "DICT:milestone.stones.glacial_thrust.name",
+  "description": "DICT:milestone.stones.glacial_thrust.description",
+  "icon": "stones:textures/gui/skills/glacialthrust.png",
+  "required_level": 20,
+  "stats": [
+    {
+      "id": "nova_radius",
+      "label": "DICT:stat.stones.nova_radius",
+      "base": 4.0,
+      "scaling": "SOCK_LEVEL",
+      "per_level": 0.5,
+      "suffix": "DICT:stat.stones.suffix.meters"
+    },
+    {
+      "id": "freeze_duration",
+      "label": "DICT:stat.stones.freeze_duration",
+      "base": 60.0,
+      "scaling": "RUNE_LEVEL",
+      "per_level": 20.0,
+      "display_factor": 0.05,
+      "suffix": "DICT:stat.stones.suffix.seconds"
+    },
+    {
+      "id": "nova_cooldown",
+      "label": "DICT:stat.stones.nova_cooldown",
+      "base": 300.0,
+      "scaling": "PLAYER_LEVEL",
+      "per_level": -1.0,
+      "min": 100.0,
+      "display_factor": 0.05,
+      "suffix": "DICT:stat.stones.suffix.seconds"
+    }
+  ],
+  "behaviors": [
+    {
+      "trigger": "ON_ACTION_BUTTON",
+      "conditions": [
+        {
+          "type": "stones:is_ready"
+        }
+      ],
+      "actions": [
+        {
+          "type": "stones:cooldown",
+          "ticks": "$nova_cooldown"
+        },
+        {
+          "type": "stones:play_sound",
+          "sound": "minecraft:block.glass.break",
+          "volume": 1.0,
+          "pitch": 0.5
+        },
+        {
+          "type": "stones:play_sound",
+          "sound": "minecraft:entity.player.attack.sweep",
+          "volume": 1.0,
+          "pitch": 0.1
+        },
+        {
+          "type": "stones:spawn_particles",
+          "particle": "minecraft:snowflake",
+          "count": 50,
+          "spread": 1.0
+        },
+        {
+          "type": "stones:invoke",
+          "call": "level.getEntitiesOfClass(java.lang.Class, net.minecraft.world.phys.AABB)",
+          "args": [
+            "net.minecraft.world.entity.LivingEntity",
+            "player.getBoundingBox().inflate((double)$nova_radius)"
+          ],
+          "save_result_to": "targets"
+        },
+        {
+          "type": "stones:for_each",
+          "from": "$targets",
+          "as": "target",
+          "actions": [
+            {
+              "type": "stones:case",
+              "cases": [
+                {
+                  "condition": {
+                    "type": "stones:variable_compare",
+                    "variable": "target",
+                    "operator": "!=",
+                    "value": "$player"
+                  },
+                  "actions": [
+                    {
+                      "type": "stones:invoke",
+                      "call": "$target.addEffect(net.minecraft.world.effect.MobEffectInstance)",
+                      "args": [
+                        "new net.minecraft.world.effect.MobEffectInstance(minecraft:slowness, (int)$freeze_duration, 10)"
+                      ]
+                    },
+                    {
+                      "type": "stones:invoke",
+                      "call": "$target.hurt(net.minecraft.world.damagesource.DamageSource, float)",
+                      "args": [
+                        "level.damageSources().magic()",
+                        "4.0"
+                      ]
+                    },
+                    {
+                      "type": "stones:spawn_particles",
+                      "particle": "minecraft:item_snowball",
+                      "pos": "$target.blockPosition",
+                      "count": 10
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

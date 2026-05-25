@@ -1,0 +1,123 @@
+{
+  "type": "MILESTONE",
+  "name": "DICT:milestone.stones.phoenix.name",
+  "description": "DICT:milestone.stones.phoenix.description",
+  "icon": "minecraft:fire_charge",
+  "stats": [
+    {
+      "id": "fire_dmg_mult",
+      "label": "DICT:stat.stones.fire_dmg_mult",
+      "base": 1.5,
+      "scaling": "RUNE_LEVEL",
+      "per_level": 0.1,
+      "suffix": "DICT:stat.stones.suffix.multiplier"
+    },
+    {
+      "id": "revive_blast",
+      "label": "DICT:stat.stones.revive_blast",
+      "base": 3.0,
+      "scaling": "SOCK_LEVEL",
+      "per_level": 0.5,
+      "suffix": "DICT:stat.stones.suffix.meters"
+    },
+    {
+      "id": "revive_cooldown",
+      "label": "DICT:stat.stones.revive_cooldown",
+      "base": 12000.0,
+      "scaling": "RUNE_LEVEL",
+      "per_level": -600.0,
+      "min": 2400.0,
+      "display_factor": 0.05,
+      "suffix": "DICT:stat.stones.suffix.seconds"
+    }
+  ],
+  "behaviors": [
+    {
+      "trigger": "ON_ATTACK",
+      "conditions": [
+        {
+          "type": "stones:is_on_fire"
+        }
+      ],
+      "actions": [
+        {
+          "type": "stones:modify_damage",
+          "multiplier": "$fire_dmg_mult"
+        },
+        {
+          "type": "stones:explode",
+          "radius": 2.0,
+          "fire": true
+        },
+        {
+          "type": "stones:play_sound",
+          "sound": "minecraft:item.firecharge.use",
+          "pitch": 0.8
+        },
+        {
+          "type": "stones:spawn_particles",
+          "particle": "minecraft:flame",
+          "count": 20,
+          "spread": 0.5
+        }
+      ]
+    },
+    {
+      "trigger": "ON_HURT",
+      "conditions": [
+        {
+          "type": "stones:health_below",
+          "percent": 0.15
+        },
+        {
+          "type": "stones:is_ready"
+        }
+      ],
+      "actions": [
+        {
+          "type": "stones:cancel"
+        },
+        {
+          "type": "stones:heal",
+          "percent_of_max_health": 1.0
+        },
+        {
+          "type": "stones:explode",
+          "radius": "$revive_blast",
+          "fire": true
+        },
+        {
+          "type": "stones:cooldown",
+          "ticks": "$revive_cooldown"
+        },
+        {
+          "type": "stones:play_sound",
+          "sound": "minecraft:entity.generic.explode",
+          "pitch": 0.5
+        },
+        {
+          "type": "stones:play_sound",
+          "sound": "minecraft:entity.ender_dragon.growl",
+          "pitch": 1.5
+        },
+        {
+          "type": "stones:spawn_particles",
+          "particle": "minecraft:large_smoke",
+          "count": 50,
+          "spread": 1.5
+        },
+        {
+          "type": "stones:spawn_particles",
+          "particle": "minecraft:lava",
+          "count": 30
+        },
+        {
+          "type": "stones:apply_effect",
+          "effect": "minecraft:fire_resistance",
+          "duration": 600,
+          "amplifier": 0
+        }
+      ]
+    }
+  ]
+}

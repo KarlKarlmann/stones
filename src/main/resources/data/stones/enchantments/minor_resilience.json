@@ -1,0 +1,9 @@
+{
+  "type": "MINOR",
+  "attribute": "minecraft:generic.armor_toughness",
+  "operation": "ADDITION",
+  "factor": 0.5,
+  "name": "Rune of Resilience",
+  "required_level": 0.2,
+  "description": "Increases Armor Toughness to better resist heavy hits."
+}

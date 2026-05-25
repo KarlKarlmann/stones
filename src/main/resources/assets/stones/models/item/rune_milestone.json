@@ -1,0 +1,13 @@
+{
+  "parent": "item/generated",
+  "textures": {
+    "layer0": "stones:item/rune_milestone"
+  },
+  "overrides": [
+    { "predicate": { "stones:amplify": 0.30 }, "model": "stones:item/rune_milestone_1" },
+    { "predicate": { "stones:amplify": 0.60 }, "model": "stones:item/rune_milestone_2" },
+    { "predicate": { "stones:amplify": 0.90 }, "model": "stones:item/rune_milestone_3" },
+    { "predicate": { "stones:amplify": 0.99 }, "model": "stones:item/rune_milestone_4" },
+    { "predicate": { "stones:amplify": 1.00 }, "model": "stones:item/rune_milestone_legendary" }
+  ]
+}
