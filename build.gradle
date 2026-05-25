@@ -31,7 +31,6 @@ minecraft {
             property 'forge.logging.console.level', 'debug'
 
             mods {
-                // HIER ANGEPASST: Mod-ID auf stones gesetzt
                 stones {
                     source sourceSets.main
                 }
@@ -65,25 +64,7 @@ tasks.named('processResources', ProcessResources).configure {
     }
 }
 
-// --- Anpassung 3: Git Push NUR wenn der Build erfolgreich war ---
-tasks.named('build').configure {
-    doLast {
-        println "--> Build erfolgreich! Starte automatischen Git Push zum Repository..."
-        
-        // 1. Alle geänderten Dateien stagen
-        exec { commandLine 'git', 'add', '.' }
-        
-        // 2. Committen (ignoreExitValue = true verhindert Abstürze, falls es keine Änderungen gibt)
-        exec { 
-            commandLine 'git', 'commit', '-m', "Auto-Build: Version ${project.version}"
-            ignoreExitValue = true 
-        }
-        
-        // 3. Auf GitHub pushen (Achte darauf, dass dein Branch wirklich 'main' heißt, sonst anpassen!)
-        exec { 
-            commandLine 'git', 'push', 'origin', 'main' 
-            ignoreExitValue = true // Verhindert Build-Abbruch bei fehlendem Internet/Auth-Problemen
-        }
-        println "--> Push(Versuch) abgeschlossen!"
-    }
+// --- Anpassung 3: Lokale Skripte laden (Wird auf GitHub ignoriert) ---
+if (file('local-git.gradle').exists()) {
+    apply from: 'local-git.gradle'
 }

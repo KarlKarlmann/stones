@@ -7,3 +7,4 @@ bin/
 .idea/
 *.iml
 .vscode/
+local-git.gradle
