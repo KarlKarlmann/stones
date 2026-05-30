@@ -1,84 +1,65 @@
-# Stones Mod
+# Stones Iron's Spells 'n Spellbooks Bridge
 
 ![Minecraft Version](https://img.shields.io/badge/Minecraft-1.20.1-brightgreen)
-![Forge Version](https://img.shields.io/badge/Forge-47.3.0+-orange)
-![License](https://img.shields.io/badge/License-CC%20BY--NC%204.0-blue)
-[![YouTube Showcase](https://img.shields.io/badge/YouTube-Showcase-FF0000?logo=youtube&logoColor=white)](https://youtu.be/ClCKPNa7ixE)
+![Forge Version](https://img.shields.io/badge/Forge-47.2.0+-orange)
+![License](https://img.shields.io/badge/License-MIT-blue)
 [![Support on Ko-fi](https://img.shields.io/badge/Ko--fi-Support_Project-F16061?logo=ko-fi&logoColor=white)](https://ko-fi.com/karlkarlmann)
 
 A Minecraft Forge mod for version 1.20.1.
 
-**Stones** is a passion project that tackles a decade-old design problem in Minecraft: the Experience system. Because enchanting turns XP into a disposable resource (meaning a player's level constantly drops and rises), implementing a traditional skill tree was never really viable.
+**Stones Iron's Spellbooks Bridge** is the official compatibility and integration bridge that fuses two of the most immersive RPG systems in Minecraft: the tactical combat action and minimalist UI philosophy of the **Stones Mod**, and the deep, expansive arcane sandbox of **Iron's Spells & Spellbooks**.
 
-Stones solves this by introducing an **item-based skill tree that is persistent, yet entirely built by the player**. Instead of a static UI menu, you bind yourself to physically generated monoliths in the world and socket items (runes) into them. This bypasses the fluctuating XP problem while keeping the progression dynamic and entirely in your hands!
+This mod bridges the gap between isolated combat mechanics, fully embedding spellcasting into the core progression loop of Stones. Magic is no longer an independent sideshow—it becomes a high-stakes, deeply rewarding aspect of your character's journey.
 
 ## 🌟 Features
 
-* **🔮 The Void Altars:** Find dormant, black monoliths in the world and bind your soul to them through a short ritual. Each altar generates a mathematically completely unique socket layout (a Phyllotaxis spiral) based on its ID. Your active rune setup and your binding remain completely intact **even after death**.
+* **🔮 Dynamic Knowledge System:** Spells are no longer gated behind arbitrary level caps. The bridge scans all active mods and addons at startup to dynamically register a Forge attribute (e.g., `knowledge_blood` or `knowledge_fire`) for every single magic school. Requirements grow progressively following a quadratic curve: Required Knowledge = 2.04 * (Effective Circle - 1)^2 (Circle 8 corresponds to exactly 100.0 knowledge points).
 
-* **🪨 The Rune System:** Personalize your altar with three different types of runes:
+* **🎲 Arcane Backlash & Wild Magic:** Casting spells beyond your current understanding is a dangerous gamble. Every point of missing knowledge reduces your success rate by -2.5%. The Luck attribute can aid you, but it strictly caps out at an 85% success chance—true mastery cannot be cheated. A fatal miscast on high-tier spells Sample inflicts severe punishments like Confusion, Weakness, and Blindness, or unleashes an uncontrollable *Wild Magic Surge*, casting a random spell from the chaos pool entirely for free!
 
-  * *Minor Runes:* Provide flat, passive bonuses.
+* **🧪 Reagent Economy & Trade Integration:** Spells demand sacrifices! Many incantations now consume physical components (e.g., Ender Pearls for Ender magic or Gunpowder for Fire magic). To support this newly introduced economy, the Wandering Trader now buys your excess resources (Dirt, Cobblestone, Deepslate, Sand) for Emeralds and sells the critical reagents required to fuel your spells.
 
-  * *Major Runes:* Scale directly with your current player level.
+* **⚔️ Seamless Action UI Injection:** No more cluttered hotkeys or multi-keybind paralysis! Your unlocked spells are automatically injected directly into the cache of the Stones Action System. The spell cooldowns are accurately calculated and translated from internal game ticks into readable seconds on your action bar.
 
-  * *Milestone Runes:* Grant entirely new, active abilities. Their strength is based on their enchantments (which can scale well beyond standard Vanilla limits).
+* **📖 Inscription Table Overhaul & Tooltips:** A complete Mixin overhaul replaces hard-to-read interfaces. The Inscription Table renders circles, required knowledge, mana costs, and cast times in an elegant book-brown (`0x322C2A`) instead of the unreadable vanilla white. Furthermore, selecting the Stones layout automatically unbinds conflicting default Iron's Spells keys to guarantee a smooth setup.
 
-  * *Cluster Jewels:* Out of space in your altar? Bundle up to five runes and insert them into a single socket!
+## 🛠️ Mod Status Effects (Buffs)
 
-  * *Meaningful Curses:* Vanilla curses (like Curse of Binding) drastically lower the level requirement of a rune but come with dangerous side effects. *(Warning: Attempting to mine a Void Altar that contains a rune with the Curse of Binding will result in a catastrophic explosion!)*
+The bridge introduces three powerful status effects that can be perfectly implemented as milestone rewards within your Stones configuration:
+* **Arcane Overdrive (`overdrive`):** Massively reduces cast time, sets mana cost to zero, and skips reagent requirements for the next spellcast. The buff is consumed upon use.
+* **Clearcast (`clearcast`):** Grants a short, volatile window where all your spells can be cast without consuming physical reagents from your inventory.
+* **Quickcast (`quickcast`):** Instantly resets the cooldown of the cast spell via a delayed server-work tick right after completion.
 
-* **⚔️ Clean Action Bar:** No more cluttered hotkeys! Stones uses a minimalist 3-button philosophy (Default: `R`, `G`, and `V`). Your active skills are assigned to a new action bar next to your hotbar with clear cooldown tracking.
+## ⚙️ Configuration (For Modpack Creators)
 
-* **👻 The Echo Trader:** An ethereal wanderer whose currency is your XP. He sells runes, Vanilla items, and Resonance Boxes. Brave players can also offer him a "Blood Sacrifice" (max HP) in exchange for massive XP boosts—but overestimating your health will result in instant death.
-
-* **💀 Death as a Feature:** Dying is no longer a pure Game Over! Your classic Vanilla "Death Score" (the yellow number shown on the death screen) is repurposed and placed on a server-wide leaderboard. A good run rewards you with **Resonance Boxes** upon respawning. These boxes dynamically combine Vanilla loot with runes. From Tier 10 onwards, they even pull items from *all installed mods* and can generate equipment with enchantments up to level 100!
-
-* **⚙️ 100% Data-Driven (For Modders):** The entire engine is data-driven. Modpack creators can create new runes and abilities or adjust the trader's loot tables using simple JSON files.
+Full control over the integration is generated inside the `config/stones_irons_bridge/` directory:
+* `server_settings.json`: Toggles server-wide rules, such as global reagent consumption.
+* `client_settings.json`: Stores the user's interface preferences (Stones UI vs. Iron's UI).
+* `reagent_list.json`: Allows server administrators to completely re-program the circle, reagent items, and required counts for every single spell (including addon spells) in the game.
 
 ## 🔗 Links & Support
-
-* 📖 **Official Wiki:** [n3g.de/wiki/en/stones](https://www.n3g.de/wiki/en/stones/)
-
-* 🎥 **Showcase Video (German Audio):** [Watch on YouTube](https://youtu.be/ClCKPNa7ixE)
 
 * ☕ **Support the Project:** [Ko-fi / KarlKarlmann](https://ko-fi.com/karlkarlmann)
 
 ## 🎮 Installation (For Players)
 
-*💡 Note: You can always download the latest compiled version directly from our [CurseForge page](https://www.curseforge.com/minecraft/mc-mods/stones).*
-
-1. Make sure [Minecraft Forge](https://files.minecraftforge.net/net/minecraftforge/forge/index_1.20.1.html) for version **1.20.1** is installed.
-
+1. Make sure Minecraft Forge for version 1.20.1 is installed.
 2. Download the latest `.jar` file of the mod.
-
-3. Place the file into your Minecraft `mods` folder.
-
+3. Place the file into your Minecraft `mods` folder along with **Stones** and **Iron's Spells & Spellbooks**.
 4. Start the game!
 
 ## 💻 Development (Build from Source)
 
-If you want to view the code or compile the mod yourself:
-
 ### Prerequisites
-
 * Java 17
-
 * Git
 
 ### Setup & Build
-
-1. Clone this repository:
-```bash
-git clone https://github.com/KarlKarlmann/stones.git
-```
-
-2. Change into the directory:
-```bash
-cd stones
-```
-
-3. Run the Gradle build:
+1. Clone this repository into your local workspace.
+2. Create a folder named `libs/` in the project root directory.
+3. Place the deobfuscated `.jar` files of the **Stones Mod** and **Iron's Spells & Spellbooks** inside the `libs/` folder.
+4. Adjust the version identifiers in `gradle.properties` to match your local files if necessary.
+5. Run the Gradle build (uncomment the matching command for your OS):
 ```bash
 # On Windows
 gradlew build
@@ -87,15 +68,10 @@ gradlew build
 ./gradlew build
 ```
 
-The compiled mod can be found in the `build/libs/` folder.
-
-## 📜 Credits & Permissions
-
-* **Author:** KarlKarlmann
-* **Modpacks:** You are free to include this mod in any CurseForge modpack. Modpack creators are welcome to adjust rune effects and skills via JSON datapacks to fit their intended progression!
-* **Videos & Streams:** You are absolutely welcome to use this mod in your YouTube videos or Twitch streams.
-* **Re-Uploads:** Please do not re-upload the mod files to other websites. Always link back to the original CurseForge/GitHub page.
-
 ## ⚖️ License
 
 This project is licensed under the **CC BY-NC 4.0** License. Find more details at [Creative Commons](https://creativecommons.org/licenses/by-nc/4.0/).
+
+---
+**Author:** KarlKarlmann  
+*Special thanks to the developers of Stones and Iron's Spells & Spellbooks for providing wonderful systems to build upon!*

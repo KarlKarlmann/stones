@@ -13,6 +13,9 @@ import net.minecraft.world.item.enchantment.Enchantment;
 import net.minecraft.world.item.enchantment.EnchantmentHelper;
 import net.minecraft.world.item.enchantment.Enchantments;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.inventory.ClickAction;
+import net.minecraft.world.inventory.Slot;
+import net.minecraft.world.entity.SlotAccess;
 import net.stones.enchantment.RuneEnchantment;
 import net.stones.enchantment.AmplifyEnchantment;
 import net.stones.enchantment.RuneStat;
@@ -33,10 +36,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.HashMap;
 
-/**
- * Das Basis-Item für alle Runen (Minor, Major, Milestone).
- * Verwaltet das Tooltip-Rendering und das XP-Grinding-System.
- */
 public class StoneItem extends Item {
 
     public enum Type { MINOR, MAJOR, MILESTONE }
@@ -55,7 +54,7 @@ public class StoneItem extends Item {
 
     @Override
     public boolean canBeDepleted() {
-        return true; // WICHTIG für Amboss-Logik
+        return true;
     }
 
     @Override
@@ -67,7 +66,7 @@ public class StoneItem extends Item {
     public UseAnim getUseAnimation(ItemStack stack) { return UseAnim.BOW; }
 
     @Override
-    public int getUseDuration(ItemStack stack) { return 40; } // 2 Sekunden Nutzung
+    public int getUseDuration(ItemStack stack) { return 40; }
 
     @Override
     public InteractionResultHolder<ItemStack> use(Level level, Player player, InteractionHand hand) {
@@ -80,8 +79,35 @@ public class StoneItem extends Item {
     }
 
     @Override
+    public boolean overrideOtherStackedOnMe(ItemStack stack, ItemStack cursorStack, Slot slot, ClickAction action, Player player, SlotAccess access) {
+        if (action == ClickAction.SECONDARY && cursorStack.isEmpty()) {
+            if (player.level().isClientSide) {
+                openRuneInfoScreen(stack);
+            }
+            return true;
+        }
+        return false;
+    }
+
+    @Override
+    public boolean overrideStackedOnOther(ItemStack stack, Slot slot, ClickAction action, Player player) {
+        if (action == ClickAction.SECONDARY && slot.getItem().isEmpty()) {
+            if (player.level().isClientSide) {
+                openRuneInfoScreen(stack);
+            }
+            return true;
+        }
+        return false;
+    }
+
+    private void openRuneInfoScreen(ItemStack stack) {
+        DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> {
+            net.minecraft.client.Minecraft.getInstance().setScreen(new net.stones.client.gui.RuneInfoScreen(stack));
+        });
+    }
+
+    @Override
     public int getMaxStackSize(ItemStack stack) {
-        // WICHTIG: Erhält die Reparatur-Kosten-Logik für Amboss-Kompatibilität
         if(stack.isEnchanted()) stack.setRepairCost(1);
         else stack.setRepairCost(0);
         return (stack.isEnchanted() || stack.getBaseRepairCost() > 0) ? 1 : 64;
@@ -109,10 +135,10 @@ public class StoneItem extends Item {
             
             int totalXp = 0;
             for (Map.Entry<Enchantment, Integer> entry : enchants.entrySet()) {
-                Enchantment ench = entry.getKey();
+                Enchantment companion = entry.getKey();
                 int lvl = entry.getValue();
-                if (!ench.isCurse()) {
-                    int xpBase = (ench.getMinCost(lvl) + ench.getMaxCost(lvl)) / 4;
+                if (!companion.isCurse()) {
+                    int xpBase = (companion.getMinCost(lvl) + companion.getMaxCost(lvl)) / 4;
                     totalXp += Math.max(1, xpBase / 2);
                 }
             }
@@ -155,16 +181,14 @@ public class StoneItem extends Item {
     public static void addFullRuneTooltip(ItemStack stack, List<Component> tooltip, int socketLevel) {
         if (stack.isEmpty()) return;
 
-        // 1. Header & Anforderungen
         int reqLevel = RuneCalculator.getRequiredLevel(stack);
-        boolean hasCurse = EnchantmentHelper.getItemEnchantmentLevel(Enchantments.VANISHING_CURSE, stack) > 0 
-                        || EnchantmentHelper.getItemEnchantmentLevel(Enchantments.BINDING_CURSE, stack) > 0;
+        boolean hasCurse = EnchantmentHelper.getItemEnchantmentLevel(Enchantments.VANISHING_CURSE, stack) > 0 ||
+                           EnchantmentHelper.getItemEnchantmentLevel(Enchantments.BINDING_CURSE, stack) > 0;
 
         tooltip.add(Component.translatable("tooltip.stones.required_level", reqLevel).withStyle(hasCurse ? ChatFormatting.GREEN : ChatFormatting.BLUE));
         if (hasCurse) tooltip.add(Component.translatable("tooltip.stones.reduced_by_curse").withStyle(ChatFormatting.DARK_GREEN));
         tooltip.add(Component.empty());
 
-        // 2. Amplify Daten bestimmen
         int ampLvl = 0;
         Map<Enchantment, Integer> enchants = EnchantmentHelper.getEnchantments(stack);
         for (Map.Entry<Enchantment, Integer> entry : enchants.entrySet()) {
@@ -173,23 +197,72 @@ public class StoneItem extends Item {
                 break;
             }
         }
+        
         double mult = AmplifyEnchantment.getMultiplier(ampLvl);
-
         if (ampLvl > 0) {
             renderAmplifyTooltip(tooltip, ampLvl, mult);
         }
 
-        // 3. Runen-Blöcke rendern
-        boolean hasUpgrades = ampLvl > 0;
+        List<Map.Entry<Enchantment, Integer>> runeEntries = new ArrayList<>();
         for (Map.Entry<Enchantment, Integer> entry : enchants.entrySet()) {
-            if (entry.getKey() instanceof RuneEnchantment rune) {
-                renderRuneEntry(tooltip, rune, entry.getValue(), socketLevel, mult);
-                hasUpgrades = true;
+            if (entry.getKey() instanceof RuneEnchantment) {
+                runeEntries.add(entry);
             }
         }
 
-        // 4. Usage Info (Grinding)
-        if (hasUpgrades || stack.getBaseRepairCost() > 0) {
+        boolean hasUpgrades = ampLvl > 0;
+        boolean showMinorMajorStats = enchants.size() < 4;
+
+        if (!runeEntries.isEmpty()) {
+            hasUpgrades = true;
+            
+            if (isClientShiftDown()) {
+                int activeIndex = (int) ((System.currentTimeMillis() / 3000) % runeEntries.size());
+
+                tooltip.add(Component.empty());
+                tooltip.add(Component.translatable("tooltip.stones.details_carousel", (activeIndex + 1), runeEntries.size())
+                        .withStyle(ChatFormatting.DARK_GRAY));
+                
+                for (int i = 0; i < runeEntries.size(); i++) {
+                    Map.Entry<Enchantment, Integer> entry = runeEntries.get(i);
+                    RuneEnchantment rune = (RuneEnchantment) entry.getKey();
+                    int lvl = entry.getValue();
+                    
+                    if (i == activeIndex) {
+                        tooltip.add(Component.literal(" ▼ ").withStyle(ChatFormatting.AQUA)
+                            .append(rune.getFullname(lvl).copy().withStyle(ChatFormatting.GOLD, ChatFormatting.UNDERLINE)));
+                        
+                        renderRuneDetails(tooltip, rune, lvl, socketLevel, mult);
+                    } else {
+                        tooltip.add(Component.literal(" • ").withStyle(ChatFormatting.DARK_GRAY)
+                            .append(rune.getFullname(lvl).copy().withStyle(ChatFormatting.GOLD)));
+                        
+                        if (showMinorMajorStats && (rune.type == RuneEnchantment.Type.MINOR || rune.type == RuneEnchantment.Type.MAJOR)) {
+                            renderRuneStatsOnly(tooltip, rune, lvl, socketLevel, mult);
+                        }
+                    }
+                }
+            } else {
+                for (Map.Entry<Enchantment, Integer> entry : runeEntries) {
+                    RuneEnchantment rune = (RuneEnchantment) entry.getKey();
+                    int lvl = entry.getValue();
+
+                    tooltip.add(Component.literal(" • ").withStyle(ChatFormatting.DARK_GRAY)
+                        .append(rune.getFullname(lvl).copy().withStyle(ChatFormatting.GOLD)));
+                    
+                    if (showMinorMajorStats && (rune.type == RuneEnchantment.Type.MINOR || rune.type == RuneEnchantment.Type.MAJOR)) {
+                        renderRuneStatsOnly(tooltip, rune, lvl, socketLevel, mult);
+                    }
+                }
+                
+                tooltip.add(Component.empty());
+                tooltip.add(Component.translatable("tooltip.stones.hold_shift_details").withStyle(ChatFormatting.DARK_GRAY));
+            }
+            tooltip.add(Component.translatable("tooltip.stones.right_click_gui").withStyle(ChatFormatting.DARK_AQUA));
+        }
+
+        if ((hasUpgrades || stack.getBaseRepairCost() > 0) && enchants.size() <= 3) {
+            tooltip.add(Component.empty());
             tooltip.add(Component.translatable("tooltip.stones.grind.1"));
             tooltip.add(Component.translatable("tooltip.stones.grind.2").withStyle(ChatFormatting.ITALIC));
         }
@@ -216,29 +289,21 @@ public class StoneItem extends Item {
         tooltip.add(Component.empty());
     }
 
-    private static void renderRuneEntry(List<Component> tooltip, RuneEnchantment ench, int runeLvl, int sockLvl, double mult) {
-        tooltip.add(ench.getFullname(runeLvl).copy().withStyle(ChatFormatting.GOLD, ChatFormatting.BOLD));
-        Component desc = ench.getCustomDescription(runeLvl);
-        if (desc != null && !desc.getString().isEmpty()) {
-            tooltip.add(desc.copy().withStyle(ChatFormatting.GRAY, ChatFormatting.ITALIC));
-        }
-
+    private static void renderRuneStatsOnly(List<Component> tooltip, RuneEnchantment ench, int runeLvl, int sockLvl, double mult) {
         int pLvl = getClientPlayerLevel();
 
         boolean isSocketed = sockLvl >= 0;
         int activeSock = isSocketed ? sockLvl : 1;
 
-        // A: Stats (Milestones)
         for (RuneStat stat : ench.getStats()) {
             float val = RuneCalculator.calculateStatValue(stat, runeLvl, activeSock, pLvl, mult);
-            MutableComponent line = Component.literal(" ➤ ").withStyle(ChatFormatting.DARK_GRAY)
+            MutableComponent line = Component.literal("    ➤ ").withStyle(ChatFormatting.DARK_GRAY)
                 .append(RuneEnchantment.resolveComponent(stat.label()).copy().withStyle(ChatFormatting.GRAY)).append(": ")
                 .append(Component.literal(String.format("%.1f", val * stat.displayFactor())))
                 .append(RuneEnchantment.resolveComponent(stat.suffix()).copy().withStyle(mult > 1.0 ? ChatFormatting.AQUA : ChatFormatting.AQUA));
             
             if (mult > 1.0) line.append(Component.literal(" ✦").withStyle(ChatFormatting.AQUA));
 
-            // Skalierungs-Info im Inventar anzeigen (eingerechnet!)
             if (!isSocketed && stat.perLevel() != 0) {
                 float boostedGrowth = (float)(stat.perLevel() * mult);
                 String sign = boostedGrowth > 0 ? "+" : "";
@@ -248,16 +313,15 @@ public class StoneItem extends Item {
             tooltip.add(line);
         }
 
-        // B: Attribute (Minor/Major)
         if (ench.targetAttribute != null) {
             if (isSocketed) {
                 double bonus = RuneCalculator.calculateAttributeBonus(ench, runeLvl, pLvl, sockLvl, mult);
                 tooltip.add(formatAttributeLine(ench, bonus, mult > 1.0, true));
             } else {
                 if (ench.type == RuneEnchantment.Type.MAJOR) {
-                    double scaledFactor = ench.factor * mult;
-                    String valStr = (ench.operation != AttributeModifier.Operation.ADDITION) ? String.format("%.1f%%", scaledFactor * 100) : String.format("%.1f", scaledFactor);
-                    MutableComponent line = Component.literal(" ➤ ").withStyle(ChatFormatting.DARK_GRAY)
+                    double scaledFactor = ench.factor * runeLvl * mult; 
+                    String valStr = (ench.operation != AttributeModifier.Operation.ADDITION) ? String.format("%.1f%%", scaledFactor * 100) : String.format("%.1f", scaledFactor);                    
+                    MutableComponent line = Component.literal("    ➤ ").withStyle(ChatFormatting.DARK_GRAY)
                         .append(Component.translatable("tooltip.stones.scaling_info").withStyle(ChatFormatting.GRAY)).append(": ")
                         .append(Component.literal("+" + valStr).withStyle(mult > 1.0 ? ChatFormatting.AQUA : ChatFormatting.GOLD))
                         .append(" ").append(Component.translatable(ench.targetAttribute.getDescriptionId()).withStyle(ChatFormatting.WHITE))
@@ -270,11 +334,33 @@ public class StoneItem extends Item {
                 }
             }
         }
-        tooltip.add(Component.empty());
+    }
+
+    private static void renderRuneDetails(List<Component> tooltip, RuneEnchantment ench, int runeLvl, int sockLvl, double mult) {
+        renderRuneStatsOnly(tooltip, ench, runeLvl, sockLvl, mult);
+
+        Component desc = ench.getCustomDescription(runeLvl);
+        if (desc != null && !desc.getString().isEmpty()) {
+            String descStr = desc.getString();
+            StringBuilder line = new StringBuilder();
+            String indent = "    "; 
+            
+            for (String word : descStr.split(" ")) {
+                if (line.length() + word.length() > 35) {
+                    tooltip.add(Component.literal(indent + line.toString()).withStyle(ChatFormatting.GRAY, ChatFormatting.ITALIC));
+                    line = new StringBuilder();
+                }
+                if (line.length() > 0) line.append(" ");
+                line.append(word);
+            }
+            if (line.length() > 0) {
+                tooltip.add(Component.literal(indent + line.toString()).withStyle(ChatFormatting.GRAY, ChatFormatting.ITALIC));
+            }
+        }
     }
 
     public static Component formatAttributeLine(RuneEnchantment rune, double value, boolean amplified, boolean active) {
-        MutableComponent line = Component.literal(" ➤ ").withStyle(ChatFormatting.DARK_GRAY);
+        MutableComponent line = Component.literal("    ➤ ").withStyle(ChatFormatting.DARK_GRAY);
         if (!active) line.append(Component.translatable("tooltip.stones.passive_effect").withStyle(ChatFormatting.GRAY)).append(": ");
         else line.append(Component.translatable("tooltip.stones.active_bonus").withStyle(ChatFormatting.GRAY)).append(": ");
 
@@ -286,9 +372,18 @@ public class StoneItem extends Item {
         return line;
     }
 
+    private static boolean isClientShiftDown() {
+        try {
+            Boolean isDown = DistExecutor.unsafeCallWhenOn(Dist.CLIENT, () -> ClientPlayerHelper::isShiftDown);
+            return isDown != null && isDown;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
     private static int getClientPlayerLevel() {
         try {
-            Integer level = net.minecraftforge.fml.DistExecutor.unsafeCallWhenOn(net.minecraftforge.api.distmarker.Dist.CLIENT, () -> ClientPlayerHelper::getLevel);
+            Integer level = DistExecutor.unsafeCallWhenOn(Dist.CLIENT, () -> ClientPlayerHelper::getLevel);
             return level == null ? 0 : level;
         } catch (Exception e) {
             return 0;
@@ -297,8 +392,11 @@ public class StoneItem extends Item {
 
     private static class ClientPlayerHelper {
         public static Integer getLevel() {
-            net.minecraft.world.entity.player.Player player = net.minecraft.client.Minecraft.getInstance().player;
+            Player player = net.minecraft.client.Minecraft.getInstance().player;
             return player != null ? player.experienceLevel : 0;
+        }
+        public static Boolean isShiftDown() {
+            return net.minecraft.client.gui.screens.Screen.hasShiftDown();
         }
     }
 }

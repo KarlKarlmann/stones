@@ -139,16 +139,12 @@ public class RuneEnchantment extends Enchantment {
         return name;
     }
 
-    /**
-     * Berechnet den Basis-Bonus für Minor und Major Runen.
-     * Verhindert Kompilierfehler im RuneCalculator.
-     */
-    public double calculateBonus(int runeLevel, int playerLevel, int socketLevel) {
+	public double calculateBonus(int runeLevel, int playerLevel, int socketLevel) {
         if (type == Type.MINOR) {
             return runeLevel * factor;
         } else if (type == Type.MAJOR) {
             int levelDiff = Math.max(0, playerLevel - socketLevel);
-            return levelDiff * factor;
+            return levelDiff * factor * runeLevel; // <-- runeLevel hinzugefügt!
         }
         return 0;
     }
@@ -157,7 +153,6 @@ public class RuneEnchantment extends Enchantment {
     
 	@Override
     public boolean isDiscoverable() {
-        // Hochperformanter Stack-Check: Sobald Loot-Klassen gefunden werden, wird false zurückgegeben.
         return STACK_WALKER.walk(frames -> frames.noneMatch(frame -> {
             String className = frame.getClassName();
             return className.contains("LootItemEnchantRandomlyFunction") || 
