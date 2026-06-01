@@ -25,6 +25,7 @@ import net.stones.logic.RuneCalculator;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 public class RunestoneMenu extends AbstractContainerMenu {
 
@@ -32,9 +33,19 @@ public class RunestoneMenu extends AbstractContainerMenu {
     private final int slotCount;
     public final List<SlotConfig> layoutData = new ArrayList<>();
     private final Player player;
+    
+    // NEU: Eindeutige ID des aktuell geöffneten Schreins
+    private final UUID shrineId;
 
+    // --- CLIENT KONSTRUKTOR ---
     public RunestoneMenu(int containerId, Inventory playerInv, FriendlyByteBuf data) {
-        this(containerId, playerInv, new ItemStackHandler(data.readInt()), false);
+        super(StonesModMenus.RUNESTONE_MENU.get(), containerId);
+        
+        // Zuweisungen direkt durchführen, ohne Umweg über einen Dummy-Konstruktor
+        this.shrineInventory = new ItemStackHandler(data.readInt());
+        this.slotCount = this.shrineInventory.getSlots();
+        this.player = playerInv.player;
+        
         int layoutSize = data.readInt();
         for (int i = 0; i < layoutSize; i++) {
             SlotType type = data.readEnum(SlotType.class);
@@ -42,25 +53,32 @@ public class RunestoneMenu extends AbstractContainerMenu {
             int idx = data.readInt();
             layoutData.add(new SlotConfig(type, lvl, idx));
         }
+        
+        // NEU: Lesen der Schrein-ID aus dem Network-Buffer funktioniert jetzt fehlerfrei
+        this.shrineId = data.readUUID(); 
+        
         initSlots();
         addPlayerInventory(playerInv);
     }
 
-    public RunestoneMenu(int containerId, Inventory playerInv, IItemHandler shrineInventory, List<SlotConfig> layout) {
+    // --- SERVER KONSTRUKTOR ---
+    public RunestoneMenu(int containerId, Inventory playerInv, IItemHandler shrineInventory, List<SlotConfig> layout, UUID shrineId) {
         super(StonesModMenus.RUNESTONE_MENU.get(), containerId);
         this.shrineInventory = shrineInventory;
         this.slotCount = shrineInventory.getSlots();
         this.layoutData.addAll(layout);
         this.player = playerInv.player;
+        
+        // NEU: Setzen der ID bei Erstellung auf dem Server
+        this.shrineId = shrineId; 
+        
         initSlots();
         addPlayerInventory(playerInv);
     }
 
-    private RunestoneMenu(int containerId, Inventory playerInv, IItemHandler shrineInventory, boolean dummy) {
-        super(StonesModMenus.RUNESTONE_MENU.get(), containerId);
-        this.shrineInventory = shrineInventory;
-        this.slotCount = shrineInventory.getSlots();
-        this.player = playerInv.player;
+    // NEU: Getter für den Screen
+    public UUID getShrineId() {
+        return this.shrineId;
     }
 
     private void initSlots() {
@@ -102,7 +120,7 @@ public class RunestoneMenu extends AbstractContainerMenu {
                 @Override
                 public int getMaxStackSize() { return 1; }
                 
-                // NEU: Verhindert das Herausnehmen bei Curse of Binding
+                // Verhindert das Herausnehmen bei Curse of Binding
                 @Override
                 public boolean mayPickup(Player playerIn) {
                     ItemStack stack = this.getItem();

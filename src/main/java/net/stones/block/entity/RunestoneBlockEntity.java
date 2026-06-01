@@ -11,6 +11,7 @@ import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.game.ClientGamePacketListener;
 import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.MenuProvider;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
@@ -20,6 +21,7 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
+import net.minecraftforge.network.NetworkHooks;
 import net.stones.data.ShrineInstance;
 import net.stones.data.ShrineSavedData;
 import net.stones.gui.RunestoneMenu;
@@ -125,16 +127,40 @@ public class RunestoneBlockEntity extends BlockEntity implements MenuProvider {
     public boolean isTextureDirty() { return textureDirty; }
     public void markTextureClean() { this.textureDirty = false; }
 
-@Override
-public Component getDisplayName() { 
-    return Component.translatable("container.stones.runestone"); 
-}
+    @Override
+    public Component getDisplayName() { 
+        return Component.translatable("container.stones.runestone"); 
+    }
+
+    // --- NEU: Hilfsmethode zum fehlerfreien Öffnen des Menüs ---
+    public void openMenu(ServerPlayer player) {
+        if (level instanceof ServerLevel serverLevel && shrineId != null) {
+            ShrineInstance shrine = ShrineSavedData.get(serverLevel).getShrine(shrineId);
+            if (shrine != null) {
+                NetworkHooks.openScreen(player, this, buffer -> {
+                    // WICHTIG: Die Reihenfolge MUSS dem RunestoneMenu Client-Konstruktor entsprechen!
+                    // 1. Inventargröße
+                    buffer.writeInt(shrine.getInventory().getSlots());
+                    // 2. Layout Daten
+                    buffer.writeInt(shrine.getLayout().size());
+                    for (ShrineInstance.SlotConfig cfg : shrine.getLayout()) {
+                        buffer.writeEnum(cfg.type);
+                        buffer.writeInt(cfg.requiredLevel);
+                        buffer.writeInt(cfg.inventoryIndex);
+                    }
+                    // 3. Eindeutige Schrein-ID für den Bindungs-Check
+                    buffer.writeUUID(this.shrineId);
+                });
+            }
+        }
+    }
+
     @Nullable
     @Override
     public AbstractContainerMenu createMenu(int containerId, Inventory playerInventory, Player player) {
         if (level instanceof ServerLevel serverLevel && shrineId != null) {
             ShrineInstance shrine = ShrineSavedData.get(serverLevel).getShrine(shrineId);
-            if (shrine != null) return new RunestoneMenu(containerId, playerInventory, shrine.getInventory(), shrine.getLayout());
+            if (shrine != null) return new RunestoneMenu(containerId, playerInventory, shrine.getInventory(), shrine.getLayout(), this.shrineId);
         }
         return null;
     }

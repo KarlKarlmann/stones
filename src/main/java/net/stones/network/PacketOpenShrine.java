@@ -6,14 +6,8 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraftforge.network.NetworkEvent;
-import net.minecraftforge.network.NetworkHooks;
 import net.stones.block.entity.RunestoneBlockEntity;
-import net.stones.data.ShrineInstance;
-import net.stones.data.ShrineSavedData;
-import net.stones.data.ShrineInstance.SlotConfig;
 
-import java.util.List;
-import java.util.UUID;
 import java.util.function.Supplier;
 
 public class PacketOpenShrine {
@@ -41,23 +35,13 @@ public class PacketOpenShrine {
                 if (level.isLoaded(pos)) {
                     BlockEntity be = level.getBlockEntity(pos);
                     if (be instanceof RunestoneBlockEntity runeBe) {
-                        UUID shrineId = runeBe.getShrineId();
-                        if (shrineId != null) {
-                            ShrineInstance shrine = ShrineSavedData.get(level).getShrine(shrineId);
-                            if (shrine != null) {
-                                // Hier ist die Logik, die früher im Block war
-                                NetworkHooks.openScreen(player, runeBe, buf -> {
-                                    buf.writeInt(shrine.getInventory().getSlots());
-                                    List<SlotConfig> layout = shrine.getLayout();
-                                    buf.writeInt(layout.size());
-                                    for (SlotConfig cfg : layout) {
-                                        buf.writeEnum(cfg.type);
-                                        buf.writeInt(cfg.requiredLevel);
-                                        buf.writeInt(cfg.inventoryIndex);
-                                    }
-                                });
-                            }
-                        }
+                        
+                        // HIER IST DIE MAGIE!
+                        // Statt die Daten hier manuell und fehleranfällig zusammenzubauen,
+                        // lassen wir das BlockEntity das Menü öffnen. 
+                        // openMenu() kümmert sich um das Layout UND schreibt die UUID in den Buffer!
+                        runeBe.openMenu(player);
+                        
                     }
                 }
             }
