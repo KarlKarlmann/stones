@@ -21,19 +21,21 @@ public class StonesJeiPlugin implements IModPlugin {
 
     @Override
     public void registerGuiHandlers(IGuiHandlerRegistration registration) {
-        // Registriert den Ausschlussbereich für das Standard-Spielerinventar
         registration.addGuiContainerHandler(InventoryScreen.class, new IGuiContainerHandler<InventoryScreen>() {
             @Override
             public List<Rect2i> getGuiExtraAreas(InventoryScreen screen) {
-                // Hier greifen wir deine genauen Basis-Koordinaten aus dem ActionSystem auf
+                // Basis-Koordinaten aus dem ActionSystem
                 int xBase = screen.width / 2 + 95;
                 int yBase = screen.height - 22;
                 
-                // Wir schützen einen großzügigen Bereich, der das Dropdown mit einschließt:
-                // Breite: 66 Pixel (3 Slots á 22)
-                // Höhe: 82 Pixel (22 für die Hauptleiste + 60 nach oben für 3 Dropdown-Slots)
-                // Startpunkt-Y: yBase - 60 (Damit die Box weit genug oben anfängt)
-                return List.of(new Rect2i(xBase, yBase - 60, 66, 82));
+                // ÄNDERUNG: Statt nur 66 Pixel Breite zu reservieren, sperren wir 
+                // den KOMPLETTEN Platz ab deiner Actionbar bis zum rechten Bildschirmrand.
+                // Das zwingt JEI dazu, die Item-Slots einzukürzen und das Suchfenster über
+                // unsere GUI zu schieben.
+                int widthToRightEdge = screen.width - xBase;
+                
+                // Wir starten wieder bei yBase - 60 und gehen 82 Pixel nach unten.
+                return List.of(new Rect2i(xBase, yBase - 60, widthToRightEdge, 82));
             }
         });
     }
