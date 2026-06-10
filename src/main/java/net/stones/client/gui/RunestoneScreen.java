@@ -45,6 +45,11 @@ import net.stones.util.ClusterTooltipHandler;
 import org.joml.Matrix4f;
 
 import net.stones.cap.PlayerShrineCapProvider;
+import net.stones.block.entity.RunestoneBlockEntity;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.core.GlobalPos;
+import net.minecraft.world.phys.Vec3;
 
 import java.awt.Color;
 import java.util.*;
@@ -68,9 +73,15 @@ public class RunestoneScreen extends AbstractContainerScreen<RunestoneMenu> {
     private static final int STAR_COUNT = 3000; 
     private static final float STAR_FIELD_RADIUS = 1200.0f; 
 
-    private List<Vec2> cachedPositions;
-    private List<int[]> cachedConnections;
-    private List<Integer> sortedIndices;
+    // =========================================================================
+    // FIX: HARTE INITIALISIERUNG
+    // Listen werden sofort erzeugt. Eine NullPointerException ist hiernach 
+    // für diese Variablen auf JVM-Ebene unmöglich.
+    // =========================================================================
+    private List<Vec2> cachedPositions = new ArrayList<>();
+    private List<int[]> cachedConnections = new ArrayList<>();
+    private List<Integer> sortedIndices = new ArrayList<>();
+    
     private double scrollX = 0;
     private double scrollY = 0;
     private float zoom = 1.0f;
@@ -87,11 +98,9 @@ public class RunestoneScreen extends AbstractContainerScreen<RunestoneMenu> {
 
     private SimpleSoundInstance menuMusic;
     
-    // Status der Seelenbindung
     private boolean isBound = false;
     private UUID viewedShrineId = null;
 
-    // --- KRYPTISCHE NACHRICHTEN ---
     private static final String[] CRYPTIC_WHISPER_KEYS = {
         "gui.stones.shrine.whisper.1",
         "gui.stones.shrine.whisper.2",
@@ -104,7 +113,6 @@ public class RunestoneScreen extends AbstractContainerScreen<RunestoneMenu> {
     };
     private Component activeWhisper = Component.empty();
 
-    // --- Schreibmaschinen-Effekt Variablen ---
     private int visibleChars = 0;
     private long lastTickTime = 0;
     private String rawWhisperText = "";
@@ -129,38 +137,51 @@ public class RunestoneScreen extends AbstractContainerScreen<RunestoneMenu> {
         this.lastTickTime = System.currentTimeMillis();
         this.activeWhisper = Component.literal("§7\"");
 
-        // --- 1. NEUER BINDUNGS-CHECK (Direkt über das Menu) ---
-        // Wir holen die ID exakt von dem Schrein, dessen Menu wir gerade geöffnet haben.
-        this.viewedShrineId = this.menu.getShrineId();
+        this.isBound = false;
+        this.viewedShrineId = null;
         
-        if (this.minecraft != null && this.minecraft.player != null && this.viewedShrineId != null) {
+        if (this.minecraft != null && this.minecraft.player != null && this.minecraft.level != null) {
+            if (this.minecraft.hitResult instanceof BlockHitResult hit) {
+                BlockEntity be = this.minecraft.level.getBlockEntity(hit.getBlockPos());
+                if (be instanceof RunestoneBlockEntity rbe) {
+                    this.viewedShrineId = rbe.getShrineId();
+                }
+            }
             
-            // Die ID des Schreins, an den der Spieler WIRKLICH gebunden ist
-            UUID myLinkedShrineId = this.minecraft.player.getCapability(PlayerShrineCapProvider.SHRINE_LINK)
-                    .map(net.stones.cap.IPlayerShrineLink::getLinkedShrine)
-                    .orElse(null);
-
-            // Simpler, robuster Check ohne Raytracing oder Distanz-Mogelei
-            this.isBound = this.viewedShrineId.equals(myLinkedShrineId);
-        } else {
-            this.isBound = false;
+            this.minecraft.player.getCapability(PlayerShrineCapProvider.SHRINE_LINK).ifPresent(cap -> {
+                UUID linkedId = cap.getLinkedShrine();
+                if (linkedId != null) {
+                    if (this.viewedShrineId != null && linkedId.equals(this.viewedShrineId)) {
+                        this.isBound = true;
+                    }
+                    if (!this.isBound) {
+                        GlobalPos shrinePos = cap.getShrinePos();
+                        if (shrinePos != null && shrinePos.dimension().equals(this.minecraft.level.dimension())) {
+                            double distSq = this.minecraft.player.distanceToSqr(Vec3.atCenterOf(shrinePos.pos()));
+                            if (distSq < 16.0) this.isBound = true;
+                        }
+                    }
+                }
+            });
         }
-        // --- ENDE BINDUNGS-CHECK ---
 
+        // Layout sauber bevölkern, falls Slots generiert wurden
         int runeCount = this.menu.layoutData.size();
-        this.cachedPositions = ShrineLayout.generateSpiralPositions(runeCount);
-        this.cachedConnections = ShrineLayout.generateConnections(this.cachedPositions);
-        
-        this.sortedIndices = new ArrayList<>(runeCount);
-        for (int i = 0; i < runeCount; i++) this.sortedIndices.add(i);
-        
-        this.sortedIndices.sort((idxA, idxB) -> {
-            SlotConfig a = this.menu.layoutData.get(idxA);
-            SlotConfig b = this.menu.layoutData.get(idxB);
-            int levelComp = Integer.compare(a.requiredLevel, b.requiredLevel);
-            if (levelComp != 0) return levelComp;
-            return a.type.compareTo(b.type);
-        });
+        if (runeCount > 0) {
+            this.cachedPositions = ShrineLayout.generateSpiralPositions(runeCount);
+            this.cachedConnections = ShrineLayout.generateConnections(this.cachedPositions);
+            
+            this.sortedIndices.clear();
+            for (int i = 0; i < runeCount; i++) this.sortedIndices.add(i);
+            
+            this.sortedIndices.sort((idxA, idxB) -> {
+                SlotConfig a = this.menu.layoutData.get(idxA);
+                SlotConfig b = this.menu.layoutData.get(idxB);
+                int levelComp = Integer.compare(a.requiredLevel, b.requiredLevel);
+                if (levelComp != 0) return levelComp;
+                return a.type.compareTo(b.type);
+            });
+        }
 
         this.starField.clear();
         RandomSource rand = RandomSource.create();
@@ -323,6 +344,7 @@ public class RunestoneScreen extends AbstractContainerScreen<RunestoneMenu> {
     }
 
     private void renderStatsPanel(GuiGraphics gui) {
+        if (this.minecraft.player == null) return;
         int playerLevel = this.minecraft.player.experienceLevel;
         
         Map<Attribute, Double> totals = new HashMap<>();
@@ -416,6 +438,12 @@ public class RunestoneScreen extends AbstractContainerScreen<RunestoneMenu> {
             }
         }
 
+        // Sicherer Bail-Out, falls doch leer
+        if (this.cachedPositions.isEmpty() || this.sortedIndices.isEmpty()) {
+            pose.popPose();
+            return;
+        }
+
         int runeCount = this.menu.layoutData.size();
         long time = System.currentTimeMillis();
         double timeLoop = (time % 10000000L); 
@@ -424,6 +452,8 @@ public class RunestoneScreen extends AbstractContainerScreen<RunestoneMenu> {
         double vy = (mouseY - centerY) / zoom - scrollY;
 
         for (int i = 0; i < runeCount; ++i) {
+            if (i >= sortedIndices.size() || i >= cachedPositions.size()) break;
+            
             int logicIndex = sortedIndices.get(i); 
             Vec2 pos = cachedPositions.get(i); 
             Slot slot = this.menu.slots.get(logicIndex);
@@ -640,6 +670,10 @@ public class RunestoneScreen extends AbstractContainerScreen<RunestoneMenu> {
     }
 
     private void updateResonance(int mx, int my) {
+        if (this.cachedPositions.isEmpty()) {
+            return; 
+        }
+        
         double cx = this.width / 2.0;
         double cy = this.height / 2.0;
         double vx = (mx - cx) / zoom - scrollX;
@@ -671,19 +705,25 @@ public class RunestoneScreen extends AbstractContainerScreen<RunestoneMenu> {
             return true;
         }
 
+        if (this.cachedPositions.isEmpty() || this.sortedIndices.isEmpty()) {
+            return super.mouseClicked(mouseX, mouseY, button);
+        }
+
         double centerX = this.width / 2.0;
         double centerY = this.height / 2.0;
         double vx = (mouseX - centerX) / zoom - scrollX;
         double vy = (mouseY - centerY) / zoom - scrollY;
 
         int runeCount = this.menu.layoutData.size();
-        for (int i = runeCount - 1; i >= 0; i--) {
+        for (int i = Math.min(runeCount, cachedPositions.size()) - 1; i >= 0; i--) {
             Vec2 pos = cachedPositions.get(i);
             if (vx >= pos.x - 9 && vx <= pos.x + 9 && vy >= pos.y - 9 && vy <= pos.y + 9) {
-                int logicIndex = sortedIndices.get(i);
-                Slot slot = this.menu.slots.get(logicIndex);
-                this.slotClicked(slot, slot.index, button, net.minecraft.world.inventory.ClickType.PICKUP);
-                return true;
+                if (i < sortedIndices.size()) {
+                    int logicIndex = sortedIndices.get(i);
+                    Slot slot = this.menu.slots.get(logicIndex);
+                    this.slotClicked(slot, slot.index, button, net.minecraft.world.inventory.ClickType.PICKUP);
+                    return true;
+                }
             }
         }
 
@@ -715,11 +755,14 @@ public class RunestoneScreen extends AbstractContainerScreen<RunestoneMenu> {
     }
 
     private void renderCustomTooltip(GuiGraphics gui, int mx, int my) {
+        if (this.cachedPositions.isEmpty() || this.sortedIndices.isEmpty()) return;
+        
         Vec2 vm = transformMouse(mx, my);
         int runeCount = this.menu.layoutData.size();
         
-        for (int i = 0; i < runeCount; ++i) {
+        for (int i = 0; i < Math.min(runeCount, cachedPositions.size()); ++i) {
              if (isMouseOverSlot(cachedPositions.get(i), vm.x, vm.y)) {
+                 if (i >= sortedIndices.size()) continue;
                  int logicIndex = sortedIndices.get(i);
                  Slot slot = this.menu.slots.get(logicIndex);
                  SlotConfig cfg = this.menu.layoutData.get(logicIndex);

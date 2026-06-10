@@ -1,5 +1,6 @@
 package net.stones.gui;
 
+import net.minecraft.core.BlockPos;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Inventory;
@@ -34,7 +35,7 @@ public class RunestoneMenu extends AbstractContainerMenu {
     public final List<SlotConfig> layoutData = new ArrayList<>();
     private final Player player;
     
-    // NEU: Eindeutige ID des aktuell geöffneten Schreins
+    // Eindeutige ID des aktuell geöffneten Schreins
     private final UUID shrineId;
 
     // --- CLIENT KONSTRUKTOR ---
@@ -54,7 +55,7 @@ public class RunestoneMenu extends AbstractContainerMenu {
             layoutData.add(new SlotConfig(type, lvl, idx));
         }
         
-        // NEU: Lesen der Schrein-ID aus dem Network-Buffer funktioniert jetzt fehlerfrei
+        // Lesen der Schrein-ID aus dem Network-Buffer
         this.shrineId = data.readUUID(); 
         
         initSlots();
@@ -69,14 +70,14 @@ public class RunestoneMenu extends AbstractContainerMenu {
         this.layoutData.addAll(layout);
         this.player = playerInv.player;
         
-        // NEU: Setzen der ID bei Erstellung auf dem Server
+        // Setzen der ID bei Erstellung auf dem Server
         this.shrineId = shrineId; 
         
         initSlots();
         addPlayerInventory(playerInv);
     }
 
-    // NEU: Getter für den Screen
+    // Getter für den Screen
     public UUID getShrineId() {
         return this.shrineId;
     }

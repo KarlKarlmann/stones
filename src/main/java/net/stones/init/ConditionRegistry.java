@@ -36,9 +36,6 @@ public class ConditionRegistry {
         if (factory == null) return null;
         return factory.create(params);
     }
-
-    // --- HOCHPERFORMANTE RESOLVER (Wird nur beim Laden der Rune ausgeführt) ---
-
     private static Function<ActionContext, Float> getFloatResolver(JsonObject params, String key, float def) {
         if (!params.has(key)) return ctx -> def;
         JsonElement el = params.get(key);

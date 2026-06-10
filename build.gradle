@@ -1,15 +1,7 @@
 plugins {
     id 'eclipse'
     id 'net.minecraftforge.gradle' version '[6.0.16,6.2)'
-}
-
-// --- NEU: Maven Repository für JEI ---
-// Hier weiß Gradle, wo es die JEI-Dateien herunterladen kann.
-repositories {
-    maven {
-        name = "Jared's maven"
-        url = "https://maven.blamejared.com/"
-    }
+    id 'org.spongepowered.mixin' version '0.7.+'
 }
 
 // Version aus gradle.properties laden (Fallback auf 1.0.0, falls nicht gefunden)
@@ -22,66 +14,94 @@ java.toolchain.languageVersion = JavaLanguageVersion.of(17)
 minecraft {
     mappings channel: 'official', version: '1.20.1'
 
-    accessTransformer = file('src/main/resources/META-INF/accesstransformer.cfg')
+    // Falls du eine Access Transformer cfg hast, einkommentieren:
+    // accessTransformer = file('src/main/resources/META-INF/accesstransformer.cfg')
 
     copyIdeResources = true
 
     runs {
         client {
+            workingDirectory project.file('run')
+            property 'forge.logging.markers', 'REGISTRIES'
+            property 'forge.logging.console.level', 'debug'
+            arg "-mixin.config=stones.mixins.json"
+            mods { stones { source sourceSets.main } }
         }
 
         server {
-        }
-
-        configureEach {
             workingDirectory project.file('run')
-
             property 'forge.logging.markers', 'REGISTRIES'
             property 'forge.logging.console.level', 'debug'
-
-            mods {
-                stones {
-                    source sourceSets.main
-                }
-            }
+            arg "-mixin.config=stones.mixins.json"
+            mods { stones { source sourceSets.main } }
         }
+    }
+}
+
+mixin {
+    add sourceSets.main, 'stones.refmap.json'
+    config 'stones.mixins.json'
+}
+
+repositories {
+    maven {
+        name = "Jared's maven"
+        url = "https://maven.blamejared.com/"
     }
 }
 
 dependencies {
     minecraft 'net.minecraftforge:forge:1.20.1-47.3.0'
 
-    // --- JEI API Integration (Soft Dependency) ---
-    // BEIDE APIs (Common und Forge) werden zum Kompilieren benötigt:
-    compileOnly fg.deobf("mezz.jei:jei-1.20.1-common-api:15.3.0.4")
-    compileOnly fg.deobf("mezz.jei:jei-1.20.1-forge-api:15.3.0.4")
+    annotationProcessor "org.spongepowered:mixin:${mixin_version}:processor"
+
+    compileOnly fg.deobf("mezz.jei:jei-${jei_mc_version}-common-api:${jei_version}")
+    compileOnly fg.deobf("mezz.jei:jei-${jei_mc_version}-forge-api:${jei_version}")
+    compileOnly fg.deobf("mezz.jei:jei-${jei_mc_version}-common:${jei_version}")
     
-    // JEI Runtime zum Testen im Spiel:
-    runtimeOnly fg.deobf("mezz.jei:jei-1.20.1-forge:15.3.0.4")
+    runtimeOnly fg.deobf("mezz.jei:jei-${jei_mc_version}-forge:${jei_version}")
 }
 
 tasks.withType(JavaCompile).configureEach {
-    options.encoding = 'UTF-8' // Use the UTF-8 charset for Java compilation
+    options.encoding = 'UTF-8'
 }
 
-// --- Anpassung 1: Dateinamen der JAR festlegen ---
-tasks.named('jar', Jar).configure {
-    archiveFileName = "stones_1.20.1_forge_${project.version}.jar"
-}
+// --- WICHTIG 1: Variablen in der mods.toml ersetzen ---
+def replaceProperties = [
+        version: project.version,
+        mod_version: project.version
+]
 
-// --- Anpassung 2: Version dynamisch in die mods.toml schreiben ---
-tasks.named('processResources', ProcessResources).configure {
-    def replaceProperties = [
-            version: project.version
-    ]
+processResources {
     inputs.properties replaceProperties
+    replaceProperties.put 'project', project
 
-    filesMatching(['META-INF/mods.toml']) {
-        expand replaceProperties + [project: project]
+    filesMatching(['META-INF/mods.toml', 'pack.mcmeta']) {
+        expand replaceProperties
     }
 }
 
-// --- Anpassung 3: Lokale Skripte laden (Wird auf GitHub ignoriert) ---
+// --- WICHTIG 2: Mod Manifest mit sauberen FML-Daten ---
+tasks.named('jar', Jar).configure {
+    archiveFileName = "stones_1.20.1_forge_${project.version}.jar"
+
+    manifest {
+        attributes([
+            "Specification-Title"     : "Stones",
+            "Specification-Vendor"    : "Stones",
+            "Specification-Version"   : "1",
+            "Implementation-Title"    : project.name,
+            "Implementation-Version"  : project.version,
+            "Implementation-Vendor"   : "Stones",
+            "Implementation-Timestamp": new Date().format("yyyy-MM-dd'T'HH:mm:ssZ"),
+            "MixinConfigs"            : "stones.mixins.json"
+        ])
+    }
+}
+
+// --- WICHTIG 3: Reobfuscation für das fertige Spiel aktivieren! ---
+jar.finalizedBy('reobfJar')
+
 if (file('local-git.gradle').exists()) {
     apply from: 'local-git.gradle'
 }

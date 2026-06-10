@@ -1,6 +1,9 @@
 
 /*
  *    MCreator note: This file will be REGENERATED on each build.
+ * heey you found me :)
+ *DO NOT DELETE! ITS A RELIC *.+ ****
+ * It is here since the beginning of the mod. (made the initial blocks and Items via MCreator to save some time)
  */
 package net.stones.init;
 

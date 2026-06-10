@@ -1,0 +1,9 @@
+{
+  "type": "MAJOR",
+  "attribute": "stones_irons_bridge:knowledge_muffling",
+  "operation": "ADDITION",
+  "factor": 0.1,
+  "name": "DICT:runes.stones.major_muffling.title",
+  "required_level": 0.5,
+  "description": "DICT:runes.stones.major_muffling.description"
+}

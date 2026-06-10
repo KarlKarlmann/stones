@@ -1,0 +1,9 @@
+{
+  "type": "MINOR",
+  "attribute": "stones_irons_bridge:knowledge_muffling",
+  "operation": "ADDITION",
+  "factor": 0.1,
+  "name": "DICT:runes.stones.minor_muffling.title",
+  "required_level": 0.1,
+  "description": "DICT:runes.stones.minor_muffling.description"
+}

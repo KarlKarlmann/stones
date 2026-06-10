@@ -9,6 +9,7 @@ import net.stones.init.StonesModBlockEntities;
 import net.stones.init.StonesModMenus;
 import net.stones.init.StonesModParticles;
 import net.stones.init.StonesModEntities;
+import net.stones.init.StonesModTabs;
 import net.stones.network.*;
 // WICHTIG: ActionSystem import entfernen oder sicherstellen, dass er nicht für Packets genutzt wird!
 // import net.stones.features.ActionSystem; 
@@ -73,6 +74,7 @@ public class StonesMod {
 		StonesModMenus.REGISTRY.register(bus);
 		StonesModParticles.REGISTRY.register(bus);
 		StonesModEntities.REGISTRY.register(bus);
+		StonesModTabs.REGISTRY.register(bus);
 
 		// Sounds am Event-Bus registrieren
 		SOUNDS.register(bus);
