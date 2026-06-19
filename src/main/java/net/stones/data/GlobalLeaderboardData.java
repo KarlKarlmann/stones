@@ -6,6 +6,7 @@ import net.minecraft.nbt.Tag;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.saveddata.SavedData;
 import net.minecraft.world.level.storage.DimensionDataStorage;
+import net.stones.init.StonesModConfig;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -13,7 +14,6 @@ import java.util.List;
 
 /**
  * Speichert Highscores inklusive Todesursache.
- * FIX: Nutzt .contains() statt .has() für NBT-Checks.
  */
 public class GlobalLeaderboardData extends SavedData {
 
@@ -55,7 +55,6 @@ public class GlobalLeaderboardData extends SavedData {
         for (int i = 0; i < entries.size(); i++) {
             LeaderboardEntry entry = entries.get(i);
             if (entry.name().equals(playerName) && entry.score() == score) {
-                // Ersetze den Eintrag mit der neuen Inschrift
                 entries.set(i, new LeaderboardEntry(playerName, score, newReason));
                 this.setDirty();
                 break;
@@ -69,7 +68,28 @@ public class GlobalLeaderboardData extends SavedData {
 
     public static GlobalLeaderboardData get(ServerLevel level) {
         DimensionDataStorage storage = level.getServer().overworld().getDataStorage();
-        return storage.computeIfAbsent(GlobalLeaderboardData::load, GlobalLeaderboardData::new, FILE_NAME);
+        return storage.computeIfAbsent(GlobalLeaderboardData::load, GlobalLeaderboardData::create, FILE_NAME);
+    }
+
+    // NEU: Factory-Methode für initiale Erstellung mit Config-Abhängigkeit
+    public static GlobalLeaderboardData create() {
+        GlobalLeaderboardData data = new GlobalLeaderboardData();
+        
+        // Config-Wert abrufen
+        int threshold = StonesModConfig.REWARD_SCORE_THRESHOLD.get();
+        
+        // Dynamische Skalierung der Standard-Einträge. 
+        // Falls der Threshold sehr niedrig ist (z.B. 0), behalten wir die Original-Werte (500, 400, 300) als Minimum.
+        int score1 = Math.max(500, threshold);
+        int score2 = Math.max(400, (int)(threshold * 0.8)); // 80% vom Threshold
+        int score3 = Math.max(300, (int)(threshold * 0.6)); // 60% vom Threshold
+        int score4 = Math.max(200, (int)(threshold * 0.5)); // 60% vom Threshold        
+        data.addScore("IrisEinhorn", score1, "Who put that cactus there?!");
+        data.addScore("KarlKarlmann", score2, "died coding this");
+        data.addScore("ThisCouldBeYou", score3, "For a coffee or two");
+        data.addScore("user_43578860", score4, "thx for pinpointing this!");         
+        data.setDirty();
+        return data;
     }
 
     public static GlobalLeaderboardData load(CompoundTag nbt) {

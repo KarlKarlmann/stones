@@ -100,11 +100,11 @@ public class StoneItem extends Item {
         return false;
     }
 
-    private void openRuneInfoScreen(ItemStack stack) {
-        DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> {
-            net.minecraft.client.Minecraft.getInstance().setScreen(new net.stones.client.gui.RuneInfoScreen(stack));
-        });
-    }
+	private void openRuneInfoScreen(ItemStack stack) {
+		net.minecraftforge.fml.DistExecutor.unsafeRunWhenOn(net.minecraftforge.api.distmarker.Dist.CLIENT, 
+			() -> () -> net.stones.client.StonesClientProxy.openRuneInfoScreen(stack)
+		);
+	}
 
     @Override
     public int getMaxStackSize(ItemStack stack) {
@@ -372,31 +372,21 @@ public class StoneItem extends Item {
         return line;
     }
 
-    private static boolean isClientShiftDown() {
-        try {
-            Boolean isDown = DistExecutor.unsafeCallWhenOn(Dist.CLIENT, () -> ClientPlayerHelper::isShiftDown);
-            return isDown != null && isDown;
-        } catch (Exception e) {
-            return false;
-        }
-    }
+	private static boolean isClientShiftDown() {
+		try {
+			Boolean isDown = DistExecutor.unsafeCallWhenOn(Dist.CLIENT, () -> net.stones.client.util.ClientTooltipHelper::isShiftDown);
+			return isDown != null && isDown;
+		} catch (Exception e) {
+			return false;
+		}
+	}
 
-    private static int getClientPlayerLevel() {
-        try {
-            Integer level = DistExecutor.unsafeCallWhenOn(Dist.CLIENT, () -> ClientPlayerHelper::getLevel);
-            return level == null ? 0 : level;
-        } catch (Exception e) {
-            return 0;
-        }
-    }
-
-    private static class ClientPlayerHelper {
-        public static Integer getLevel() {
-            Player player = net.minecraft.client.Minecraft.getInstance().player;
-            return player != null ? player.experienceLevel : 0;
-        }
-        public static Boolean isShiftDown() {
-            return net.minecraft.client.gui.screens.Screen.hasShiftDown();
-        }
-    }
+	private static int getClientPlayerLevel() {
+		try {
+			Integer level = DistExecutor.unsafeCallWhenOn(Dist.CLIENT, () -> net.stones.client.util.ClientTooltipHelper::getLevel);
+			return level == null ? 0 : level;
+		} catch (Exception e) {
+			return 0;
+		}
+	}
 }

@@ -8,6 +8,7 @@ version="${version}"
 displayName="stones"
 displayURL="https://www.n3g.de"
 credits="NOT created using the mod maker MCreator — but kindly mentioned because the initial setup was generated with it."
+logoFile="stones.png"
 authors="KarlKarlmann"
 
 [[dependencies.stones]]
@@ -16,3 +17,10 @@ authors="KarlKarlmann"
     versionRange="[1.20.1]"
     ordering="AFTER"
     side="BOTH"
+
+[[dependencies.stones]]
+    modId="actionbar"
+    mandatory=true
+    versionRange="[1.0,)"
+    ordering="AFTER"
+    side="CLIENT"

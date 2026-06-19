@@ -14,7 +14,7 @@ Stones solves this by introducing an **item-based skill tree that is persistent,
 
 ## 🌟 Features
 
-* **🔮 The Void Altars:** Find dormant, black monoliths in the world and bind your soul to them through a short ritual. Each altar generates a mathematically completely unique socket layout (a Phyllotaxis spiral) based on its ID. Your active rune setup and your binding remain completely intact **even after death**.
+* **🔮 The Stones:** Find dormant, black monoliths in the world and bind your soul to them through a short ritual. Each altar generates a mathematically completely unique socket layout (a Phyllotaxis spiral) based on its ID. Your active rune setup and your binding remain completely intact **even after death**.
 
 * **🪨 The Rune System:** Personalize your altar with three different types of runes:
 

@@ -38,12 +38,14 @@ public class PacketOpenLeaderboard {
         buf.writeInt(this.lastRunScore);
     }
 
-    public static void handle(PacketOpenLeaderboard msg, Supplier<NetworkEvent.Context> ctx) {
-        ctx.get().enqueueWork(() -> {
-            DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> ClientHandler.handlePacket(msg));
-        });
-        ctx.get().setPacketHandled(true);
-    }
+	public static void handle(PacketOpenLeaderboard msg, Supplier<NetworkEvent.Context> ctx) {
+		ctx.get().enqueueWork(() -> {
+			net.minecraftforge.fml.DistExecutor.unsafeRunWhenOn(net.minecraftforge.api.distmarker.Dist.CLIENT, 
+				() -> () -> net.stones.client.StonesClientProxy.handleLeaderboardPacket(msg)
+			);
+		});
+		ctx.get().setPacketHandled(true);
+	}
 
     private static class ClientHandler {
         public static void handlePacket(PacketOpenLeaderboard msg) {

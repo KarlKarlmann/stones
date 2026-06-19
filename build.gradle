@@ -44,10 +44,7 @@ mixin {
 }
 
 repositories {
-    maven {
-        name = "Jared's maven"
-        url = "https://maven.blamejared.com/"
-    }
+    // Jared's maven wurde entfernt, da wir JEI nicht mehr benötigen.
 }
 
 dependencies {
@@ -55,11 +52,10 @@ dependencies {
 
     annotationProcessor "org.spongepowered:mixin:${mixin_version}:processor"
 
-    compileOnly fg.deobf("mezz.jei:jei-${jei_mc_version}-common-api:${jei_version}")
-    compileOnly fg.deobf("mezz.jei:jei-${jei_mc_version}-forge-api:${jei_version}")
-    compileOnly fg.deobf("mezz.jei:jei-${jei_mc_version}-common:${jei_version}")
-    
-    runtimeOnly fg.deobf("mezz.jei:jei-${jei_mc_version}-forge:${jei_version}")
+    // --- WICHTIG: Die Actionbar-Mod für den Compiler verfügbar machen ---
+    // Erfordert den Ordner "libs" auf gleicher Ebene wie diese build.gradle
+    // WURDE GEÄNDERT AUF compileOnly: Es ist nun eine optionale Soft-Dependency!
+    compileOnly fg.deobf(files('libs/actionbar_1.20.1_forge_1.0.0.jar'))
 }
 
 tasks.withType(JavaCompile).configureEach {

@@ -7,7 +7,6 @@
   "mixins": [
   ],
   "client": [
-    "jei.JeiOverlayMixin"
   ],
   "injectors": {
     "defaultRequire": 1

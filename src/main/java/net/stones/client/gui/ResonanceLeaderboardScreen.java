@@ -1,5 +1,7 @@
 package net.stones.client.gui;
 
+import net.minecraft.ChatFormatting;
+import net.minecraft.Util;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
@@ -17,6 +19,7 @@ import java.util.List;
  * Der native Leaderboard-Screen.
  * Zeigt das Epitaph-Feld rechts auf der Zeile, wenn platziert.
  * Zeigt links Infos zur Benötigten Punktzahl an, wenn nicht platziert.
+ * Integriert einen dezenten Support-Link.
  */
 public class ResonanceLeaderboardScreen extends Screen {
 
@@ -80,6 +83,7 @@ public class ResonanceLeaderboardScreen extends Screen {
             }
         }
 
+        // --- BUTTONS LINKS ---
         if (!pendingScores.isEmpty()) {
             this.addRenderableWidget(Button.builder(Component.translatable("gui.stones.leaderboard.claim_all"), (btn) -> {
                 if (this.isOnLeaderboard && this.saveButton != null && this.saveButton.active) {
@@ -96,6 +100,16 @@ public class ResonanceLeaderboardScreen extends Screen {
             }
             this.onClose();
         }).bounds(centerX - 150, centerY + 70, 140, 20).build());
+
+        // --- NEU: SUPPORT BUTTON RECHTS ---
+        // Ein hübscher Button mit einem roten Herzchen, der das UI rechts unten ausbalanciert
+        Component supportText = Component.literal("❤ ").withStyle(ChatFormatting.RED)
+                                .append(Component.translatable("gui.stones.leaderboard.support"));
+                                
+        this.addRenderableWidget(Button.builder(supportText, (btn) -> {
+            // HIER DEINEN LINK EINTRAGEN (Ko-fi, Patreon, PayPal, CurseForge, etc.)
+            Util.getPlatform().openUri("https://ko-fi.com/dein_name");
+        }).bounds(centerX + 10, centerY + 70, 140, 20).build());
     }
 
     @Override
@@ -121,15 +135,15 @@ public class ResonanceLeaderboardScreen extends Screen {
 
         // Info-Text auf der linken Seite
         if (this.isOnLeaderboard && this.epitaphBox != null) {
-            // Spieler ist auf dem Leaderboard
             gui.drawString(this.font, Component.translatable("gui.stones.leaderboard.immortalized"), centerX - 150, centerY - 10, 0xFFFFFF);
             gui.drawString(this.font, Component.translatable("gui.stones.leaderboard.write_inscription_line1"), centerX - 150, centerY, 0x888888);
             gui.drawString(this.font, Component.translatable("gui.stones.leaderboard.write_inscription_line2"), centerX - 150, centerY + 10, 0x888888);
         } else if (this.lastRunScore > 0) {
-            // Spieler hat einen Score, ist aber NICHT auf dem Leaderboard
             gui.drawString(this.font, Component.translatable("gui.stones.leaderboard.not_placed_title"), centerX - 150, centerY - 10, 0xFF5555); 
             gui.drawString(this.font, Component.translatable("gui.stones.leaderboard.your_score", this.lastRunScore), centerX - 150, centerY, 0xAAAAAA);
-            gui.drawString(this.font, Component.translatable("gui.stones.leaderboard.hint_boxes_1"), centerX - 150, centerY + 15, 0x666666);
+            
+            int requiredScore = net.stones.init.StonesModConfig.REWARD_SCORE_THRESHOLD.get();
+            gui.drawString(this.font, Component.translatable("gui.stones.leaderboard.hint_boxes_1", requiredScore), centerX - 150, centerY + 15, 0x666666);
             gui.drawString(this.font, Component.translatable("gui.stones.leaderboard.hint_boxes_2"), centerX - 150, centerY + 25, 0x666666);
         }
 

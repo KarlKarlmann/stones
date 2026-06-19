@@ -29,17 +29,18 @@ public class ScoreRewardSystem {
     private static final String NBT_LIST_KEY = "stones_legacy_runs";
 
     @SubscribeEvent
-    public static void onPlayerDeath(LivingDeathEvent event) {
-        if (event.getEntity() instanceof ServerPlayer player) {
-            int currentRunScore = player.getScore();
-            if (currentRunScore <= 0) return;
+	public static void onPlayerDeath(LivingDeathEvent event) {
+			if (event.getEntity() instanceof ServerPlayer player) {
+				int currentRunScore = player.getScore();
 
-            // NEU: Wir speichern den Score des Todes IMMER zwischen, 
-            // völlig unabhängig davon, ob er eine Kiste wert ist!
-            player.getPersistentData().putInt("stones_last_death_score", currentRunScore);
+				// FIX 1: Den Score IMMER speichern, auch bei <= 0, 
+				// damit alte, erfolgreiche Runs überschrieben werden!
+				player.getPersistentData().putInt("stones_last_death_score", currentRunScore);
 
-            // Todesgrund parsen
-            String deathReason = player.getCombatTracker().getDeathMessage().getString();
+				if (currentRunScore <= 0) return;
+
+				// Todesgrund parsen
+				String deathReason = player.getCombatTracker().getDeathMessage().getString();
             
             // Globales Leaderboard abrufen, um Platzierung zu checken
             GlobalLeaderboardData leaderboard = GlobalLeaderboardData.get(player.serverLevel());
@@ -79,7 +80,7 @@ public class ScoreRewardSystem {
         }
     }
 
-    @SubscribeEvent
+	@SubscribeEvent
     public static void onRespawn(PlayerEvent.PlayerRespawnEvent event) {
         if (event.getEntity() instanceof ServerPlayer player) {
             ListTag list = player.getPersistentData().getList(NBT_LIST_KEY, Tag.TAG_INT);
@@ -87,11 +88,14 @@ public class ScoreRewardSystem {
             for (int i = 0; i < list.size(); i++) personalScores.add(list.getInt(i));
 
             List<GlobalLeaderboardData.LeaderboardEntry> global = GlobalLeaderboardData.get(player.serverLevel()).getEntries();
-
-            // NEU: Hole den Wert des gerade passierten Todes!
+            
+            // Wert des gerade passierten Todes holen
             int lastDeathScore = player.getPersistentData().getInt("stones_last_death_score");
-
-            // FIX: Jetzt werden korrekterweise 3 Argumente (inklusive lastDeathScore) übergeben!
+            
+            // FIX 2: Den Score sofort "konsumieren". 
+            // Verhindert mehrfaches Editieren bei Relogs oder erneuten Toden ohne Punkte.
+            player.getPersistentData().putInt("stones_last_death_score", -1);
+            
             StonesMod.PACKET_HANDLER.send(PacketDistributor.PLAYER.with(() -> player), 
                 new PacketOpenLeaderboard(personalScores, global, lastDeathScore));
         }

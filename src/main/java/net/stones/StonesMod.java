@@ -11,6 +11,9 @@ import net.stones.init.StonesModParticles;
 import net.stones.init.StonesModEntities;
 import net.stones.init.StonesModTabs;
 import net.stones.network.*;
+import net.minecraftforge.fml.config.ModConfig;
+import net.minecraftforge.fml.ModLoadingContext;
+import net.stones.init.StonesModConfig;
 // WICHTIG: ActionSystem import entfernen oder sicherstellen, dass er nicht für Packets genutzt wird!
 // import net.stones.features.ActionSystem; 
 import net.stones.enchantment.behavior.reflection.ReflectionInvoker;
@@ -65,8 +68,12 @@ public class StonesMod {
 		() -> SoundEvent.createVariableRangeEvent(new ResourceLocation(MODID, "echo_trader_emerge")));
 	public static final RegistryObject<SoundEvent> SHRINE_BIND = SOUNDS.register("shrine_bind",
 		() -> SoundEvent.createVariableRangeEvent(new ResourceLocation(MODID, "shrine_bind")));
+	
 	public StonesMod() {
 		IEventBus bus = FMLJavaModLoadingContext.get().getModEventBus();
+
+        // NEU: Config registrieren (COMMON bedeutet, sie gilt für Server und Client synchron)
+        ModLoadingContext.get().registerConfig(ModConfig.Type.COMMON, StonesModConfig.SPEC);
 
 		StonesModBlocks.REGISTRY.register(bus);
 		StonesModBlockEntities.REGISTRY.register(bus);
@@ -93,7 +100,7 @@ public class StonesMod {
 		addNetworkMessage(PacketPerformAction.class, PacketPerformAction::encode, PacketPerformAction::new, PacketPerformAction::handle);	
 		addNetworkMessage(PacketClaimReward.class, PacketClaimReward::toBytes, PacketClaimReward::new, PacketClaimReward::handle);
 		addNetworkMessage(PacketBuyEcho.class, PacketBuyEcho::toBytes, PacketBuyEcho::new, PacketBuyEcho::handle);
-		addNetworkMessage(PacketUpdateEpitaph.class, PacketUpdateEpitaph::toBytes, PacketUpdateEpitaph::new, PacketUpdateEpitaph::handle); // Registrierung des Epitaph-Netzwerkpakets
+		addNetworkMessage(PacketUpdateEpitaph.class, PacketUpdateEpitaph::toBytes, PacketUpdateEpitaph::new, PacketUpdateEpitaph::handle);
 
 		// --- S2C ---
 		addNetworkMessage(PacketSyncPlayerShrine.class, PacketSyncPlayerShrine::toBytes, PacketSyncPlayerShrine::new, PacketSyncPlayerShrine::handle);
