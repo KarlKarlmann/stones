@@ -75,8 +75,6 @@ public class RunestoneScreen extends AbstractContainerScreen<RunestoneMenu> {
 
     // =========================================================================
     // FIX: HARTE INITIALISIERUNG
-    // Listen werden sofort erzeugt. Eine NullPointerException ist hiernach 
-    // für diese Variablen auf JVM-Ebene unmöglich.
     // =========================================================================
     private List<Vec2> cachedPositions = new ArrayList<>();
     private List<int[]> cachedConnections = new ArrayList<>();
@@ -137,30 +135,18 @@ public class RunestoneScreen extends AbstractContainerScreen<RunestoneMenu> {
         this.lastTickTime = System.currentTimeMillis();
         this.activeWhisper = Component.literal("§7\"");
 
-        this.isBound = false;
-        this.viewedShrineId = null;
+		this.isBound = false;
         
-        if (this.minecraft != null && this.minecraft.player != null && this.minecraft.level != null) {
-            if (this.minecraft.hitResult instanceof BlockHitResult hit) {
-                BlockEntity be = this.minecraft.level.getBlockEntity(hit.getBlockPos());
-                if (be instanceof RunestoneBlockEntity rbe) {
-                    this.viewedShrineId = rbe.getShrineId();
-                }
-            }
-            
+        // Wir nehmen die ID jetzt DIREKT aus dem Menü!
+        this.viewedShrineId = this.menu.getShrineId();
+        
+        if (this.minecraft != null && this.minecraft.player != null) {
             this.minecraft.player.getCapability(PlayerShrineCapProvider.SHRINE_LINK).ifPresent(cap -> {
                 UUID linkedId = cap.getLinkedShrine();
-                if (linkedId != null) {
-                    if (this.viewedShrineId != null && linkedId.equals(this.viewedShrineId)) {
-                        this.isBound = true;
-                    }
-                    if (!this.isBound) {
-                        GlobalPos shrinePos = cap.getShrinePos();
-                        if (shrinePos != null && shrinePos.dimension().equals(this.minecraft.level.dimension())) {
-                            double distSq = this.minecraft.player.distanceToSqr(Vec3.atCenterOf(shrinePos.pos()));
-                            if (distSq < 16.0) this.isBound = true;
-                        }
-                    }
+                
+                // Wir prüfen nur noch auf die exakte UUID-Übereinstimmung
+                if (linkedId != null && this.viewedShrineId != null && linkedId.equals(this.viewedShrineId)) {
+                    this.isBound = true;
                 }
             });
         }

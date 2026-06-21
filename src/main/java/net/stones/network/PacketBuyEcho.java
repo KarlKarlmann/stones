@@ -53,6 +53,13 @@ public class PacketBuyEcho {
                     if (player.isCreative() || player.experienceLevel >= cost) {
                         if (!player.isCreative()) player.giveExperienceLevels(-cost);
                         ItemStack buy = stockItem.copy();
+                        
+                        // Den Custom Cost Tag vor dem Hinzufügen ins Inventar bereinigen, damit der Stack wieder Vanilla ist
+                        if (buy.hasTag()) {
+                            buy.getTag().remove("EchoCustomCost");
+                            if (buy.getTag().isEmpty()) buy.setTag(null);
+                        }
+
                         if (!player.getInventory().add(buy)) player.drop(buy, false);
                         trader.consumeResonance();
                         player.level().playSound(null, player.getX(), player.getY(), player.getZ(), SoundEvents.EXPERIENCE_ORB_PICKUP, SoundSource.PLAYERS, 0.5f, 1.0f);
@@ -80,18 +87,42 @@ public class PacketBuyEcho {
     }
 
     public static int getXpCost(ItemStack stack) {
+        // --- 0. Custom Config-based Cost ---
+        // Wenn das Item vom Echo Trader ein NBT-Preisschild erhalten hat, nutzen wir dieses!
+        if (stack.hasTag() && stack.getTag().contains("EchoCustomCost")) {
+            return stack.getTag().getInt("EchoCustomCost");
+        }
+
+        // --- 1. Resonanz Boxen ---
         if (stack.getItem() == StonesModItems.RESONANCE_BOX.get()) {
-            return switch (stack.getOrCreateTag().getInt("ResonanceLootTier")) {
-                case 1 -> 5; case 5 -> 30; case 10 -> 65; default -> 15;
-            };
+            int tier = stack.getOrCreateTag().getInt("ResonanceLootTier");
+            if (tier <= 0) tier = 1;
+            return net.stones.init.StonesModConfig.TRADER_COST_BOX_BASE.get() + (tier * net.stones.init.StonesModConfig.TRADER_COST_BOX_PER_TIER.get());
         }
+        
+        // --- 2. Runen ---
         if (stack.getItem() instanceof net.stones.item.StoneItem) {
-            int base = (stack.getItem() == StonesModItems.RUNE_MILESTONE.get()) ? 40 : 15;
+            int base = net.stones.init.StonesModConfig.TRADER_COST_RUNE_MINOR.get();
+            if (stack.getItem() == StonesModItems.RUNE_MAJOR.get()) {
+                base = net.stones.init.StonesModConfig.TRADER_COST_RUNE_MAJOR.get();
+            } else if (stack.getItem() == StonesModItems.RUNE_MILESTONE.get()) {
+                base = net.stones.init.StonesModConfig.TRADER_COST_RUNE_MILESTONE.get();
+            }
             int amp = EnchantmentHelper.getItemEnchantmentLevel(ForgeRegistries.ENCHANTMENTS.getValue(new ResourceLocation("stones", "amplify")), stack);
-            return base + (amp / 2);
+            
+            return base + (amp / net.stones.init.StonesModConfig.TRADER_COST_RUNE_AMP_DIVISOR.get());
         }
-        if (stack.getItem() == StonesModItems.CLUSTER_JEWEL_MAJOR.get()) return 50;
-        if (stack.getItem() == StonesModItems.CLUSTER_JEWEL_MINOR.get()) return 25;
-        return 10;
+        
+        // --- 3. Cluster ---
+        if (stack.getItem() == StonesModItems.CLUSTER_JEWEL_MILESTONE.get()) 
+            return net.stones.init.StonesModConfig.TRADER_COST_CLUSTER_MILESTONE.get();
+        if (stack.getItem() == StonesModItems.CLUSTER_JEWEL_MAJOR.get()) 
+            return net.stones.init.StonesModConfig.TRADER_COST_CLUSTER_MAJOR.get();
+        if (stack.getItem() == StonesModItems.CLUSTER_JEWEL_MINOR.get()) 
+            return net.stones.init.StonesModConfig.TRADER_COST_CLUSTER_MINOR.get();
+        
+        // --- 4. Fallback Ressourcen ---
+        int count = stack.getCount();
+        return Math.max(net.stones.init.StonesModConfig.TRADER_COST_RESOURCE_BASE.get(), count / net.stones.init.StonesModConfig.TRADER_COST_RESOURCE_DIVISOR.get()); 
     }
 }

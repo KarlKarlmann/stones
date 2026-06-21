@@ -25,6 +25,7 @@ import net.stones.enchantment.RuneEnchantment;
 import net.stones.enchantment.RuneStat;
 import net.stones.init.StonesModTags;
 import net.stones.item.ClusterJewelItem;
+import net.minecraft.resources.ResourceLocation;
 import net.stones.item.StoneItem;
 import java.util.HashMap;
 import java.util.ArrayList;
@@ -33,25 +34,29 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * MATHEMATISCHE SINGLE SOURCE OF TRUTH.
- * Diese Klasse berechnet ausschließlich Werte. Sie ist die einzige Autorität für die
- * Resonanz-Mathematik und wird von Tooltips, dem Server-System und dem Action-System genutzt.
+ * Die Mathematik hinter den Rune-Boni (Tooltips, Server-System, Action-System).
+ *
+ * Wichtig: updatePlayer() rechnet NICHT nur, sondern wendet die Werte auch direkt an
+ * (AttributeModifier am Player) und pflegt den ACTIVE_MILESTONES-Cache. Wer hier was
+ * ändert, sollte beide Seiten im Blick haben – ist also keine reine Rechen-Klasse.
  */
 public class RuneCalculator {
 
-    public static class CachedMilestone {
-        public final RuneEnchantment rune;
-        public final int runeLevel;
-        public final int socketLevel;
-        public final double mult;
+	public static class CachedMilestone {
+		public final RuneEnchantment rune;
+		public final int runeLevel;
+		public final int socketLevel;
+		public final double mult;
+		public final ResourceLocation runeId;   // NEU
 
-        public CachedMilestone(RuneEnchantment rune, int runeLevel, int socketLevel, double mult) {
-            this.rune = rune;
-            this.runeLevel = runeLevel;
-            this.socketLevel = socketLevel;
-            this.mult = mult;
-        }
-    }
+		public CachedMilestone(RuneEnchantment rune, int runeLevel, int socketLevel, double mult, ResourceLocation runeId) {
+			this.rune = rune;
+			this.runeLevel = runeLevel;
+			this.socketLevel = socketLevel;
+			this.mult = mult;
+			this.runeId = runeId;
+		}
+	}
 	
 	public static final Map<UUID, List<CachedMilestone>> ACTIVE_MILESTONES = new HashMap<>();
 	
@@ -174,52 +179,49 @@ public class RuneCalculator {
     /**
      * Wendet alle aktiven Schrein-Effekte auf den Spieler an (Server-Side).
      */
-    public static void updatePlayer(ServerPlayer player) {
-        // 1. Liste GANZ OBEN initialisieren, damit sie IMMER existiert
-        List<CachedMilestone> currentMilestones = new ArrayList<>();
-
-        player.getCapability(PlayerShrineCapProvider.SHRINE_LINK).ifPresent(cap -> {
-            UUID shrineId = cap.getLinkedShrine();
-            if (shrineId != null) {
-                ShrineInstance shrine = ShrineSavedData.get(player.serverLevel()).getShrine(shrineId);
-                if (shrine != null) {
-                    // 1. Alle alten Modifier entfernen
-                    for (int i = 0; i < shrine.getInventory().getSlots(); i++) {
-                        removeAllModifiersFromSlot(player, i);
-                    }
-
-                    // 2. Neue Modifier berechnen und anwenden
-                    collectActiveRunes(shrine.getInventory(), shrine.getLayout(), player.experienceLevel, 
-                        (rune, runeLevel, socketLevel, mult, mainSlot, subSlot) -> {
-                            
-                            // KORREKTUR: Milestones mit dem kompletten Kontext in den Cache packen!
-                            if (rune.type == RuneEnchantment.Type.MILESTONE) {
-                                currentMilestones.add(new CachedMilestone(rune, runeLevel, socketLevel, mult));
-                            }
-
-                            if (rune.targetAttribute != null) {
-                                double bonus = calculateAttributeBonus(rune, runeLevel, player.experienceLevel, socketLevel, mult);
-                                if (bonus != 0) {
-                                    AttributeInstance inst = player.getAttribute(rune.targetAttribute);
-                                    if (inst != null) {
-                                        UUID modifierId = getUniqueModifierID(mainSlot, subSlot, rune.targetAttribute.getDescriptionId());
-                                        String modName = "Runestone Bonus " + mainSlot + (subSlot >= 0 ? "_" + subSlot : "");
-                                        AttributeModifier mod = new AttributeModifier(modifierId, modName, bonus, rune.operation);
-                                        if (!inst.hasModifier(mod)) inst.addTransientModifier(mod);
-                                    }
-                                }
-                            }
-                        }
-                    );
-                }
-            }
-        });
-
-        // 3. Cache IMMER aktualisieren! Auch wenn der Schrein null ist.
-        // Wenn der Schrein fehlt (z.B. abgebaut), ist die Liste leer und der Cache wird fehlerfrei bereinigt.
-            ACTIVE_MILESTONES.remove(player.getUUID());
-            ACTIVE_MILESTONES.put(player.getUUID(), currentMilestones);
-    }
+	public static void updatePlayer(ServerPlayer player) {
+		// 1. Liste GANZ OBEN initialisieren, damit sie IMMER existiert
+		List<CachedMilestone> currentMilestones = new ArrayList<>();
+		player.getCapability(PlayerShrineCapProvider.SHRINE_LINK).ifPresent(cap -> {
+			UUID shrineId = cap.getLinkedShrine();
+			if (shrineId != null) {
+				ShrineInstance shrine = ShrineSavedData.get(player.serverLevel()).getShrine(shrineId);
+				if (shrine != null) {
+					// 1. Alle alten Modifier entfernen
+					for (int i = 0; i < shrine.getInventory().getSlots(); i++) {
+						removeAllModifiersFromSlot(player, i);
+					}
+					// 2. Neue Modifier berechnen und anwenden
+					collectActiveRunes(shrine.getInventory(), shrine.getLayout(), player.experienceLevel, 
+						(rune, runeLevel, socketLevel, mult, mainSlot, subSlot) -> {
+							
+							// KORREKTUR: Milestones mit dem kompletten Kontext in den Cache packen!
+							if (rune.type == RuneEnchantment.Type.MILESTONE) {
+								ResourceLocation runeId = ForgeRegistries.ENCHANTMENTS.getKey(rune);
+								currentMilestones.add(new CachedMilestone(rune, runeLevel, socketLevel, mult, runeId));
+							}
+							if (rune.targetAttribute != null) {
+								double bonus = calculateAttributeBonus(rune, runeLevel, player.experienceLevel, socketLevel, mult);
+								if (bonus != 0) {
+									AttributeInstance inst = player.getAttribute(rune.targetAttribute);
+									if (inst != null) {
+										UUID modifierId = getUniqueModifierID(mainSlot, subSlot, rune.targetAttribute.getDescriptionId());
+										String modName = "Runestone Bonus " + mainSlot + (subSlot >= 0 ? "_" + subSlot : "");
+										AttributeModifier mod = new AttributeModifier(modifierId, modName, bonus, rune.operation);
+										if (!inst.hasModifier(mod)) inst.addTransientModifier(mod);
+									}
+								}
+							}
+						}
+					);
+				}
+			}
+		});
+		// 3. Cache IMMER aktualisieren! Auch wenn der Schrein null ist.
+		// Wenn der Schrein fehlt (z.B. abgebaut), ist die Liste leer und der Cache wird fehlerfrei bereinigt.
+			ACTIVE_MILESTONES.remove(player.getUUID());
+			ACTIVE_MILESTONES.put(player.getUUID(), currentMilestones);
+	}
 
     /**
      * NEU: Berechnet die Boni lokal auf dem Client ohne Entity-Bezug.

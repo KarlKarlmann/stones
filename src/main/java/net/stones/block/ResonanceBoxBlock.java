@@ -96,7 +96,6 @@ public class ResonanceBoxBlock extends ChestBlock {
         if (!state.is(newState.getBlock())) {
             BlockEntity be = level.getBlockEntity(pos);
             if (be instanceof ResonanceBoxBlockEntity box) {
-                // Einfach droppen. Inventar ist garantiert voll.
                 Containers.dropContents(level, pos, box);
                 level.updateNeighbourForOutputSignal(pos, this);
             }

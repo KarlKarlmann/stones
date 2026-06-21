@@ -23,6 +23,7 @@ import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.ai.goal.*;
 import net.minecraft.world.entity.npc.WanderingTrader;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.enchantment.Enchantment;
@@ -32,9 +33,11 @@ import net.minecraft.world.level.ServerLevelAccessor;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.network.NetworkHooks;
 import net.minecraftforge.registries.ForgeRegistries;
+import net.stones.StonesMod;
 import net.stones.gui.EchoTraderMenu;
 import net.stones.init.StonesModItems;
 import net.stones.init.StonesModParticles;
+import net.stones.init.StonesModConfig;
 import net.stones.item.StoneItem;
 import net.stones.enchantment.RuneEnchantment;
 
@@ -89,8 +92,9 @@ public class EchoTraderEntity extends WanderingTrader {
         currentStock.clear();
         List<ItemStack> pool = new ArrayList<>();
 
-        // --- RESONANZ BOXEN ---
-        for (int i = 0; i < 4; i++) {
+        // --- RESONANZ BOXEN (aus Config) ---
+        int boxCount = StonesModConfig.TRADER_BOX_COUNT.get();
+        for (int i = 0; i < boxCount; i++) {
             int tier = 1 + this.random.nextInt(10);
             ItemStack box = new ItemStack(StonesModItems.RESONANCE_BOX.get());
             box.getOrCreateTag().putInt("ResonanceLootTier", tier);
@@ -103,21 +107,48 @@ public class EchoTraderEntity extends WanderingTrader {
         if (random.nextBoolean()) pool.add(generateSpecialRune(StoneItem.Type.MILESTONE));
 
         // --- CLUSTER JEWELS ---
-        pool.add(new ItemStack(StonesModItems.CLUSTER_JEWEL_MINOR.get()));
-        if (random.nextFloat() < 0.3f) pool.add(new ItemStack(StonesModItems.CLUSTER_JEWEL_MAJOR.get()));
+        // Extrem seltene Chancen für die mächtigen Endgame-Biester
+        if (random.nextFloat() < 0.02f) {
+            pool.add(new ItemStack(StonesModItems.CLUSTER_JEWEL_MINOR.get()));
+        }
+        if (random.nextFloat() < 0.005f) {
+            pool.add(new ItemStack(StonesModItems.CLUSTER_JEWEL_MAJOR.get()));
+        }
+        if (random.nextFloat() < 0.0001f) {
+            pool.add(new ItemStack(StonesModItems.CLUSTER_JEWEL_MILESTONE.get()));
+        }
 
-        // --- RESSOURCEN ---
-        pool.add(new ItemStack(Items.LAPIS_LAZULI, 16 + random.nextInt(32)));
-        pool.add(new ItemStack(Items.DIAMOND, 1 + random.nextInt(3)));
-        pool.add(new ItemStack(Items.ANVIL));
-        pool.add(new ItemStack(Items.ENCHANTING_TABLE));
+        // --- RESSOURCEN (aus Config gelesen und bepreist) ---
+        List<? extends String> extraItems = StonesModConfig.TRADER_EXTRA_ITEMS.get();
+        for (String entry : extraItems) {
+            try {
+                String[] parts = entry.split(";");
+                if (parts.length >= 4) {
+                    net.minecraft.world.item.Item item = ForgeRegistries.ITEMS.getValue(new net.minecraft.resources.ResourceLocation(parts[0]));
+                    if (item != null && item != Items.AIR) {
+                        int min = Integer.parseInt(parts[1]);
+                        int max = Integer.parseInt(parts[2]);
+                        int amount = min;
+                        if (max > min) amount += random.nextInt(max - min + 1);
+                        
+                        int cost = Integer.parseInt(parts[3]);
+                        
+                        ItemStack resourceStack = new ItemStack(item, amount);
+                        // Wir speichern den errechneten Preis direkt im NBT des Stacks!
+                        resourceStack.getOrCreateTag().putInt("EchoCustomCost", cost);
+                        pool.add(resourceStack);
+                    }
+                }
+            } catch (Exception e) {
+                StonesMod.LOGGER.warn("Invalid EchoTrader config entry skipped: " + entry);
+            }
+        }
 
         // --- LEBENSOPFER ---
         pool.add(createSacrificeItem(0)); 
         if (random.nextBoolean()) pool.add(createSacrificeItem(1)); 
         if (random.nextFloat() < 0.2f) pool.add(createSacrificeItem(2)); 
 
-        // Korrektur: RandomSource zu java.util.Random für shuffle
         Collections.shuffle(pool, new java.util.Random(this.random.nextLong()));
         
         for (int i = 0; i < Math.min(13, pool.size()); i++) {
@@ -161,11 +192,11 @@ public class EchoTraderEntity extends WanderingTrader {
         CompoundTag tag = stack.getOrCreateTag();
         tag.putBoolean("EchoSacrifice", true);
         tag.putInt("SacrificeType", type);
-        stack.setHoverName(Component.literal(switch (type) {
-            case 0 -> "§cKleines Lebensopfer";
-            case 1 -> "§4Mittleres Lebensopfer";
-            default -> "§0§lGroßes Lebensopfer";
-        }));
+        stack.setHoverName(switch (type) {
+            case 0 -> Component.translatable("item.stones.sacrifice.small").withStyle(net.minecraft.ChatFormatting.RED);
+            case 1 -> Component.translatable("item.stones.sacrifice.medium").withStyle(net.minecraft.ChatFormatting.DARK_RED);
+            default -> Component.translatable("item.stones.sacrifice.large").withStyle(net.minecraft.ChatFormatting.BLACK, net.minecraft.ChatFormatting.BOLD);
+        });
         return stack;
     }
 
@@ -222,7 +253,7 @@ public class EchoTraderEntity extends WanderingTrader {
             if (!this.level().isClientSide && player instanceof ServerPlayer serverPlayer) {
                 NetworkHooks.openScreen(serverPlayer, new SimpleMenuProvider(
                     (id, inv, p) -> new EchoTraderMenu(id, inv, this),
-                    Component.literal("§3Echo Trader")
+                    Component.translatable("entity.stones.echo_trader").withStyle(net.minecraft.ChatFormatting.DARK_AQUA)
                 ), buf -> buf.writeInt(this.getId()));
             }
             return InteractionResult.sidedSuccess(this.level().isClientSide);
@@ -232,6 +263,40 @@ public class EchoTraderEntity extends WanderingTrader {
 
     @Override protected void updateTrades() {} 
     @Override public boolean removeWhenFarAway(double dist) { return false; }
+    
+    // --- VOID ESCAPE MECHANISMUS ---
+    @Override
+    public boolean hurt(DamageSource source, float amount) {
+        if (this.level().isClientSide) return false;
+
+        // Finde heraus, ob ein Spieler schuld ist (direkt oder durch Pfeile/Magie)
+        Player attacker = null;
+        if (source.getEntity() instanceof Player p) attacker = p;
+        else if (source.getDirectEntity() instanceof Player p2) attacker = p2;
+
+        if (attacker != null) {
+            // Strafe für den Angreifer: 3 Minuten Dunkelheit (3600 Ticks)
+            attacker.addEffect(new net.minecraft.world.effect.MobEffectInstance(net.minecraft.world.effect.MobEffects.DARKNESS, 3600, 0));
+            attacker.displayClientMessage(Component.translatable("chat.stones.echo_trader.curse").withStyle(net.minecraft.ChatFormatting.DARK_GRAY, net.minecraft.ChatFormatting.ITALIC), true);
+        }
+
+        // Void Escape (für jeglichen Schaden, sodass er unsterblich und ätherisch wirkt)
+        this.level().playSound(null, this.getX(), this.getY(), this.getZ(), net.minecraft.sounds.SoundEvents.SOUL_ESCAPE, net.minecraft.sounds.SoundSource.NEUTRAL, 1.0f, 0.5f);
+        
+        if (this.level() instanceof net.minecraft.server.level.ServerLevel serverLevel) {
+            serverLevel.sendParticles(StonesModParticles.ECHO_MOTH.get(),
+                this.getX(), this.getY() + 1.0, this.getZ(),
+                60, 0.5, 0.8, 0.5, 0.05
+            );
+            serverLevel.sendParticles(ParticleTypes.LARGE_SMOKE,
+                this.getX(), this.getY() + 1.0, this.getZ(),
+                20, 0.5, 0.8, 0.5, 0.05
+            );
+        }
+
+        this.discard(); // Despawn
+        return false; // Physischen Schaden/Tod annullieren
+    }
     
     @Override
     public void addAdditionalSaveData(CompoundTag tag) {
@@ -246,7 +311,6 @@ public class EchoTraderEntity extends WanderingTrader {
     public void readAdditionalSaveData(CompoundTag tag) {
         super.readAdditionalSaveData(tag);
         
-        // FIX: Nur laden, wenn der Tag wirklich vorhanden ist (verhindert 0-Wert Bug bei /summon)
         if (tag.contains("DespawnDelay")) {
             this.despawnDelay = tag.getInt("DespawnDelay");
             this.entityData.set(DESPAWN_TICKS, this.despawnDelay);

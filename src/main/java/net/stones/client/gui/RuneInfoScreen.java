@@ -32,17 +32,16 @@ import net.stones.logic.RuneCalculator;
 import java.util.*;
 
 /**
- * ARCHITEKTONISCHES MASTERPIECE: RuneInfoScreen (Path of Exile Adaption)
- * Hochperformantes, triptychon-basiertes Render-Modell fuer bis zu 256 Enchantments.
- * Integriert Retained-Mode Caching, Scissor Clipping, Lerp Scrolling und UI Partikel.
- * Volle Internationalisierung (I18n) fuer mehrsprachigen Support.
+ * zeigt aktive Rune-Boni im Stil eines dreigeteilten Panels.
+ * Nutzt Row-Caching, Scissor-Clipping für die Liste, Lerp für Scroll-Animation,
+ * unterstützt mehrsprachige Übersetzungen.
  */
 public class RuneInfoScreen extends Screen {
 
     // --- DECO ASSETS ---
     private static final ResourceLocation BG_NEBULA = new ResourceLocation("stones", "textures/gui/shrine_nebula.png");
 
-    // --- GRIMDARK COLOR SYSTEM (Blanchitsu Palette) ---
+    // --- Blanchitsu Palette ---
     private static final int COL_DEEP_BLACK    = 0xEE050505; // Opazitaetsreduziertes Schwarzbraun (Hintergrund)
     private static final int COL_DARK_BROWN    = 0xFF1E1914; // Harte Schatten/Umrandung
     private static final int COL_SICKLY_YELLOW = 0xFFE4E595; // Goldenes Verfall-Gelb (Headings)
@@ -64,11 +63,9 @@ public class RuneInfoScreen extends Screen {
     private float scrollCurrent = 0.0F;
     private int totalContentHeight = 0;
 
-    // --- INTERACTIVE COMPONENTS ---
     private EditBox searchBox;
     private final List<UIParticle> particles = new ArrayList<>();
 
-    // --- TRIDIMENSIONAL TRIPTYCH LAYOUT BOUNDS ---
     private int paneY;
     private int paneHeight;
     private int paneWidth;
@@ -128,7 +125,6 @@ public class RuneInfoScreen extends Screen {
     }
 
     /**
-     * RETAINED MODE DATA EXTRACTION & TRANSLATION
      * Berechnet alle UI-Komponenten vorab und haelt sie im RAM.
      * Nutzt Font-Splitting, um Text-Ueberlauf im schmalen Paneel zu verhindern.
      */
@@ -347,16 +343,12 @@ public class RuneInfoScreen extends Screen {
         // 3. Dynamic Glow Screen-Titel zeichnen
         this.renderDynamicTitle(gui, centerX, centerY);
 
-        // 4. ASYMMETRIC TRIPTYCH LAYOUT RENDERING
         this.renderTriptychBorders(gui, centerX, centerY);
 
-        // LEFT FLANK: Holographic 3D Orbiting Model
         this.renderHolographicArtifact(gui, centerX, centerY);
 
-        // MIDDLE PANEL: Scissor Scrolled List with Frustum Culling
         this.renderMiddlePaneList(gui, centerX);
 
-        // RIGHT FLANK: Summary & Cumulative Stats (Squished)
         this.renderRightPaneSummary(gui, centerX, centerY);
 
         // Footer Search Field Decoration / Outline
@@ -587,7 +579,7 @@ public class RuneInfoScreen extends Screen {
         return false;
     }
 
-    // --- IMMERSIVE SCREEN-SPACE LIGHTWEIGHT PARTICLE ENGINE ---
+    // --- SCREEN-SPACE PARTICLE ENGINE ---
     private static class UIParticle {
         double x, y;
         double vx, vy;

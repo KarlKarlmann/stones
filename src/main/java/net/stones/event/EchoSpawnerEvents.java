@@ -16,9 +16,6 @@ import net.stones.init.StonesModEntities;
 @Mod.EventBusSubscriber(modid = StonesMod.MODID)
 public class EchoSpawnerEvents {
 
-    // Konfiguration
-    private static final int SPAWN_INTERVAL = 24000; // 1x pro Minecraft Tag
-    private static final int SPAWN_CHANCE = 15; // 15% Chance pro Intervall
     private static int timer = 0;
 
     @SubscribeEvent
@@ -27,11 +24,14 @@ public class EchoSpawnerEvents {
         if (event.level.dimension() != Level.OVERWORLD) return;
 
         timer++;
-        if (timer >= SPAWN_INTERVAL) {
+        int interval = net.stones.init.StonesModConfig.TRADER_SPAWN_INTERVAL.get();
+        
+        if (timer >= interval) {
             timer = 0;
             ServerLevel level = (ServerLevel) event.level;
             
-            if (level.random.nextInt(100) < SPAWN_CHANCE) {
+            int chance = net.stones.init.StonesModConfig.TRADER_SPAWN_CHANCE.get();
+            if (level.random.nextInt(100) < chance) {
                 spawnEchoTrader(level);
             }
         }

@@ -184,14 +184,24 @@ public class EchoTraderScreen extends AbstractContainerScreen<EchoTraderMenu> {
                 if (stack.hasTag() && stack.getTag().getBoolean("EchoSacrifice")) {
                     int type = stack.getTag().getInt("SacrificeType");
                     switch(type) {
-                        case 0 -> { tooltip.add(Component.literal("§7Opfere §c10% §7deiner Vitalität.")); tooltip.add(Component.literal("§aGewinn: Wenig Erfahrung.")); }
-                        case 1 -> { tooltip.add(Component.literal("§7Opfere §c30-60% §7deiner Vitalität.")); tooltip.add(Component.literal("§aGewinn: Moderate Erfahrung.")); }
-                        case 2 -> { tooltip.add(Component.literal("§4§lWARNUNG: §c75-100% §7Vitalitätsverlust.")); tooltip.add(Component.literal("§0§lKANN TÖDLICH SEIN.")); tooltip.add(Component.literal("§aGewinn: Massive Erfahrung.")); }
+                        case 0 -> { 
+                            tooltip.add(Component.translatable("tooltip.stones.sacrifice.small.desc")); 
+                            tooltip.add(Component.translatable("tooltip.stones.sacrifice.small.reward")); 
+                        }
+                        case 1 -> { 
+                            tooltip.add(Component.translatable("tooltip.stones.sacrifice.medium.desc")); 
+                            tooltip.add(Component.translatable("tooltip.stones.sacrifice.medium.reward")); 
+                        }
+                        default -> { 
+                            tooltip.add(Component.translatable("tooltip.stones.sacrifice.large.desc")); 
+                            tooltip.add(Component.translatable("tooltip.stones.sacrifice.large.warn")); 
+                            tooltip.add(Component.translatable("tooltip.stones.sacrifice.large.reward")); 
+                        }
                     }
                 } else {
                     int cost = PacketBuyEcho.getXpCost(stack);
                     boolean canAfford = this.minecraft.player.experienceLevel >= cost || this.minecraft.player.isCreative();
-                    tooltip.add(Component.literal("Kosten: " + cost + " Level").withStyle(canAfford ? net.minecraft.ChatFormatting.GREEN : net.minecraft.ChatFormatting.RED, net.minecraft.ChatFormatting.BOLD));
+                    tooltip.add(Component.translatable("tooltip.stones.trader_cost", cost).withStyle(canAfford ? net.minecraft.ChatFormatting.GREEN : net.minecraft.ChatFormatting.RED, net.minecraft.ChatFormatting.BOLD));
                 }
                 gui.renderComponentTooltip(this.font, tooltip, x, y);
                 return;

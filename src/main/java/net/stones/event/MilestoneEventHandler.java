@@ -131,26 +131,22 @@ public class MilestoneEventHandler {
         }
     }
 
-    // --- CORE LOGIC ---
-
-    public static void executeMilestones(ServerPlayer player, TriggerType trigger, Event event) {
-        // Holt sich das vorbereitete Array mit vollem Kontext in Millisekunden (O(1) Map Lookup)
-        List<CachedMilestone> milestones = RuneCalculator.getActiveMilestones(player);
-        
-        for (CachedMilestone cached : milestones) {
-            RuneEnchantment runeEnch = cached.rune;
-            ResourceLocation idLoc = ForgeRegistries.ENCHANTMENTS.getKey(runeEnch);
-            String runeId = idLoc != null ? idLoc.getPath() : "unknown";
-
-            for (RuneBehavior behavior : runeEnch.getBehaviors()) {
-                if (behavior.trigger == trigger) {
-                    ActionContext context = new ActionContext(player, event, new com.google.gson.JsonObject(), runeId);
-                    context.setContextLevels(runeEnch, cached.runeLevel, cached.socketLevel, cached.mult);
-                    behavior.execute(context);
-                }
+// --- CORE LOGIC ---
+// Das hier wird on Tick aufgerufen. Es ist also ein kritischer Knotenpunkt!
+public static void executeMilestones(ServerPlayer player, TriggerType trigger, Event event) {
+    List<CachedMilestone> milestones = RuneCalculator.getActiveMilestones(player);
+    
+    for (CachedMilestone cached : milestones) {
+        String runeId = cached.runeId != null ? cached.runeId.getPath() : "unknown";
+        for (RuneBehavior behavior : cached.rune.getBehaviors()) {
+            if (behavior.trigger == trigger) {
+                ActionContext context = new ActionContext(player, event, new com.google.gson.JsonObject(), runeId);
+                context.setContextLevels(cached.rune, cached.runeLevel, cached.socketLevel, cached.mult);
+                behavior.execute(context);
             }
         }
     }
+}
 	
     public static boolean isValidRune(ItemStack stack, ShrineInstance shrine, int index, int playerLevel) {
         if (stack.isEmpty() || !(stack.getItem() instanceof StoneItem)) return false;

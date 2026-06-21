@@ -86,7 +86,7 @@ public class GlobalLeaderboardData extends SavedData {
         int score4 = Math.max(200, (int)(threshold * 0.5)); // 60% vom Threshold        
         data.addScore("IrisEinhorn", score1, "Who put that cactus there?!");
         data.addScore("KarlKarlmann", score2, "died coding this");
-        data.addScore("ThisCouldBeYou", score3, "For a coffee or two");
+        data.addScore("ThisCouldBeYou", score3, "For a coffee or two{kofi}");
         data.addScore("user_43578860", score4, "thx for pinpointing this!");         
         data.setDirty();
         return data;

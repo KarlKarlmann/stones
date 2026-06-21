@@ -115,41 +115,6 @@ public class StonesModEnchantments {
         return map;
     }
 
-/*     private static void scanConfigFolder(Map<String, JsonObject> map) {
-        Path configDir = FMLPaths.CONFIGDIR.get()
-                .resolve("stones")
-                .resolve(CONFIG_VERSION)
-                .resolve("enchantments");
-                
-        File folder = configDir.toFile();
-        
-        if (!folder.exists()) {
-            folder.mkdirs();
-        }
-        
-        LOGGER.info("Loading Runes from: " + folder.getAbsolutePath());
-
-        File[] files = folder.listFiles((dir, name) -> name.endsWith(".json"));
-
-        if (files == null || files.length == 0) {
-            LOGGER.info("No runes found, generating defaults using JsonExporter...");
-            JsonExporter.main(new String[]{});
-            files = folder.listFiles((dir, name) -> name.endsWith(".json"));
-        }
-
-        if (files != null) {
-            for (File file : files) {
-                try (FileReader reader = new FileReader(file)) {
-                    JsonObject json = GSON.fromJson(reader, JsonObject.class);
-                    String id = file.getName().replace(".json", "").toLowerCase();
-                    map.put(id, json); 
-                } catch (Exception e) {
-                    LOGGER.error("Failed to load rune json: " + file.getName(), e);
-                }
-            }
-        }
-    } */
-
     private static void registerRuneFromJson(String id, JsonObject json, RegisterEvent event) {
         try {
             String typeStr = json.get("type").getAsString().toUpperCase();
@@ -160,6 +125,9 @@ public class StonesModEnchantments {
 			String iconPath = json.has("icon") ? json.get("icon").getAsString() : null;
             double factor = json.has("factor") ? json.get("factor").getAsDouble() : 0.0;
 			float reqLevel = json.has("required_level") ? json.get("required_level").getAsFloat() : 5.0f;
+            
+            // --- NEU: Parameter auslesen (Standard: true) ---
+            boolean discoverable = json.has("discoverable") ? json.get("discoverable").getAsBoolean() : true;
 
             RuneEnchantment tempEnchantment = null;
 
@@ -169,7 +137,7 @@ public class StonesModEnchantments {
                 if (attribute != null) {
                     String opStr = json.get("operation").getAsString().toUpperCase();
                     AttributeModifier.Operation operation = AttributeModifier.Operation.valueOf(opStr);
-                    tempEnchantment = new RuneEnchantment(type, attribute, operation, factor, customName, customDesc, iconPath, reqLevel);
+                    tempEnchantment = new RuneEnchantment(type, attribute, operation, factor, customName, customDesc, iconPath, reqLevel, discoverable);
                 } else {
                     LOGGER.error("Attribute not found: " + attrStr);
                 }
@@ -178,13 +146,13 @@ public class StonesModEnchantments {
                 String effStr = json.get("effect").getAsString();
                 MobEffect effect = ForgeRegistries.MOB_EFFECTS.getValue(new ResourceLocation(effStr));
                 if (effect != null) {
-                    tempEnchantment = new RuneEnchantment(type, effect, factor, customName, customDesc, iconPath, reqLevel);
+                    tempEnchantment = new RuneEnchantment(type, effect, factor, customName, customDesc, iconPath, reqLevel, discoverable);
                 } else {
-                    LOGGER.error("Attribute not found: " + effStr);
+                    LOGGER.error("Effect not found: " + effStr);
                 }
             }
             else {
-                tempEnchantment = new RuneEnchantment(type, (Attribute)null, null, 0.0, customName, customDesc, iconPath, reqLevel);
+                tempEnchantment = new RuneEnchantment(type, (Attribute)null, null, 0.0, customName, customDesc, iconPath, reqLevel, discoverable);
             }
 
             if (tempEnchantment != null) {

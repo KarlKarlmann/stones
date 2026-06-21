@@ -15,7 +15,9 @@ import net.stones.data.ShrineSavedData;
 import net.stones.logic.RuneCalculator;
 import net.stones.network.PacketSyncLevelUpInfo;
 import net.stones.network.PacketSyncShrineMirror;
-
+import net.stones.network.PacketSyncPlayerShrine;
+import net.minecraftforge.network.PacketDistributor;
+import net.stones.cap.PlayerShrineCapProvider;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
@@ -51,14 +53,23 @@ public class StonesAttributeEvents {
         }
     }
 
-    @SubscribeEvent
-    public static void onPlayerRespawn(PlayerEvent.PlayerRespawnEvent event) {
-        if (event.getEntity() instanceof ServerPlayer player) {
-            // Respawn: Alles neu laden
-            syncMirrorToClient(player);
-            recalculateAttributes(player);
-        }
+@SubscribeEvent
+public static void onPlayerRespawn(PlayerEvent.PlayerRespawnEvent event) {
+    if (event.getEntity() instanceof ServerPlayer player) {
+        
+        // DIESER BLOCK FEHLT: Dem Client nach dem Tod seine Capability wiedergeben!
+        player.getCapability(PlayerShrineCapProvider.SHRINE_LINK).ifPresent(cap -> {
+            StonesMod.PACKET_HANDLER.send(
+                PacketDistributor.PLAYER.with(() -> player), 
+                new PacketSyncPlayerShrine(cap.getLinkedShrine(), cap.getShrinePos())
+            );
+        });
+
+        // Respawn: Alles neu laden
+        syncMirrorToClient(player);
+        recalculateAttributes(player);
     }
+}
 	@SubscribeEvent
     public static void onPlayerLoggedOut(PlayerEvent.PlayerLoggedOutEvent event) {
         UUID uuid = event.getEntity().getUUID();
@@ -108,12 +119,12 @@ public class StonesAttributeEvents {
         }
     }
 
-    /**
-     * Berechnet Attribute serverseitig neu und informiert den Client über das Level (für Toasts).
-     * Leichtgewichtig.
-     */
+	/**
+	 * Berechnet Attribute serverseitig neu und informiert den Client über das Level (für Toasts).
+	 * Ruft RuneCalculator.updatePlayer() auf – siehe dort, NICHT billig, nur selten aufgerufen
+	 * (gedrosselt durch UPDATE_COOLDOWN).
+	 */
     private static void recalculateAttributes(ServerPlayer player) {
-        // 1. Serverseitige Attribute setzen (Single Source of Truth)
 		LAST_KNOWN_LEVELS.put(player.getUUID(), player.experienceLevel);
         RuneCalculator.updatePlayer(player);
 

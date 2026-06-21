@@ -13,7 +13,6 @@ import java.util.Random;
 import java.util.UUID;
 
 /**
- * Blanchitsu Skin-Prozessor (High-Fidelity NPR).
  * Implementiert Upscaling, Koordinaten-Jitter und eine 5-Farben-Quantisierung.
  * * Palette:
  * - DEEP_BLACK: Harte Konturen und tiefste Schatten (#050505)

@@ -32,6 +32,7 @@ public class RuneEnchantment extends Enchantment {
     
     public final double factor;
     public final float baseRequiredLevel;
+    private final boolean discoverable; // <-- NEU: Steuert, ob die Rune am Zaubertisch auftaucht
     private final String customName;
     private final String customDescription;
     private final String iconPath;
@@ -42,7 +43,7 @@ public class RuneEnchantment extends Enchantment {
     
     public static final EnchantmentCategory RUNE_CATEGORY = EnchantmentCategory.create("RUNE_STONE", item -> item instanceof StoneItem);
 
-    public RuneEnchantment(Type type, Attribute attribute, AttributeModifier.Operation operation, double factor, @Nullable String customName, @Nullable String customDescription, @Nullable String iconPath, float baseRequiredLevel) {
+    public RuneEnchantment(Type type, Attribute attribute, AttributeModifier.Operation operation, double factor, @Nullable String customName, @Nullable String customDescription, @Nullable String iconPath, float baseRequiredLevel, boolean discoverable) {
         super(Rarity.COMMON, RUNE_CATEGORY, EquipmentSlot.values());
         this.type = type;
         this.targetAttribute = attribute;
@@ -53,9 +54,10 @@ public class RuneEnchantment extends Enchantment {
         this.customDescription = customDescription;
         this.iconPath = iconPath;
         this.baseRequiredLevel = baseRequiredLevel;
+        this.discoverable = discoverable; // <-- NEU
     }
 
-    public RuneEnchantment(Type type, MobEffect effect, double amplifier, @Nullable String customName, @Nullable String customDescription, @Nullable String iconPath, float baseRequiredLevel) {
+    public RuneEnchantment(Type type, MobEffect effect, double amplifier, @Nullable String customName, @Nullable String customDescription, @Nullable String iconPath, float baseRequiredLevel, boolean discoverable) {
         super(Rarity.COMMON, RUNE_CATEGORY, new EquipmentSlot[]{EquipmentSlot.MAINHAND});
         this.type = type;
         this.targetAttribute = null;
@@ -66,6 +68,7 @@ public class RuneEnchantment extends Enchantment {
         this.customDescription = customDescription;
         this.iconPath = iconPath;
         this.baseRequiredLevel = baseRequiredLevel;
+        this.discoverable = discoverable; // <-- NEU
     }
     
     /**
@@ -153,6 +156,12 @@ public class RuneEnchantment extends Enchantment {
     
 	@Override
     public boolean isDiscoverable() {
+        // Zuerst checken, ob es per JSON deaktiviert wurde
+        if (!this.discoverable) {
+            return false;
+        }
+
+        // Falls true, die alte Hack/StackWalker-Logik anwenden, um sie aus dem Loot fernzuhalten
         return STACK_WALKER.walk(frames -> frames.noneMatch(frame -> {
             String className = frame.getClassName();
             return className.contains("LootItemEnchantRandomlyFunction") || 

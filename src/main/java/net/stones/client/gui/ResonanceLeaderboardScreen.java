@@ -8,6 +8,7 @@ import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox; 
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
+import net.minecraft.world.item.ItemStack;
 import net.stones.StonesMod;
 import net.stones.data.GlobalLeaderboardData;
 import net.stones.network.PacketClaimReward;
@@ -18,8 +19,8 @@ import java.util.List;
 /**
  * Der native Leaderboard-Screen.
  * Zeigt das Epitaph-Feld rechts auf der Zeile, wenn platziert.
- * Zeigt links Infos zur Benötigten Punktzahl an, wenn nicht platziert.
- * Integriert einen dezenten Support-Link.
+ * Zeigt links ausstehende Belohnungen als gerenderte, skalierende Items.
+ * Integriert einen dezenten Support-Link und Easter-Eggs.
  */
 public class ResonanceLeaderboardScreen extends Screen {
 
@@ -57,29 +58,36 @@ public class ResonanceLeaderboardScreen extends Screen {
         int centerY = this.height / 2;
         int startY = centerY - 105; 
 
-        if (this.isOnLeaderboard && this.lastRunScore != -1) {
-            boolean highlightedCurrent = false;
-            for (int i = 0; i < Math.min(globalEntries.size(), 10); i++) {
-                GlobalLeaderboardData.LeaderboardEntry entry = globalEntries.get(i);
-                boolean isCurrentRun = !highlightedCurrent && entry.name().equals(currentPlayerName) && entry.score() == lastRunScore;
+        boolean highlightedCurrent = false;
+        for (int i = 0; i < Math.min(globalEntries.size(), 10); i++) {
+            GlobalLeaderboardData.LeaderboardEntry entry = globalEntries.get(i);
+            boolean isCurrentRun = !highlightedCurrent && entry.name().equals(currentPlayerName) && entry.score() == lastRunScore;
+            int entryY = startY + 15 + (i * 22);
+            
+            if (isCurrentRun && this.lastRunScore != -1) {
+                highlightedCurrent = true;
                 
-                if (isCurrentRun) {
-                    highlightedCurrent = true;
-                    int entryY = startY + 15 + (i * 22);
-                    
-                    this.epitaphBox = this.addRenderableWidget(new EditBox(this.font, centerX + 25, entryY + 10, 110, 12, Component.translatable("gui.stones.leaderboard.epitaph_placeholder")));
-                    this.epitaphBox.setMaxLength(45);
-                    this.epitaphBox.setValue(this.currentEpitaph);
+                this.epitaphBox = this.addRenderableWidget(new EditBox(this.font, centerX + 25, entryY + 10, 110, 12, Component.translatable("gui.stones.leaderboard.epitaph_placeholder")));
+                this.epitaphBox.setMaxLength(45);
+                this.epitaphBox.setValue(this.currentEpitaph);
 
-                    this.saveButton = this.addRenderableWidget(Button.builder(Component.translatable("gui.stones.leaderboard.save_btn"), (btn) -> {
-                        String text = this.epitaphBox.getValue();
-                        StonesMod.PACKET_HANDLER.sendToServer(new PacketUpdateEpitaph(text, this.lastRunScore));
-                        btn.setMessage(Component.translatable("gui.stones.leaderboard.saved_marker")); 
-                        btn.active = false;
-                    }).bounds(centerX + 140, entryY + 9, 22, 12).build());
-                    
-                    break;
-                }
+                this.saveButton = this.addRenderableWidget(Button.builder(Component.translatable("gui.stones.leaderboard.save_btn"), (btn) -> {
+                    String text = this.epitaphBox.getValue();
+                    StonesMod.PACKET_HANDLER.sendToServer(new PacketUpdateEpitaph(text, this.lastRunScore));
+                    btn.setMessage(Component.translatable("gui.stones.leaderboard.saved_marker")); 
+                    btn.active = false;
+                }).bounds(centerX + 140, entryY + 9, 22, 12).build());
+                
+            } else if (entry.deathReason().contains("{kofi}")) {
+                // --- EASTER EGG: INLINE SUPPORT BUTTON ---
+                // Ersetzt den {kofi} Tag durch ein hübsches Layout und macht die Zeile klickbar
+                String cleanReason = entry.deathReason().replace("{kofi}", "");
+                Component btnText = Component.literal("☕ ").withStyle(ChatFormatting.GOLD)
+                                    .append(Component.literal(cleanReason).withStyle(ChatFormatting.WHITE));
+                
+                this.addRenderableWidget(Button.builder(btnText, (btn) -> {
+                    Util.getPlatform().openUri("https://ko-fi.com/karlkarlmann");
+                }).bounds(centerX + 25, entryY + 7, 130, 16).build());
             }
         }
 
@@ -101,15 +109,12 @@ public class ResonanceLeaderboardScreen extends Screen {
             this.onClose();
         }).bounds(centerX - 150, centerY + 70, 140, 20).build());
 
-        // --- NEU: SUPPORT BUTTON RECHTS ---
-        // Ein hübscher Button mit einem roten Herzchen, der das UI rechts unten ausbalanciert
-        Component supportText = Component.literal("❤ ").withStyle(ChatFormatting.RED)
-                                .append(Component.translatable("gui.stones.leaderboard.support"));
-                                
-        this.addRenderableWidget(Button.builder(supportText, (btn) -> {
-            // HIER DEINEN LINK EINTRAGEN (Ko-fi, Patreon, PayPal, CurseForge, etc.)
-            Util.getPlatform().openUri("https://ko-fi.com/dein_name");
-        }).bounds(centerX + 10, centerY + 70, 140, 20).build());
+        // --- SUPPORT BUTTON (KAFFEE) LINKS OBEN ---
+        // Der kleine permanente Button neben den "Deine Belohnungen"
+        Component leftSupportText = Component.literal("☕");
+        this.addRenderableWidget(Button.builder(leftSupportText, (btn) -> {
+            Util.getPlatform().openUri("https://ko-fi.com/karlkarlmann");
+        }).bounds(centerX - 35, startY - 6, 20, 20).build());
     }
 
     @Override
@@ -121,15 +126,64 @@ public class ResonanceLeaderboardScreen extends Screen {
 
         gui.drawCenteredString(this.font, Component.translatable("gui.stones.leaderboard.header"), centerX, centerY - 120, 0xFFFFFF);
 
+        ItemStack hoveredBox = null;
+
         // --- LINKS: DEINE BELOHNUNGEN ---
         gui.drawString(this.font, Component.translatable("gui.stones.leaderboard.personal_boxes"), centerX - 150, startY, 0xFFFFFF);
         if (pendingScores.isEmpty()) {
             gui.drawString(this.font, Component.translatable("gui.stones.leaderboard.no_rewards"), centerX - 140, startY + 15, 0xFFFFFF);
         } else {
-            for (int i = 0; i < Math.min(pendingScores.size(), 6); i++) {
+            int boxStartX = centerX - 145;
+            int boxStartY = startY + 15;
+            int xOffset = 0;
+            int yOffset = 0;
+
+            for (int i = 0; i < Math.min(pendingScores.size(), 12); i++) {
                 int score = pendingScores.get(pendingScores.size() - 1 - i);
-                String prefix = (i == 0) ? "§b§l> " : "§7- ";
-                gui.drawString(this.font, Component.translatable("gui.stones.leaderboard.score_entry", prefix, score, (Math.min(5, (score / 1000) + 1))), centerX - 140, startY + 15 + (i * 10), 0xFFFFFF);
+                // Tier-Logik genau wie im ScoreRewardSystem
+                int tier = Math.max(1, Math.min(10, (score / 1000) + 1));
+
+                // Wir erzeugen einen Fake-Itemstack der Kiste, um ihn im GUI zu rendern
+                ItemStack boxStack = new ItemStack(net.stones.init.StonesModItems.RESONANCE_BOX.get());
+                boxStack.getOrCreateTag().putInt("ResonanceLootTier", tier);
+                boxStack.setHoverName(Component.translatable("item.stones.resonance_gift", tier).withStyle(ChatFormatting.LIGHT_PURPLE));
+                
+                net.minecraft.nbt.ListTag lore = new net.minecraft.nbt.ListTag();
+                lore.add(net.minecraft.nbt.StringTag.valueOf(
+                    Component.Serializer.toJson(Component.translatable("tooltip.stones.score", score).withStyle(ChatFormatting.DARK_GRAY))
+                ));
+                boxStack.getOrCreateTagElement("display").put("Lore", lore);
+
+                // Dynamische Skalierung (Tier 1 = 0.75x Größe, Tier 10 = 1.2x Größe)
+                float scale = 0.7f + (tier * 0.05f); 
+                int itemX = boxStartX + xOffset;
+                int itemY = boxStartY + yOffset;
+
+                gui.pose().pushPose();
+                // Da der Ankerpunkt für die Skalierung links oben wäre, 
+                // verschieben wir ihn in die Mitte (+8, +8) der Kiste für zentriertes Wachstum.
+                gui.pose().translate(itemX + 8, itemY + 8, 0);
+                gui.pose().scale(scale, scale, 1.0f);
+                gui.pose().translate(-8, -8, 0);
+                
+                gui.renderItem(boxStack, 0, 0);
+                gui.pose().popPose();
+
+                // Hitbox für Hover-Tooltip berechnen (Berücksichtigt die Skalierung aus der Mitte)
+                float halfSize = 8 * scale;
+                float hitX = itemX + 8 - halfSize;
+                float hitY = itemY + 8 - halfSize;
+                float hitW = 16 * scale;
+                
+                if (mouseX >= hitX && mouseX <= hitX + hitW && mouseY >= hitY && mouseY <= hitY + hitW) {
+                    hoveredBox = boxStack;
+                }
+
+                xOffset += 24; // Platz für die nächste Kiste in der Reihe
+                if (xOffset >= 120) { // Nach 5 Kisten eine neue Zeile anfangen (Raster)
+                    xOffset = 0;
+                    yOffset += 24;
+                }
             }
         }
 
@@ -168,11 +222,22 @@ public class ResonanceLeaderboardScreen extends Screen {
             
             if (!isCurrentRun) {
                 String reason = entry.deathReason();
-                if (reason.length() > 30) reason = reason.substring(0, 27) + "...";
-                gui.drawString(this.font, Component.translatable("gui.stones.leaderboard.epitaph_display", reason), centerX + 25, entryY + 10, 0xFFFFFF);
+                // Überprüfen ob der Text den {kofi} Tag enthält
+                if (reason.contains("{kofi}")) {
+                    // WICHTIG: Wenn der Tag da ist, rendern wir KEINEN Text. 
+                    // Der Button wurde bereits in der init() Methode genau über diese Position gelegt!
+                } else {
+                    if (reason.length() > 30) reason = reason.substring(0, 27) + "...";
+                    gui.drawString(this.font, Component.translatable("gui.stones.leaderboard.epitaph_display", reason), centerX + 25, entryY + 10, 0xFFFFFF);
+                }
             }
         }
 
         super.render(gui, mouseX, mouseY, partialTicks);
+        
+        // Tooltip ganz am Ende über alles drüber rendern, damit er von nichts verdeckt wird
+        if (hoveredBox != null) {
+            gui.renderTooltip(this.font, hoveredBox, mouseX, mouseY);
+        }
     }
 }

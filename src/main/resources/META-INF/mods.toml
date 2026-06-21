@@ -21,6 +21,6 @@ authors="KarlKarlmann"
 [[dependencies.stones]]
     modId="actionbar"
     mandatory=true
-    versionRange="[1.0,)"
+    versionRange="[1.0.1,)"
     ordering="AFTER"
     side="CLIENT"

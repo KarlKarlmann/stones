@@ -48,7 +48,7 @@ public class MilestoneActionRegistry {
     public static void register(RuneAction action) { ACTIONS.put(action.getId(), action); }
     public static RuneAction get(String id) { return ACTIONS.get(id); }
     
-    // --- SMART PARSING ENGINE (NUR NOCH $ SYNTAX) ---
+    // --- PARSING ENGINE (NUR NOCH $ SYNTAX) ---
     
     public static float resolveFloat(ActionContext ctx, JsonObject params, String key, float def) {
         if (!params.has(key)) return def;
