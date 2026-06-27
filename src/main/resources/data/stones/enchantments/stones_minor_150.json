@@ -1,0 +1,22 @@
+{
+  "type": "MINOR",
+  "name": "Curse of Frailty",
+  "description": "Drains your life force, but eases the shrine resonance.",
+  "is_curse": true,
+  "required_level": -5.0,
+  "attribute": "minecraft:generic.max_health",
+  "operation": "addition",
+  "factor": -1.0,
+  "max_level": 10,
+  "stats": [
+    {
+      "id": "curse_req_reduction",
+      "label": "Resonance Burden",
+      "base": -5.0,
+      "per_level": -5.0,
+      "scaling": "RUNE_LEVEL",
+      "display_factor": 1.0,
+      "suffix": " Lvl"
+    }
+  ]
+}

@@ -22,7 +22,6 @@ import net.stones.client.renderer.ClientDynamicLabelHandler;
 import net.stones.enchantment.AmplifyEnchantment;
 import net.stones.block.entity.ResonanceBoxBlockEntity;
 import net.stones.client.renderer.ResonanceBoxRenderer;
-
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -104,19 +103,34 @@ public class StonesModClient {
         }
     }
 
-    private static void registerAmplifyProperty(net.minecraft.world.item.Item item) {
-        ItemProperties.register(item, new ResourceLocation(StonesMod.MODID, "amplify"), (stack, level, entity, seed) -> {
-            int ampLvl = 0;
-            var enchants = EnchantmentHelper.getEnchantments(stack);
-            for (var entry : enchants.entrySet()) {
-                if (entry.getKey() instanceof AmplifyEnchantment) {
-                    ampLvl = entry.getValue();
-                    break;
-                }
-            }
-            return ampLvl / 100.0f;
-        });
-    }
+private static void registerAmplifyProperty(net.minecraft.world.item.Item item) {
+		ItemProperties.register(item, new ResourceLocation(StonesMod.MODID, "amplify"), (stack, level, entity, seed) -> {
+			try {
+				// 1. Basis-Checks
+				if (stack == null || stack.isEmpty()) {
+					return 0.0f;
+				}
+
+				net.minecraft.world.item.enchantment.Enchantment amplify = net.minecraftforge.registries.ForgeRegistries.ENCHANTMENTS.getValue(new ResourceLocation(StonesMod.MODID, "amplify"));
+				if (amplify == null) {
+					return 0.0f;
+				}
+
+				// 2. Hier wird es gefährlich: Wenn eine Fremd-Mod bei null level/entity 
+				// innerhalb von getItemEnchantmentLevel abstürzt, fangen wir das jetzt ab!
+				int ampLvl = EnchantmentHelper.getItemEnchantmentLevel(amplify, stack);
+				
+				if (ampLvl <= 0) {
+					return 0.0f; 
+				}
+				
+				return net.minecraft.util.Mth.clamp(ampLvl / 100.0f, 0.0f, 1.0f);
+
+			} catch (Exception e) {
+				return 0.0f; 
+			}
+		});
+	}
 
     @SubscribeEvent
     public static void registerRenderers(EntityRenderersEvent.RegisterRenderers event) {

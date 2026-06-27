@@ -14,8 +14,6 @@ import net.stones.network.*;
 import net.minecraftforge.fml.config.ModConfig;
 import net.minecraftforge.fml.ModLoadingContext;
 import net.stones.init.StonesModConfig;
-// WICHTIG: ActionSystem import entfernen oder sicherstellen, dass er nicht für Packets genutzt wird!
-// import net.stones.features.ActionSystem; 
 import net.stones.enchantment.behavior.reflection.ReflectionInvoker;
 import net.minecraftforge.network.simple.SimpleChannel;
 import net.minecraftforge.network.NetworkRegistry;
@@ -108,6 +106,8 @@ public class StonesMod {
 		addNetworkMessage(PacketOpenLeaderboard.class, PacketOpenLeaderboard::toBytes, PacketOpenLeaderboard::new, PacketOpenLeaderboard::handle);
 		addNetworkMessage(PacketSyncLevelUpInfo.class, PacketSyncLevelUpInfo::encode, PacketSyncLevelUpInfo::new, PacketSyncLevelUpInfo::handle);			
 		addNetworkMessage(PacketSyncCombo.class, PacketSyncCombo::encode, PacketSyncCombo::new, PacketSyncCombo::handle);
+        addNetworkMessage(PacketSyncCooldown.class, PacketSyncCooldown::encode, PacketSyncCooldown::new, PacketSyncCooldown::handle);
+        addNetworkMessage(PacketSyncEnchantments.class, PacketSyncEnchantments::toBytes, PacketSyncEnchantments::new, PacketSyncEnchantments::handle);
 
 		event.enqueueWork(() -> {
 			try {

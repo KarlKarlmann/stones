@@ -19,6 +19,7 @@ import net.stones.cap.PlayerShrineCapProvider;
 import net.stones.data.ShrineInstance;
 import net.stones.data.ShrineSavedData;
 import net.stones.network.PacketSyncPlayerShrine;
+import net.stones.network.PacketSyncEnchantments;
 
 @Mod.EventBusSubscriber(modid = StonesMod.MODID)
 public class StonesCapabilityEvents {
@@ -56,16 +57,23 @@ public class StonesCapabilityEvents {
 		event.getOriginal().invalidateCaps(); // danach wieder invalidieren
 	}
 
-    // Sync beim Login
+    // Sync beim Login (Schrein-Link + komplette Runen-Registry)
     @SubscribeEvent
     public static void onPlayerLogin(PlayerEvent.PlayerLoggedInEvent event) {
         if (event.getEntity() instanceof ServerPlayer player) {
+            // 1. Schrein synchronisieren
             player.getCapability(PlayerShrineCapProvider.SHRINE_LINK).ifPresent(cap -> {
                 StonesMod.PACKET_HANDLER.send(
                     PacketDistributor.PLAYER.with(() -> player), 
                     new PacketSyncPlayerShrine(cap.getLinkedShrine(), cap.getShrinePos())
                 );
             });
+
+            // 2. Erwachte Runen-Registry aus dem Datapack an den Client schicken
+            StonesMod.PACKET_HANDLER.send(
+                PacketDistributor.PLAYER.with(() -> player),
+                PacketSyncEnchantments.build()
+            );
         }
     }
     
@@ -79,6 +87,12 @@ public class StonesCapabilityEvents {
                     new PacketSyncPlayerShrine(cap.getLinkedShrine(), cap.getShrinePos())
                 );
             });
+
+            // Erneute Synchronisation zur Absicherung bei Dimensionswechseln
+            StonesMod.PACKET_HANDLER.send(
+                PacketDistributor.PLAYER.with(() -> player),
+                PacketSyncEnchantments.build()
+            );
          }
     }
 }

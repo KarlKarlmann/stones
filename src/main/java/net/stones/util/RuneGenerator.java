@@ -39,9 +39,9 @@ public class RuneGenerator {
             default -> StonesModItems.RUNE_MINOR.get();
         });
 
-        List<Enchantment> validEnchants = ForgeRegistries.ENCHANTMENTS.getValues().stream()
-                .filter(e -> e instanceof RuneEnchantment r && r.type == type)
-                .collect(Collectors.toList());
+		List<Enchantment> validEnchants = ForgeRegistries.ENCHANTMENTS.getValues().stream()
+				.filter(e -> e instanceof RuneEnchantment r && r.type == type && r.isAwake())
+				.collect(Collectors.toList());
 
         if (!validEnchants.isEmpty()) {
             Enchantment selected = validEnchants.get(random.nextInt(validEnchants.size()));

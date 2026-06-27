@@ -15,20 +15,20 @@ minecraft {
     mappings channel: 'official', version: '1.20.1'
     copyIdeResources = true
 
-	runs {
-		client {
-			workingDirectory project.file('run')
-			property 'mixin.env.disableRefMap', 'true'
-			arg "-mixin.config=stones.mixins.json"
-			mods { stones { source sourceSets.main } }
-		}
-		server {
-			workingDirectory project.file('run')
-			property 'mixin.env.disableRefMap', 'true'
-			arg "-mixin.config=stones.mixins.json"
-			mods { stones { source sourceSets.main } }
-		}
-	}
+    runs {
+        client {
+            workingDirectory project.file('run')
+            property 'mixin.env.disableRefMap', 'true'
+            arg "-mixin.config=stones.mixins.json"
+            mods { stones { source sourceSets.main } }
+        }
+        server {
+            workingDirectory project.file('run')
+            property 'mixin.env.disableRefMap', 'true'
+            arg "-mixin.config=stones.mixins.json"
+            mods { stones { source sourceSets.main } }
+        }
+    }
 }
 
 mixin {
@@ -46,7 +46,7 @@ dependencies {
     annotationProcessor "org.spongepowered:mixin:${mixin_version}:processor"
 
     // Scannt den "libs" Ordner automatisch nach ALLEN .jar Dateien und bindet sie ein!
-	implementation fg.deobf(fileTree(dir: 'libs', include: '*.jar'))
+    implementation fg.deobf(fileTree(dir: 'libs', include: '*.jar'))
 }
 
 tasks.withType(JavaCompile).configureEach {
@@ -93,66 +93,6 @@ if (file('local-git.gradle').exists()) {
     apply from: 'local-git.gradle'
 }
 
-// ============================================================
-// Füge diesen Block am Ende von Stones' build.gradle ein
-// und passe die Pfade unten an deine Umgebung an.
-// ============================================================
-
-// --- ANPASSEN: an deine Umgebung ---
-def instanceModsDir  = 'E:/PrismLauncher/instances/StonesTest/minecraft/mods'
-def prismLauncherExe = 'E:/PrismLauncher/prismlauncher.exe'
-def instanceId        = 'StonesTest'   // Ordnername der Instanz
-
-def serverDir         = 'E:/StonesTestServer'
-def serverModsDir     = "${serverDir}/mods"
-
-// Eine Liste der Dateien, die jeweils synct werden sollen:
-// 1) die frisch gebaute & reobfuskierte Stones-Jar
-// 2) ALLES, was in libs/ liegt (Actionbar + jede weitere Dependency-Jar)
-def filesToSync = {
-    [tasks.named('jar').get().archiveFile.get().asFile] +
-    fileTree(dir: 'libs', include: '*.jar').files
-}
-
-// ---------------- CLIENT ----------------
-tasks.register('syncModsToInstance', Copy) {
-    dependsOn tasks.named('reobfJar')
-
-    doFirst {
-        // alte Stones- und libs-Jars im Ziel-mods-Ordner entfernen,
-        // damit keine veralteten Doppel-Versionen rumliegen
-        def names = filesToSync().collect { it.name }
-        fileTree(instanceModsDir).matching {
-            include names
-        }.each { it.delete() }
-    }
-
-    from(filesToSync())
-    into instanceModsDir
-}
-
-tasks.register('runVanilla', Exec) {
-    dependsOn 'syncModsToInstance'
-    commandLine prismLauncherExe, '-l', instanceId
-}
-
-// ---------------- SERVER ----------------
-tasks.register('syncModsToServer', Copy) {
-    dependsOn tasks.named('reobfJar')
-
-    doFirst {
-        def names = filesToSync().collect { it.name }
-        fileTree(serverModsDir).matching {
-            include names
-        }.each { it.delete() }
-    }
-
-    from(filesToSync())
-    into serverModsDir
-}
-
-tasks.register('runServerVanilla', Exec) {
-    dependsOn 'syncModsToServer'
-    workingDir serverDir
-    commandLine 'cmd', '/c', 'run.bat'
+if (file('local-env.gradle').exists()) {
+    apply from: 'local-env.gradle'
 }

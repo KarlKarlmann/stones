@@ -1,0 +1,22 @@
+{
+  "type": "MAJOR",
+  "name": "Curse of Exposure",
+  "description": "Drastically corrodes your armor, but vastly reduces your resonance burden.",
+  "is_curse": true,
+  "required_level": -5.0,
+  "attribute": "minecraft:generic.armor",
+  "operation": "addition",
+  "factor": -0.2,
+  "max_level": 10,
+  "stats": [
+    {
+      "id": "curse_req_reduction",
+      "label": "Resonance Burden",
+      "base": -5.0,
+      "per_level": -5.0,
+      "scaling": "RUNE_LEVEL",
+      "display_factor": 1.0,
+      "suffix": " Lvl"
+    }
+  ]
+}

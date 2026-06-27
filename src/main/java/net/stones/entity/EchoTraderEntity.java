@@ -163,9 +163,9 @@ public class EchoTraderEntity extends WanderingTrader {
             default -> StonesModItems.RUNE_MINOR.get();
         });
 
-        List<Enchantment> valid = ForgeRegistries.ENCHANTMENTS.getValues().stream()
-                .filter(e -> e instanceof RuneEnchantment r && r.type.name().equals(type.name()))
-                .collect(Collectors.toList());
+		List<Enchantment> valid = ForgeRegistries.ENCHANTMENTS.getValues().stream()
+				.filter(e -> e instanceof RuneEnchantment r && r.type.name().equals(type.name()) && r.isAwake())
+				.collect(Collectors.toList());
 
         Map<Enchantment, Integer> enchants = new HashMap<>();
         if (!valid.isEmpty()) {

@@ -73,9 +73,6 @@ public class RunestoneScreen extends AbstractContainerScreen<RunestoneMenu> {
     private static final int STAR_COUNT = 3000; 
     private static final float STAR_FIELD_RADIUS = 1200.0f; 
 
-    // =========================================================================
-    // FIX: HARTE INITIALISIERUNG
-    // =========================================================================
     private List<Vec2> cachedPositions = new ArrayList<>();
     private List<int[]> cachedConnections = new ArrayList<>();
     private List<Integer> sortedIndices = new ArrayList<>();
@@ -135,26 +132,29 @@ public class RunestoneScreen extends AbstractContainerScreen<RunestoneMenu> {
         this.lastTickTime = System.currentTimeMillis();
         this.activeWhisper = Component.literal("§7\"");
 
-		this.isBound = false;
+        this.isBound = false;
         
-        // Wir nehmen die ID jetzt DIREKT aus dem Menü!
         this.viewedShrineId = this.menu.getShrineId();
         
         if (this.minecraft != null && this.minecraft.player != null) {
             this.minecraft.player.getCapability(PlayerShrineCapProvider.SHRINE_LINK).ifPresent(cap -> {
                 UUID linkedId = cap.getLinkedShrine();
-                
-                // Wir prüfen nur noch auf die exakte UUID-Übereinstimmung
                 if (linkedId != null && this.viewedShrineId != null && linkedId.equals(this.viewedShrineId)) {
                     this.isBound = true;
                 }
             });
         }
 
-        // Layout sauber bevölkern, falls Slots generiert wurden
         int runeCount = this.menu.layoutData.size();
         if (runeCount > 0) {
-            this.cachedPositions = ShrineLayout.generateSpiralPositions(runeCount);
+            List<Vec2> rawPositions = ShrineLayout.generateSpiralPositions(runeCount);
+            
+            // FIX: Komplettes Screen-Layout an der X-Achse spiegeln, damit es zur 3D Block-Textur passt
+            this.cachedPositions.clear();
+            for (Vec2 p : rawPositions) {
+                this.cachedPositions.add(new Vec2(-p.x, p.y));
+            }
+            
             this.cachedConnections = ShrineLayout.generateConnections(this.cachedPositions);
             
             this.sortedIndices.clear();
@@ -420,7 +420,13 @@ public class RunestoneScreen extends AbstractContainerScreen<RunestoneMenu> {
                 int texSize = (int)(256.0f / 0.85f);
                 int offset = -texSize / 2;
                 
+                pose.pushPose();
+                // FIX: Spiegelung der Hintergrundtextur zur korrekten Ausrichtung an unsere gespiegelten Slots
+                pose.scale(-1.0f, 1.0f, 1.0f);
+                RenderSystem.disableCull(); // Damit es durch die Umkehrung nicht unsichtbar wird
                 gui.blit(overlayTex, offset, offset, 0, 0, texSize, texSize, texSize, texSize);
+                RenderSystem.enableCull();
+                pose.popPose();
             }
         }
 
@@ -428,6 +434,21 @@ public class RunestoneScreen extends AbstractContainerScreen<RunestoneMenu> {
         if (this.cachedPositions.isEmpty() || this.sortedIndices.isEmpty()) {
             pose.popPose();
             return;
+        }
+
+        // --- LEY-LINIEN (VERBINDUNGEN) ZEICHNEN ---
+        if (this.isBound && !this.cachedConnections.isEmpty()) {
+            for (int[] conn : this.cachedConnections) {
+                if (conn[0] < this.cachedPositions.size() && conn[1] < this.cachedPositions.size()) {
+                    Vec2 p1 = this.cachedPositions.get(conn[0]);
+                    Vec2 p2 = this.cachedPositions.get(conn[1]);
+                    
+                    boolean resonating = (conn[0] == lastHoveredVisualIndex || conn[1] == lastHoveredVisualIndex);
+                    int lineColor = resonating ? 0x8800FFFF : 0x220088FF; 
+                    
+                    drawLine(gui, p1.x, p1.y, p2.x, p2.y, lineColor);
+                }
+            }
         }
 
         int runeCount = this.menu.layoutData.size();
@@ -526,12 +547,14 @@ public class RunestoneScreen extends AbstractContainerScreen<RunestoneMenu> {
         BufferBuilder bufferbuilder = tesselator.getBuilder();
         RenderSystem.enableBlend();
         RenderSystem.defaultBlendFunc();
+        RenderSystem.disableDepthTest();
         RenderSystem.setShader(GameRenderer::getPositionColorShader);
         Matrix4f matrix = gui.pose().last().pose();
         bufferbuilder.begin(VertexFormat.Mode.DEBUG_LINES, DefaultVertexFormat.POSITION_COLOR);
         bufferbuilder.vertex(matrix, x1, y1, 0).color(r, g, b, a).endVertex();
         bufferbuilder.vertex(matrix, x2, y2, 0).color(r, g, b, a).endVertex();
         tesselator.end();
+        RenderSystem.enableDepthTest();
         RenderSystem.disableBlend();
     }
     
@@ -678,15 +701,18 @@ public class RunestoneScreen extends AbstractContainerScreen<RunestoneMenu> {
             lastHoveredVisualIndex = currentHover;
             activeResonanceIndices.clear();
             if (currentHover != -1) {
-                if (currentHover > 0) activeResonanceIndices.add(currentHover - 1);
-                if (currentHover < cachedPositions.size() - 1) activeResonanceIndices.add(currentHover + 1);
+                activeResonanceIndices.add(currentHover);
+                for (int[] conn : cachedConnections) {
+                    if (conn[0] == currentHover) activeResonanceIndices.add(conn[1]);
+                    if (conn[1] == currentHover) activeResonanceIndices.add(conn[0]);
+                }
             }
         }
     }
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        if (button == 1) { 
+        if (button == 1 && this.hoveredSlot == null) { 
             isDragging = true;
             return true;
         }

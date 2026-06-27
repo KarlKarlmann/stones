@@ -74,7 +74,7 @@ public class ClusterTooltipHandler {
                    .append(s.getHoverName())
                    .append(Component.literal(" (Lvl " + req + ")").withStyle(ChatFormatting.AQUA)));
 
-                // 2. ENCHANTMENTS AUFLISTEN (Das fehlte dir!)
+                // 2. ENCHANTMENTS AUFLISTEN
                 Map<Enchantment, Integer> enchants = EnchantmentHelper.getEnchantments(s);
                 if (!enchants.isEmpty()) {
                     for (Map.Entry<Enchantment, Integer> entry : enchants.entrySet()) {
@@ -82,8 +82,8 @@ public class ClusterTooltipHandler {
                         int lvl = entry.getValue();
                         Component name = ench.getFullname(lvl);
                         
-                        // Farbe: Runen grau, andere (Amplify/Vanilla) dunkelviolett
-                        ChatFormatting color = (ench instanceof RuneEnchantment) ? ChatFormatting.GRAY : ChatFormatting.DARK_PURPLE;
+                        // Farbe: Flüche rot, Runen grau, andere (Amplify/Vanilla) dunkelviolett
+                        ChatFormatting color = ench.isCurse() ? ChatFormatting.RED : ((ench instanceof RuneEnchantment) ? ChatFormatting.GRAY : ChatFormatting.DARK_PURPLE);
                         
                         tooltip.add(Component.literal("      - ") 
                             .withStyle(ChatFormatting.DARK_GRAY)

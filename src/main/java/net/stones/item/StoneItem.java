@@ -16,6 +16,7 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.inventory.ClickAction;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.entity.SlotAccess;
+import net.stones.StonesMod;
 import net.stones.enchantment.RuneEnchantment;
 import net.stones.enchantment.AmplifyEnchantment;
 import net.stones.enchantment.RuneStat;
@@ -29,7 +30,10 @@ import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraftforge.fml.DistExecutor;
+import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.event.entity.player.ItemTooltipEvent;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -181,16 +185,17 @@ public class StoneItem extends Item {
     public static void addFullRuneTooltip(ItemStack stack, List<Component> tooltip, int socketLevel) {
         if (stack.isEmpty()) return;
 
+        Map<Enchantment, Integer> enchants = EnchantmentHelper.getEnchantments(stack);
         int reqLevel = RuneCalculator.getRequiredLevel(stack);
-        boolean hasCurse = EnchantmentHelper.getItemEnchantmentLevel(Enchantments.VANISHING_CURSE, stack) > 0 ||
-                           EnchantmentHelper.getItemEnchantmentLevel(Enchantments.BINDING_CURSE, stack) > 0;
+        
+        // Prüft, ob irgendein Fluch auf dem Item liegt
+        boolean hasCurse = enchants.keySet().stream().anyMatch(Enchantment::isCurse);
 
         tooltip.add(Component.translatable("tooltip.stones.required_level", reqLevel).withStyle(hasCurse ? ChatFormatting.GREEN : ChatFormatting.BLUE));
         if (hasCurse) tooltip.add(Component.translatable("tooltip.stones.reduced_by_curse").withStyle(ChatFormatting.DARK_GREEN));
         tooltip.add(Component.empty());
 
         int ampLvl = 0;
-        Map<Enchantment, Integer> enchants = EnchantmentHelper.getEnchantments(stack);
         for (Map.Entry<Enchantment, Integer> entry : enchants.entrySet()) {
             if (entry.getKey() instanceof AmplifyEnchantment) {
                 ampLvl = entry.getValue();
@@ -227,15 +232,16 @@ public class StoneItem extends Item {
                     Map.Entry<Enchantment, Integer> entry = runeEntries.get(i);
                     RuneEnchantment rune = (RuneEnchantment) entry.getKey();
                     int lvl = entry.getValue();
+                    ChatFormatting runeColor = rune.isCurse() ? ChatFormatting.RED : ChatFormatting.GOLD;
                     
                     if (i == activeIndex) {
                         tooltip.add(Component.literal(" ▼ ").withStyle(ChatFormatting.AQUA)
-                            .append(rune.getFullname(lvl).copy().withStyle(ChatFormatting.GOLD, ChatFormatting.UNDERLINE)));
+                            .append(rune.getFullname(lvl).copy().withStyle(runeColor, ChatFormatting.UNDERLINE)));
                         
                         renderRuneDetails(tooltip, rune, lvl, socketLevel, mult);
                     } else {
                         tooltip.add(Component.literal(" • ").withStyle(ChatFormatting.DARK_GRAY)
-                            .append(rune.getFullname(lvl).copy().withStyle(ChatFormatting.GOLD)));
+                            .append(rune.getFullname(lvl).copy().withStyle(runeColor)));
                         
                         if (showMinorMajorStats && (rune.type == RuneEnchantment.Type.MINOR || rune.type == RuneEnchantment.Type.MAJOR)) {
                             renderRuneStatsOnly(tooltip, rune, lvl, socketLevel, mult);
@@ -246,9 +252,10 @@ public class StoneItem extends Item {
                 for (Map.Entry<Enchantment, Integer> entry : runeEntries) {
                     RuneEnchantment rune = (RuneEnchantment) entry.getKey();
                     int lvl = entry.getValue();
+                    ChatFormatting runeColor = rune.isCurse() ? ChatFormatting.RED : ChatFormatting.GOLD;
 
                     tooltip.add(Component.literal(" • ").withStyle(ChatFormatting.DARK_GRAY)
-                        .append(rune.getFullname(lvl).copy().withStyle(ChatFormatting.GOLD)));
+                        .append(rune.getFullname(lvl).copy().withStyle(runeColor)));
                     
                     if (showMinorMajorStats && (rune.type == RuneEnchantment.Type.MINOR || rune.type == RuneEnchantment.Type.MAJOR)) {
                         renderRuneStatsOnly(tooltip, rune, lvl, socketLevel, mult);
@@ -275,7 +282,8 @@ public class StoneItem extends Item {
         else if (level >= 30) rarityColor = ChatFormatting.GOLD;
         else if (level >= 15) rarityColor = ChatFormatting.BLUE;
 
-        tooltip.add(Component.literal("Amplify ").append(Component.translatable("enchantment.level." + level))
+        // Prefix ✦ hinzugefügt, damit es nicht vom Vanilla-Stripper unten entfernt wird
+        tooltip.add(Component.literal("✦ Amplify ").append(Component.translatable("enchantment.level." + level))
                 .withStyle(rarityColor, ChatFormatting.BOLD));
 
         tooltip.add(Component.translatable("tooltip.stones.amplify.1").withStyle(ChatFormatting.DARK_PURPLE, ChatFormatting.ITALIC));
@@ -389,4 +397,31 @@ public class StoneItem extends Item {
 			return 0;
 		}
 	}
+
+    // ==========================================
+    // TOOLTIP CLEANER (Entfernt Vanilla Enchantments vom Item)
+    // ==========================================
+    @Mod.EventBusSubscriber(modid = StonesMod.MODID, value = Dist.CLIENT)
+    public static class ClientTooltipCleaner {
+        @SubscribeEvent
+        public static void onTooltipClean(ItemTooltipEvent event) {
+            ItemStack stack = event.getItemStack();
+            if (stack.getItem() instanceof StoneItem || stack.getItem() instanceof ClusterJewelItem) {
+                Map<Enchantment, Integer> enchants = EnchantmentHelper.getEnchantments(stack);
+                if (enchants.isEmpty()) return;
+                
+                // Wir entfernen die langweiligen Vanilla-Enchantment-Zeilen, da wir sie unten schöner selbst rendern.
+                event.getToolTip().removeIf(component -> {
+                    String text = component.getString();
+                    // Die Vanilla-Enchantments haben keine Formatierungen wie " • " oder " ➤ " im reinen Text!
+                    for (Map.Entry<Enchantment, Integer> entry : enchants.entrySet()) {
+                        if (text.equals(entry.getKey().getFullname(entry.getValue()).getString())) {
+                            return true; // Exakt diese Vanilla-Zeile aus dem Tooltip werfen
+                        }
+                    }
+                    return false;
+                });
+            }
+        }
+    }
 }

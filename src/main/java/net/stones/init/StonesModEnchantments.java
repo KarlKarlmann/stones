@@ -1,234 +1,193 @@
 package net.stones.init;
 
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
-import com.google.gson.JsonArray;
-import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.world.effect.MobEffect;
-import net.minecraft.world.entity.ai.attributes.Attribute;
-import net.minecraft.world.entity.ai.attributes.AttributeModifier;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
-import net.minecraftforge.fml.ModList;
 import net.minecraftforge.fml.common.Mod;
-import net.minecraftforge.fml.loading.FMLPaths;
-import net.minecraftforge.forgespi.language.IModInfo;
 import net.minecraftforge.registries.ForgeRegistries;
 import net.minecraftforge.registries.RegisterEvent;
 import net.stones.StonesMod;
-import net.stones.effect.StonesCooldownEffect;
 import net.stones.enchantment.RuneEnchantment;
-import net.stones.enchantment.AmplifyEnchantment; // Import der neuen Klasse
-import net.stones.enchantment.behavior.RuneAction;
-import net.stones.enchantment.behavior.RuneBehavior;
-import net.stones.enchantment.behavior.RuneCondition;
-import net.stones.enchantment.RuneStat;
+import net.stones.enchantment.AmplifyEnchantment;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import net.stones.enchantment.behavior.TriggerType;
-import java.io.File;
-import java.io.FileReader;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.stream.Stream;
 
 @Mod.EventBusSubscriber(modid = StonesMod.MODID, bus = Mod.EventBusSubscriber.Bus.MOD)
 public class StonesModEnchantments {
 
     private static final Logger LOGGER = LogManager.getLogger();
-    private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
-    
-    // Versionsordner NUR für die Config (Nutzer-Sicherheit)
-    public static final String CONFIG_VERSION = "v1.1";
-    
-    // Sauberer Pfad ohne Version für Mod-Interne Ressourcen (Datapacks/Bridge-JAR)
-    private static final String INTERNAL_DATA_PATH = "data/stones/enchantments";
-    private static Map<String, JsonObject> discoveredRunes = null;
-	
+
+    // Eure gesammelten Legacy Runes aus alten Spielständen (Bleiben zur Abwärtskompatibilität unverändert)
+    private static final String[] LEGACY_RUNES = {
+        "major_fire_magic_resistance",
+        "minor_ice_magic_power",
+        "major_ice_magic_resistance",
+        "major_evocation_magic_power",
+        "milestone_gravity_well",
+        "minor_max_strikes",
+        "minor_muffling",
+        "minor_vitality",
+        "minor_ender_magic_resistance",
+        "major_mana_regeneration",
+        "milestone_drowned_warrior",
+        "minor_ice_magic_resistance",
+        "minor_blood_magic_resistance",
+        "minor_resilience",
+        "milestone_archon",
+        "milestone_fireblast",
+        "minor_evocation",
+        "major_max_strikes",
+        "milestone_gamblers_ruin",
+        "major_stamina_regen",
+        "minor_blood",
+        "major_mana",
+        "minor_void",
+        "minor_eldritch_magic_power",
+        "major_evocation",
+        "major_celerity",
+        "minor_lightning_magic_power",
+        "major_wrath",
+        "minor_ice",
+        "major_luck",
+        "major_eldritch_magic_power",
+        "minor_blood_magic_power",
+        "minor_ender",
+        "major_ender",
+        "minor_eldritch_magic_resistance",
+        "major_weight",
+        "minor_ender_magic_power",
+        "milestone_arcane_focus",
+        "minor_fire",
+        "major_holy_magic_resistance",
+        "major_evocation_magic_resistance",
+        "major_void",
+        "major_ender_magic_resistance",
+        "minor_weight",
+        "minor_mana",
+        "major_eldritch",
+        "minor_lightning_magic_resistance",
+        "minor_lightning",
+        "minor_cooldown_reduction",
+        "major_lightning",
+        "major_nature_magic_power",
+        "minor_evocation_magic_power",
+        "minor_fire_magic_power",
+        "major_swift_casting",
+        "major_spell_resistance",
+        "minor_mana_regeneration",
+        "minor_haste",
+        "milestone_night_hunter",
+        "major_blood",
+        "major_cooldown_reduction",
+        "minor_stability",
+        "milestone_phoenix",
+        "minor_nature_magic_resistance",
+        "minor_fire_magic_resistance",
+        "major_blood_magic_resistance",
+        "minor_armor_negation",
+        "major_ice",
+        "minor_nature_magic_power",
+        "major_nature_magic_resistance",
+        "milestone_dash",
+        "minor_swiftness",
+        "major_holy",
+        "minor_spell_resistance",
+        "minor_hardness",
+        "major_nature",
+        "major_camouflage",
+        "major_ice_magic_power",
+        "major_armor_negation",
+        "minor_swift_casting",
+        "minor_holy",
+        "milestone_master_prospector",
+        "major_fire",
+        "major_blood_magic_power",
+        "milestone_storm_caller",
+        "milestone_gladiator",
+        "milestone_necromancer",
+        "minor_impact",
+        "minor_nature",
+        "major_lightning_magic_power",
+        "major_fire_magic_power",
+        "minor_holy_magic_power",
+        "minor_holy_magic_resistance",
+        "minor_eldritch",
+        "minor_fortune",
+        "milestone_glacial_thrust",
+        "minor_evocation_magic_resistance",
+        "minor_camouflage",
+        "milestone_berserker",
+        "major_ender_magic_power",
+        "minor_stamina_regen",
+        "major_lightning_magic_resistance",
+        "milestone_battle_mage",
+        "major_spell_power",
+        "minor_spell_power",
+        "major_eldritch_magic_resistance",
+        "milestone_midas_touch",
+        "major_muffling",
+        "major_impact",
+        "major_holy_magic_power"
+    };
+
+    // Feste Slots für die Hauptmod Stones
+    private static final int DYNAMIC_MINOR_SLOTS = 150;
+    private static final int DYNAMIC_MAJOR_SLOTS = 100;
+    private static final int DYNAMIC_MILESTONE_SLOTS = 50;
+
     @SubscribeEvent
     public static void onRegister(RegisterEvent event) {
-        // 1. JSONs scannen (nur beim ersten Aufruf eines Registry-Events)
-        if (discoveredRunes == null) {
-            discoveredRunes = scanModResources();
-			// DEAKTIVIERT: Config-Ordner nicht mehr laden, um Server/Client Desyncs zu vermeiden.
-            //scanConfigFolder(discoveredRunes);
-        }
-
-        // 2. VERZAUBERUNGEN REGISTRIEREN
         if (event.getRegistryKey().equals(ForgeRegistries.Keys.ENCHANTMENTS)) {
             MilestoneActionRegistry.init();
             ConditionRegistry.init();
 
-            // --- NEU: Manuelle Registrierung der Amplify Verzauberung ---
+            // 1. Amplify registrieren
             event.register(ForgeRegistries.Keys.ENCHANTMENTS, 
                 new ResourceLocation(StonesMod.MODID, "amplify"), 
-                () -> new AmplifyEnchantment());
-            
-            // Registrierung der dynamischen Runen aus JSONs
-            discoveredRunes.forEach((id, json) -> registerRuneFromJson(id, json, event));
-        }
+                AmplifyEnchantment::new);
 
-        // 3. AUTOMATISCHE COOLDOWN-EFFEKTE REGISTRIEREN
-        if (event.getRegistryKey().equals(ForgeRegistries.Keys.MOB_EFFECTS)) {
-            discoveredRunes.forEach((id, json) -> {
-                ResourceLocation effectId = new ResourceLocation(StonesMod.MODID, "cooldown_" + id);
-                
-                String iconPath = json.has("icon") ? json.get("icon").getAsString() : "minecraft:textures/item/barrier.png";
-                
-                event.register(ForgeRegistries.Keys.MOB_EFFECTS, effectId, () -> new StonesCooldownEffect(iconPath, json.has("name") ? json.get("name").getAsString() : "Skill"));
-                LOGGER.info("[Stones] Auto-registrierter CD-Effekt: {} (Icon: {})", effectId, iconPath);
-            });
+            // 2. Legacy Hüllen registrieren (Vermeidet Weltkorruption)
+            for (String legacyId : LEGACY_RUNES) {
+                RuneEnchantment.Type initialType = RuneEnchantment.Type.MINOR;
+                if (legacyId.startsWith("major_")) {
+                    initialType = RuneEnchantment.Type.MAJOR;
+                } else if (legacyId.startsWith("milestone_")) {
+                    initialType = RuneEnchantment.Type.MILESTONE;
+                }
+                registerDormantSlot(event, StonesMod.MODID, legacyId, initialType);
+            }
+
+            // 3. Echte Wildcard-Slots registrieren (Präfix angepasst auf stones_minor_<int>!)
+            registerModSlots(event, StonesMod.MODID, DYNAMIC_MINOR_SLOTS, DYNAMIC_MAJOR_SLOTS, DYNAMIC_MILESTONE_SLOTS);
+            
+            LOGGER.info("[Stones] Registry Phase 1 abgeschlossen. Hüllen bereit.");
         }
     }
 
-    private static Map<String, JsonObject> scanModResources() {
-        Map<String, JsonObject> map = new HashMap<>();
-        
-        for (IModInfo mod : ModList.get().getMods()) {
-            String modId = mod.getModId();
-            Path path = ModList.get().getModFileById(modId).getFile().findResource(INTERNAL_DATA_PATH);
-            
-            if (Files.exists(path)) {
-                try (Stream<Path> walk = Files.walk(path, 1)) {
-                    walk.filter(p -> p.toString().endsWith(".json"))
-                        .forEach(file -> {
-                            try (InputStream is = Files.newInputStream(file)) {
-                                JsonObject json = GSON.fromJson(new InputStreamReader(is), JsonObject.class);
-                                String id = file.getFileName().toString().replace(".json", "").toLowerCase();
-                                map.put(id, json);
-                            } catch (Exception e) {
-                                LOGGER.error("Failed to read JAR resource from {}: {}", modId, file, e);
-                            }
-                        });
-                } catch (Exception e) {
-                    LOGGER.error("Failed to scan internal resources for mod {}: {}", modId, e.getMessage());
-                }
-            }
-        }
-        return map;
+    /**
+     * ÖFFENTLICHE API FÜR ADDONS / BRÜCKEN-MODS
+     * Erlaubt es Brücken-Mods (wie Epic Fight Bridge) in ihrem eigenen RegisterEvent,
+     * eine Reihe an eigenen Slots im selben Schema zu registrieren.
+     * * Aufruf in der Bridge-Mod z. B.:
+     * StonesModEnchantments.registerModSlots(event, "stonesefbridge", 100, 50, 25);
+     */
+    public static void registerModSlots(RegisterEvent event, String modId, int minorCount, int majorCount, int milestoneCount) {
+        registerDynamicSlotsForMod(event, modId, modId + "_minor_", RuneEnchantment.Type.MINOR, minorCount);
+        registerDynamicSlotsForMod(event, modId, modId + "_major_", RuneEnchantment.Type.MAJOR, majorCount);
+        registerDynamicSlotsForMod(event, modId, modId + "_milestone_", RuneEnchantment.Type.MILESTONE, milestoneCount);
+        LOGGER.info("[Stones API] {} Wildcard-Slots für die Mod '{}' registriert.", 
+            (minorCount + majorCount + milestoneCount), modId);
     }
 
-    private static void registerRuneFromJson(String id, JsonObject json, RegisterEvent event) {
-        try {
-            String typeStr = json.get("type").getAsString().toUpperCase();
-            RuneEnchantment.Type type = RuneEnchantment.Type.valueOf(typeStr);
-            
-            String customName = json.has("name") ? json.get("name").getAsString() : null;
-            String customDesc = json.has("description") ? json.get("description").getAsString() : null;
-			String iconPath = json.has("icon") ? json.get("icon").getAsString() : null;
-            double factor = json.has("factor") ? json.get("factor").getAsDouble() : 0.0;
-			float reqLevel = json.has("required_level") ? json.get("required_level").getAsFloat() : 5.0f;
-            
-            // --- NEU: Parameter auslesen (Standard: true) ---
-            boolean discoverable = json.has("discoverable") ? json.get("discoverable").getAsBoolean() : true;
-
-            RuneEnchantment tempEnchantment = null;
-
-            if (json.has("attribute")) {
-                String attrStr = json.get("attribute").getAsString();
-                Attribute attribute = ForgeRegistries.ATTRIBUTES.getValue(new ResourceLocation(attrStr));
-                if (attribute != null) {
-                    String opStr = json.get("operation").getAsString().toUpperCase();
-                    AttributeModifier.Operation operation = AttributeModifier.Operation.valueOf(opStr);
-                    tempEnchantment = new RuneEnchantment(type, attribute, operation, factor, customName, customDesc, iconPath, reqLevel, discoverable);
-                } else {
-                    LOGGER.error("Attribute not found: " + attrStr);
-                }
-            } 
-            else if (json.has("effect")) {
-                String effStr = json.get("effect").getAsString();
-                MobEffect effect = ForgeRegistries.MOB_EFFECTS.getValue(new ResourceLocation(effStr));
-                if (effect != null) {
-                    tempEnchantment = new RuneEnchantment(type, effect, factor, customName, customDesc, iconPath, reqLevel, discoverable);
-                } else {
-                    LOGGER.error("Effect not found: " + effStr);
-                }
-            }
-            else {
-                tempEnchantment = new RuneEnchantment(type, (Attribute)null, null, 0.0, customName, customDesc, iconPath, reqLevel, discoverable);
-            }
-
-            if (tempEnchantment != null) {
-				if (json.has("stats")) {
-					JsonArray statsArray = json.getAsJsonArray("stats");
-					for (JsonElement e : statsArray) {
-						JsonObject sObj = e.getAsJsonObject();
-						tempEnchantment.addStat(new RuneStat(
-							sObj.get("id").getAsString(),
-							sObj.get("label").getAsString(),
-							sObj.has("type") ? sObj.get("type").getAsString() : "generic",
-							sObj.get("base").getAsFloat(),
-							sObj.has("per_level") ? sObj.get("per_level").getAsFloat() : 0f,
-							sObj.has("scaling") ? sObj.get("scaling").getAsString() : "RUNE_LEVEL",
-							sObj.has("display_factor") ? sObj.get("display_factor").getAsFloat() : 1.0f,
-							sObj.has("suffix") ? sObj.get("suffix").getAsString() : "",
-							sObj.has("min") ? sObj.get("min").getAsFloat() : null,
-							sObj.has("max") ? sObj.get("max").getAsFloat() : null
-						));
-					}
-				}
-				
-                if (json.has("behaviors")) {
-                    JsonArray behaviors = json.getAsJsonArray("behaviors");
-                    for (JsonElement el : behaviors) {
-                        JsonObject bObj = el.getAsJsonObject();
-                        String trigStr = bObj.get("trigger").getAsString().toUpperCase();
-                        TriggerType trigger = TriggerType.get(trigStr);
-                        
-                        List<RuneCondition> conditionsList = new ArrayList<>();
-                        if (bObj.has("conditions")) {
-                            JsonElement condElement = bObj.get("conditions");
-                            if (condElement.isJsonArray()) {
-                                for (JsonElement ce : condElement.getAsJsonArray()) parseAndAddCondition(ce.getAsJsonObject(), conditionsList);
-                            } else if (condElement.isJsonObject()) {
-                                parseAndAddCondition(condElement.getAsJsonObject(), conditionsList);
-                            }
-                        }
-                        
-                        List<RuneBehavior.ConfiguredRuneAction> actionsList = new ArrayList<>();
-                        if (bObj.has("actions")) {
-                            for (JsonElement actEl : bObj.getAsJsonArray("actions")) {
-                                JsonObject actObj = actEl.getAsJsonObject();
-                                if (actObj.has("type")) {
-                                    RuneAction action = MilestoneActionRegistry.get(actObj.get("type").getAsString());
-                                    if (action != null) actionsList.add(new RuneBehavior.ConfiguredRuneAction(action, actObj));
-                                }
-                            }
-                        }
-                        tempEnchantment.addBehavior(new RuneBehavior(trigger, conditionsList, actionsList));
-                    }
-                }
-
-                // NEU: Max-Level aus JSON lesen (falls nicht vorhanden, bleibt es beim Standardwert)
-                if (json.has("max_level")) {
-                    tempEnchantment.setMaxLevel(json.get("max_level").getAsInt());
-                }
-
-                final RuneEnchantment finalEnchantment = tempEnchantment;
-                event.register(ForgeRegistries.Keys.ENCHANTMENTS, new ResourceLocation(StonesMod.MODID, id), () -> finalEnchantment);
-                LOGGER.info("Registered Rune: stones:{}", id);
-            }
-        } catch (Exception e) {
-            LOGGER.error("Critical error registering rune '" + id + "'", e);
+    private static void registerDynamicSlotsForMod(RegisterEvent event, String modId, String prefix, RuneEnchantment.Type type, int count) {
+        for (int i = 1; i <= count; i++) {
+            // Generiert z. B. stones_minor_01, stonesefbridge_minor_01, ...
+            String slotId = prefix + String.format("%02d", i);
+            registerDormantSlot(event, modId, slotId, type);
         }
     }
 
-    private static void parseAndAddCondition(JsonObject json, List<RuneCondition> list) {
-        if (json.has("type")) {
-            String type = json.get("type").getAsString();
-            RuneCondition condition = ConditionRegistry.create(type, json);
-            if (condition != null) {
-                list.add(condition);
-            } else {
-                LOGGER.warn("Unknown condition type: " + type);
-            }
-        }
+    private static void registerDormantSlot(RegisterEvent event, String namespace, String id, RuneEnchantment.Type initialType) {
+        RuneEnchantment dormantShell = new RuneEnchantment(initialType);
+        event.register(ForgeRegistries.Keys.ENCHANTMENTS, new ResourceLocation(namespace, id), () -> dormantShell);
     }
 }

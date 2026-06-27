@@ -203,6 +203,8 @@
 	"tooltip.stones.resonance_desc2": "legacy.",
 	"subtitles.stones.echo_trader_emerge":"*A noise emanates from the depths.",
 	"subtitles.stones.shrine_ambient":"ᛗᛟᚾᚨᛞᛟᛊ ☉ — ⲡⲗⲏⲣⲱⲙⲁ ⲧⲟⲩ ⲫⲱⲧⲟⲥ ... ᚦᛖ ᚢᚾᚲᚾᛟᚹᚾ ᚠᚨᚦᛖᚱ ᚹᚺᛁᛊᛈᛖᚱᛊ ᛁᚾ ᚦᛖ ᛊᛁᛚᛖᚾᚲᛖ",
+	"subtitles.stones.rune_ambient": "Rune: mmmmmmmmmh oooooooh",
+	"subtitles.stones.rune_cursed": "Rune: RRRATATAATATAAAAAA! HA",
 	"tooltip.stones.grind.1":"§eHold [right-click] §7 to purge",
 	"tooltip.stones.grind.2":"§8 (Removes upgrades & returns XP)",
 	"tooltip.stones.grind.3":"§7 Stone cleaned. §a%s XP§7 restored!",

@@ -1,0 +1,19 @@
+{
+  "type": "MILESTONE",
+  "name": "Curse of Dead Weight",
+  "description": "An extremely heavy, useless burden that clogs your shrine.",
+  "is_curse": true,
+  "required_level": 10.0,
+  "max_level": 5,
+  "stats": [
+    {
+      "id": "curse_req_penalty",
+      "label": "Additional Burden",
+      "base": 10.0,
+      "per_level": 10.0,
+      "scaling": "RUNE_LEVEL",
+      "display_factor": 1.0,
+      "suffix": " Lvl"
+    }
+  ]
+}

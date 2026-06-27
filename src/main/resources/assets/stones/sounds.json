@@ -9,6 +9,26 @@
       }
     ]
   },
+  "music.rune_ambient": {
+    "category": "music",
+    "subtitle": "subtitles.stones.rune_ambient",
+    "sounds": [
+      {
+        "name": "stones:music/rune_ambient",
+        "stream": true
+      }
+    ]
+  },
+  "music.rune_cursed": {
+    "category": "music",
+    "subtitle": "subtitles.stones.rune_cursed",
+    "sounds": [
+      {
+        "name": "stones:music/rune_cursed",
+        "stream": true
+      }
+    ]
+  },
   "echo_trader_emerge": {
     "category": "neutral",
     "subtitle": "subtitles.stones.echo_trader_emerge",

@@ -16,7 +16,6 @@ import net.minecraft.world.level.block.Block;
 import java.util.*;
 import java.util.function.Function;
 import net.minecraftforge.registries.ForgeRegistries;
-import net.minecraft.world.effect.MobEffect;
 
 public class ConditionRegistry {
     
@@ -106,7 +105,6 @@ public class ConditionRegistry {
         });
     
         register("stones:health_below", params -> {
-            // Resolver wird nur EINMAL beim Erstellen der Bedingung erzeugt
             final var resolver = getFloatResolver(params, "percent", 0.5f);
             return new RuneCondition() {
                 @Override public String getId() { return "stones:health_below"; }
@@ -189,13 +187,16 @@ public class ConditionRegistry {
             };
         });
         
+        // ==========================================
+        // DIE READY CONDITION (Löst den pyro_shot Mismatch)
+        // ==========================================
         register("stones:is_ready", params -> new RuneCondition() {
             @Override public String getId() { return "stones:is_ready"; }
             @Override public boolean test(ActionContext context) {
-                String name = context.getRuneId();
-                ResourceLocation effectId = new ResourceLocation(StonesMod.MODID, "cooldown_" + name);
-                MobEffect effect = ForgeRegistries.MOB_EFFECTS.getValue(effectId);
-                return effect == null || !context.getPlayer().hasEffect(effect);
+                // Hier lösen wir den Namen korrekt auf (genau wie in der Cooldown-Action)
+                String name = MilestoneActionRegistry.resolveString(context, params, "name", context.getRuneId());
+                long endTick = context.getPlayer().getPersistentData().getLong("cd_" + name);
+                return context.getPlayer().level().getGameTime() >= endTick;
             }
         });
         
@@ -216,7 +217,6 @@ public class ConditionRegistry {
         });
         
         register("stones:block_check", params -> {
-            // Komplexe Listen werden EINMAL beim Laden extrahiert
             final Set<String> allowedBlocks = new HashSet<>();
             if (params.has("blocks")) {
                 for (JsonElement e : params.getAsJsonArray("blocks")) allowedBlocks.add(e.getAsString());
@@ -233,7 +233,6 @@ public class ConditionRegistry {
             return new RuneCondition() {
                 @Override public String getId() { return "stones:block_check"; }
                 @Override public boolean test(ActionContext ctx) {
-                    // params wird hier nur für den Raycast-Abstand genutzt, falls nötig
                     BlockPos pos = MilestoneActionRegistry.getTargetPos(ctx, params);
                     if (pos == null) return false;
 

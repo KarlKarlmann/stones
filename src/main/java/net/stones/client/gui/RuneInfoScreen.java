@@ -21,7 +21,11 @@ import net.minecraft.world.item.ItemDisplayContext;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.enchantment.Enchantment;
 import net.minecraft.world.item.enchantment.EnchantmentHelper;
-import net.minecraft.world.item.enchantment.Enchantments; // <-- KORRIGIERTER IMPORT
+import net.minecraft.world.item.enchantment.Enchantments;
+import net.minecraft.client.resources.sounds.SimpleSoundInstance;
+import net.minecraft.client.resources.sounds.SoundInstance;
+import net.minecraft.sounds.SoundSource;
+import net.minecraft.util.RandomSource;
 import net.stones.enchantment.AmplifyEnchantment;
 import net.stones.enchantment.RuneEnchantment;
 import net.stones.enchantment.RuneStat;
@@ -50,7 +54,7 @@ public class RuneInfoScreen extends Screen {
     private static final int COL_CYAN_GLOW     = 0xFF00FFFF; // Magisches Leuchten (Amplify)
 
     private final ItemStack runeStack;
-    private final boolean isCorrupted; // Curse of Binding Aktivitaet
+    private final boolean isCorrupted; // Curse Aktivitaet (Generelles Theme)
     private final double amplifyMultiplier;
 
     // --- RETAINED MODE DATA MODEL (Row Cache) ---
@@ -70,13 +74,15 @@ public class RuneInfoScreen extends Screen {
     private int paneHeight;
     private int paneWidth;
 
+    private SimpleSoundInstance ambientSound;
+
     public RuneInfoScreen(ItemStack stack) {
         super(stack.getHoverName());
         this.runeStack = stack;
 
         // Visual Checks initial beim Laden
         Map<Enchantment, Integer> enchants = EnchantmentHelper.getEnchantments(runeStack);
-        this.isCorrupted = enchants.containsKey(Enchantments.BINDING_CURSE);
+        this.isCorrupted = enchants.keySet().stream().anyMatch(Enchantment::isCurse);
 
         int ampLvl = 0;
         for (Map.Entry<Enchantment, Integer> entry : enchants.entrySet()) {
@@ -92,6 +98,11 @@ public class RuneInfoScreen extends Screen {
     protected void init() {
         super.init();
         this.particles.clear();
+        
+        // --- MUSIK UNTERDRÜCKUNG BEIM START ---
+        if (this.minecraft != null) {
+            this.minecraft.getMusicManager().stopPlaying();
+        }
 
         int centerX = this.width / 2;
         int centerY = this.height / 2;
@@ -117,6 +128,43 @@ public class RuneInfoScreen extends Screen {
         // Daten einmalig kompilieren & Stat-Squishing ausführen
         this.compileData("");
         this.performStatSquishing();
+
+        // --- SOUND LOGIK ---
+        if (this.ambientSound == null && this.minecraft != null) {
+            ResourceLocation soundLoc = this.isCorrupted ?
+                    new ResourceLocation("stones", "music.rune_cursed") :
+                    new ResourceLocation("stones", "music.rune_ambient");
+
+            // Wir nutzen SoundSource.AMBIENT, damit es als unheimliches Hintergrundgeräusch
+            // abspielt und man es über die normalen Soundeinstellungen regeln kann.
+            this.ambientSound = new SimpleSoundInstance(
+                    soundLoc,
+                    SoundSource.AMBIENT,
+                    1.0f, 1.0f,
+                    RandomSource.create(),
+                    true, 0, SoundInstance.Attenuation.NONE, 0.0, 0.0, 0.0, true 
+            );
+            this.minecraft.getSoundManager().play(this.ambientSound);
+        }
+    }
+
+    @Override
+    public void tick() {
+        super.tick();
+        // --- DAUERHAFTE MUSIK UNTERDRÜCKUNG ---
+        if (this.minecraft != null && this.minecraft.player != null && this.minecraft.player.tickCount % 20 == 0) {
+            this.minecraft.getMusicManager().stopPlaying();
+        }
+    }
+
+    @Override
+    public void removed() {
+        super.removed();
+        // Sound stoppen, sobald der Screen geschlossen wird!
+        if (this.ambientSound != null && this.minecraft != null) {
+            this.minecraft.getSoundManager().stop(this.ambientSound);
+            this.ambientSound = null;
+        }
     }
 
     private void onSearchQueryChanged(String query) {
@@ -174,7 +222,8 @@ public class RuneInfoScreen extends Screen {
                 }
 
                 // Rune Name Heading
-                addRuneRow(tempRuneRows, fullname.copy().withStyle(isCorrupted ? ChatFormatting.RED : ChatFormatting.GOLD, ChatFormatting.BOLD), true, false, 12);
+                ChatFormatting headingColor = rune.isCurse() ? ChatFormatting.RED : ChatFormatting.GOLD;
+                addRuneRow(tempRuneRows, fullname.copy().withStyle(headingColor, ChatFormatting.BOLD), true, false, 12);
 
                 // Rune Stats (Formatierte Modifikatoren)
                 for (RuneStat stat : rune.getStats()) {
@@ -270,15 +319,19 @@ public class RuneInfoScreen extends Screen {
         this.squishedStats.clear();
         Map<String, Float> statSums = new LinkedHashMap<>();
         Map<String, String> statSuffixes = new HashMap<>();
+        List<Component> activeMilestones = new ArrayList<>(); // NEU: Milestones sammeln
 
         Map<Enchantment, Integer> enchants = EnchantmentHelper.getEnchantments(runeStack);
         for (Map.Entry<Enchantment, Integer> entry : enchants.entrySet()) {
             if (entry.getKey() instanceof RuneEnchantment rune) {
-                // Milestones aus der aggregierten Eigenschaftenleiste ignorieren
-                if (rune.type == RuneEnchantment.Type.MILESTONE) {
-                    continue;
-                }
                 int lvl = entry.getValue();
+                
+                // NEU: Milestones abspeichern und dann ihre detaillierten Stats überspringen
+                if (rune.type == RuneEnchantment.Type.MILESTONE) {
+                    activeMilestones.add(rune.getFullname(lvl));
+                    continue; // <- Sorgt dafür, dass Milestone-Stats rechts nicht auftauchen!
+                }
+                
                 for (RuneStat stat : rune.getStats()) {
                     float val = RuneCalculator.calculateStatValue(stat, lvl, 1, getClientPlayerLevel(), amplifyMultiplier);
                     String rawLabel = stat.label();
@@ -320,6 +373,20 @@ public class RuneInfoScreen extends Screen {
             }
         }
 
+        // NEU: Die gesammelten Milestones ganz unten anfügen
+        if (!activeMilestones.isEmpty()) {
+            if (!this.squishedStats.isEmpty()) {
+                this.squishedStats.add(Component.empty().getVisualOrderText());
+            }
+            for (Component milestoneName : activeMilestones) {
+                MutableComponent line = Component.literal("✦ ").withStyle(ChatFormatting.LIGHT_PURPLE)
+                        .append(milestoneName.copy().withStyle(ChatFormatting.WHITE));
+                for (FormattedCharSequence splitLine : this.font.split(line, 94)) {
+                    this.squishedStats.add(splitLine);
+                }
+            }
+        }
+
         if (this.squishedStats.isEmpty()) {
             this.squishedStats.add(Component.translatable("gui.stones.rune_info.no_active_effects").withStyle(ChatFormatting.DARK_GRAY, ChatFormatting.ITALIC).getVisualOrderText());
         }
@@ -334,11 +401,11 @@ public class RuneInfoScreen extends Screen {
         // 1. Atmospheric Moving Backdrop (Parallax)
         this.renderNebulaParallax(gui, mouseX, mouseY);
 
-        // 2. 2D UI Partikelsystem rendern
-        this.renderUIParticles(gui, mouseX, mouseY);
-
         int centerX = this.width / 2;
         int centerY = this.height / 2;
+
+        // 2. 2D UI Partikelsystem rendern
+        this.renderUIParticles(gui, mouseX, mouseY, centerX, centerY);
 
         // 3. Dynamic Glow Screen-Titel zeichnen
         this.renderDynamicTitle(gui, centerX, centerY);
@@ -384,17 +451,37 @@ public class RuneInfoScreen extends Screen {
         poseStack.popPose();
     }
 
-    private void renderUIParticles(GuiGraphics gui, int mouseX, int mouseY) {
+    private void renderUIParticles(GuiGraphics gui, int mouseX, int mouseY, int centerX, int centerY) {
+        if (this.minecraft.level == null) return;
+        
         // Spawning ambient particles based on theme
-        if (this.particles.size() < 100 && this.minecraft.level != null && this.minecraft.level.random.nextInt(4) == 0) {
-            double px = this.minecraft.level.random.nextDouble() * this.width;
-            double py = this.minecraft.level.random.nextDouble() * this.height;
-            double pvx = (this.minecraft.level.random.nextDouble() - 0.5D) * 0.3D;
-            double pvy = (this.minecraft.level.random.nextDouble() - 0.5D) * 0.3D;
-            float psize = 1.0F + this.minecraft.level.random.nextFloat() * 1.5F;
-            int pMaxAge = 60 + this.minecraft.level.random.nextInt(120);
-            int pcolor = isCorrupted ? COL_ACCENT_RED : (this.minecraft.level.random.nextBoolean() ? COL_SICKLY_YELLOW : COL_CYAN_GLOW);
-            this.particles.add(new UIParticle(px, py, pvx, pvy, psize, pMaxAge, pcolor));
+        if (this.particles.size() < 150) {
+            // Ambient Screen Particles
+            if (this.minecraft.level.random.nextInt(4) == 0) {
+                double px = this.minecraft.level.random.nextDouble() * this.width;
+                double py = this.minecraft.level.random.nextDouble() * this.height;
+                double pvx = (this.minecraft.level.random.nextDouble() - 0.5D) * 0.3D;
+                double pvy = (this.minecraft.level.random.nextDouble() - 0.5D) * 0.3D;
+                float psize = 1.0F + this.minecraft.level.random.nextFloat() * 1.5F;
+                int pMaxAge = 60 + this.minecraft.level.random.nextInt(120);
+                int pcolor = isCorrupted ? COL_ACCENT_RED : (this.minecraft.level.random.nextBoolean() ? COL_SICKLY_YELLOW : COL_CYAN_GLOW);
+                this.particles.add(new UIParticle(px, py, pvx, pvy, psize, pMaxAge, pcolor));
+            }
+            
+            // Rune specific emanating particles
+            if (this.minecraft.level.random.nextInt(2) == 0) {
+                int runeX = centerX - 155;
+                int runeY = centerY - 15;
+                double px = runeX + (this.minecraft.level.random.nextDouble() - 0.5) * 30.0;
+                double py = runeY + (this.minecraft.level.random.nextDouble() - 0.5) * 40.0;
+                // Bewegen sich nach oben und leicht nach außen weg
+                double pvx = (px - runeX) * 0.015;
+                double pvy = -0.3 - this.minecraft.level.random.nextDouble() * 0.8;
+                float psize = 1.5F + this.minecraft.level.random.nextFloat() * 2.0F;
+                int pMaxAge = 30 + this.minecraft.level.random.nextInt(30);
+                int pcolor = isCorrupted ? COL_ACCENT_RED : COL_CYAN_GLOW;
+                this.particles.add(new UIParticle(px, py, pvx, pvy, psize, pMaxAge, pcolor));
+            }
         }
 
         // Processing / Drawing
@@ -449,9 +536,12 @@ public class RuneInfoScreen extends Screen {
         PoseStack poseStack = gui.pose();
 
         poseStack.pushPose();
-        poseStack.translate(centerX - 155, centerY - 15, 150);
+        // Z auf 250 hochziehen für sichere Sichtbarkeit über dem Hintergrund und anderen Elementen
+        poseStack.translate(centerX - 155, centerY - 15, 250); 
+        
+        // 42x Scale (inklusive negativem Y-Flip, da GUI-Koordinaten in Minecraft nach unten wachsen!)
         float itemScale = 42.0F;
-        poseStack.scale(itemScale, itemScale, itemScale);
+        poseStack.scale(itemScale, -itemScale, itemScale); 
 
         // Rotation & Breathing Animation
         float spinAngle = (time % 360000) / 32.0f;
@@ -459,6 +549,10 @@ public class RuneInfoScreen extends Screen {
         poseStack.mulPose(Axis.YP.rotationDegrees(spinAngle));
         poseStack.mulPose(Axis.XP.rotationDegrees(pitchAngle));
 
+        // DepthTest für korrekte Modelldarstellung reaktivieren
+        RenderSystem.enableDepthTest();
+        com.mojang.blaze3d.platform.Lighting.setupForEntityInInventory();
+        
         Minecraft.getInstance().getItemRenderer().renderStatic(
                 this.runeStack,
                 ItemDisplayContext.GUI,
@@ -469,34 +563,9 @@ public class RuneInfoScreen extends Screen {
                 this.minecraft.level,
                 0
         );
-
-        poseStack.popPose();
-
-        // Holographic Platform / Pedestal below the floating artifact (Path of Exile Look)
-        poseStack.pushPose();
-        poseStack.translate(centerX - 155, centerY + 22, 0); 
-        float floatPulse = (float) Math.sin(time * 0.004) * 3.0F;
         
-        // Flatten the coordinate system to draw circular concentric discs
-        poseStack.scale(1.0F, 0.3F, 1.0F);
-
-        int baseRingCol = isCorrupted ? COL_ACCENT_RED : COL_CYAN_GLOW;
-        // Concentric glowing rings with opacity fading outward
-        int ringAlpha3 = 0x22000000 | (baseRingCol & 0x00FFFFFF);
-        int ringAlpha2 = 0x55000000 | (baseRingCol & 0x00FFFFFF);
-        int ringAlpha1 = 0xAA000000 | (baseRingCol & 0x00FFFFFF);
-
-        // Soft outer glowing disc
-        gui.fill(-32, (int) (-3 + floatPulse), 32, (int) (3 + floatPulse), ringAlpha3);
-        // Medium glowing disc
-        gui.fill(-24, (int) (-2 + floatPulse), 24, (int) (2 + floatPulse), ringAlpha2);
-        // Bright inner core disc
-        gui.fill(-16, (int) (-1 + floatPulse), 16, (int) (1 + floatPulse), ringAlpha1);
-
-        // Solid energy boundaries representing decorative elements of the pedestal
-        gui.fill(-26, (int) (-1 + floatPulse), -22, (int) (1 + floatPulse), baseRingCol);
-        gui.fill(22, (int) (-1 + floatPulse), 26, (int) (1 + floatPulse), baseRingCol);
-
+        gui.flush(); // Render buffers immediately so it doesn't z-fight with UI
+        RenderSystem.disableDepthTest();
         poseStack.popPose();
     }
 
@@ -529,7 +598,7 @@ public class RuneInfoScreen extends Screen {
                 if (row.isSeparator) {
                     drawOrnateSeparator(gui, clipX + 10, currentY + 3, clipW - 20);
                 } else {
-                    int txtColor = row.isHeader ? (isCorrupted ? COL_ACCENT_RED : COL_SICKLY_YELLOW) : COL_OFF_WHITE;
+                    int txtColor = COL_OFF_WHITE;
                     gui.drawString(this.font, row.component, clipX + 8, currentY, txtColor, false);
                 }
             }

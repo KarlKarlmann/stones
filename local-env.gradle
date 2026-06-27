@@ -1,0 +1,56 @@
+// ============================================================
+// LOKALE TEST-UMGEBUNG (Wird von Git ignoriert)
+// ============================================================
+
+def instanceModsDir  = 'E:/PrismLauncher/instances/StonesTest/minecraft/mods'
+def prismLauncherExe = 'E:/PrismLauncher/prismlauncher.exe'
+def instanceId       = 'StonesTest'
+
+def serverDir        = 'E:/StonesTestServer'
+def serverModsDir    = "${serverDir}/mods"
+
+def filesToSync = {
+    [tasks.named('jar').get().archiveFile.get().asFile] +
+    fileTree(dir: 'libs', include: '*.jar').files
+}
+
+// ---------------- CLIENT ----------------
+tasks.register('syncModsToInstance', Copy) {
+    dependsOn tasks.named('reobfJar')
+
+    doFirst {
+        def names = filesToSync().collect { it.name }
+        fileTree(instanceModsDir).matching {
+            include names
+        }.each { it.delete() }
+    }
+
+    from(filesToSync())
+    into instanceModsDir
+}
+
+tasks.register('runVanilla', Exec) {
+    dependsOn 'syncModsToInstance'
+    commandLine prismLauncherExe, '-l', instanceId
+}
+
+// ---------------- SERVER ----------------
+tasks.register('syncModsToServer', Copy) {
+    dependsOn tasks.named('reobfJar')
+
+    doFirst {
+        def names = filesToSync().collect { it.name }
+        fileTree(serverModsDir).matching {
+            include names
+        }.each { it.delete() }
+    }
+
+    from(filesToSync())
+    into serverModsDir
+}
+
+tasks.register('runServerVanilla', Exec) {
+    dependsOn 'syncModsToServer'
+    workingDir serverDir
+    commandLine 'cmd', '/c', 'run.bat'
+}

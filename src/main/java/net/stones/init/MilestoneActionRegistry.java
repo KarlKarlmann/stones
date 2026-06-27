@@ -449,42 +449,31 @@ public class MilestoneActionRegistry {
             }
         });
 
+        // ==========================================
+        // DIE NEUE COOLDOWN ACTION (Keine Potion-Effekte mehr!)
+        // ==========================================
         register(new RuneAction() {
             @Override public String getId() { return "stones:cooldown"; }
             @Override public void execute(ActionContext ctx, JsonObject params) {
-                // Hier wurde jegliche Beeinflussung wie split() oder toLowerCase() entfernt
                 String name = resolveString(ctx, params, "name", ctx.getRuneId());
                 float ticks = resolveFloat(ctx, params, "ticks", 0f);
                 
-                LOGGER.info("[Stones-Debug] Cooldown-Action aufgerufen für: {}", name);
-                LOGGER.info("[Stones-Debug] Berechnete Ticks: {}", ticks);
-
-                if (name == null || name.isEmpty()) {
-                    LOGGER.error("[Stones-Debug] Cooldown abgebrochen: Kein Name gefunden (JSON oder Kontext)!");
+                if (name == null || name.isEmpty() || ticks <= 0) {
+                    LOGGER.warn("[Stones-Debug] Cooldown ignoriert: Ungültiger Name oder Ticks <= 0.");
                     return;
                 }
 
-                ResourceLocation effectId = new ResourceLocation(StonesMod.MODID, "cooldown_" + name);
-                MobEffect effect = ForgeRegistries.MOB_EFFECTS.getValue(effectId);
+                // Server-seitig: Zeit in Ticks berechnen
+                long endTick = ctx.getPlayer().level().getGameTime() + (long)ticks;
                 
-                if (effect == null) {
-                    LOGGER.error("[Stones-Debug] Cooldown abgebrochen: MobEffect '{}' nicht in Registry gefunden!", effectId);
-                    return;
-                }
+                // Im NBT für die Conditions sichern
+                ctx.getPlayer().getPersistentData().putLong("cd_" + name, endTick);
 
-                if (ticks <= 0) {
-                    LOGGER.warn("[Stones-Debug] Cooldown ignoriert: Ticks sind 0 oder negativ.");
-                    return;
-                }
-
-                try {
-                    MobEffectInstance instance = new MobEffectInstance(effect, (int)ticks, 0, false, false, true);
-                    instance.setCurativeItems(new ArrayList<>());
-                    ctx.getPlayer().addEffect(instance);
-                    LOGGER.info("[Stones-Debug] Cooldown erfolgreich gesetzt.");
-                } catch (Exception e) {
-                    LOGGER.error("[Stones-Debug] Fehler beim Hinzufügen des Potion-Effekts!", e);
-                }
+                // Client informieren (für die Actionbar)
+                net.minecraftforge.network.PacketDistributor.PacketTarget target = net.minecraftforge.network.PacketDistributor.PLAYER.with(() -> ctx.getPlayer());
+                net.stones.StonesMod.PACKET_HANDLER.send(target, new net.stones.network.PacketSyncCooldown(name, endTick));
+                
+                LOGGER.info("[Stones-Debug] Timestamp-Cooldown gesetzt für: {} (EndTick: {})", name, endTick);
             }
         });
 
@@ -602,7 +591,6 @@ public class MilestoneActionRegistry {
             @Override public void execute(ActionContext ctx, JsonObject params) {
                 ServerLevel sl = (ServerLevel) ctx.getPlayer().level();
                 
-                // Position bestimmen exakt wie in deinem Original (Box-Korrektur)
                 Vec3 pos;
                 Object raw = resolveObject(ctx, params, "pos");
                 if (raw instanceof BlockPos bp) pos = Vec3.atLowerCornerOf(bp);
@@ -728,7 +716,4 @@ public class MilestoneActionRegistry {
 		});
         LOGGER.info("MilestoneActionRegistry initialisiert.");
     }
-	
-
-
 }
