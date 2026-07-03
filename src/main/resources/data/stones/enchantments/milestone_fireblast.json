@@ -3,7 +3,7 @@
   "name": "DICT:milestone.stones.pyromancer.name",
   "description": "DICT:milestone.stones.pyromancer.description",
   "icon": "stones:textures/gui/skills/fireball.png",
-  "required_level": 10,
+  "required_level": 3,
   "stats": [
     {
       "id": "pyro_cooldown",

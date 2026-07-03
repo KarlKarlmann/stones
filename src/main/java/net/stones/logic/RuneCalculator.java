@@ -194,11 +194,19 @@ public class RuneCalculator {
 					// 2. Neue Modifier berechnen und anwenden
 					collectActiveRunes(shrine.getInventory(), shrine.getLayout(), player.experienceLevel, 
 						(rune, runeLevel, socketLevel, mult, mainSlot, subSlot) -> {
+                            if (rune.type == RuneEnchantment.Type.MINOR) {
+                                net.stones.advancement.StonesAdvancementHelper.grantAdvancement(player, "power/first_resonance");
+                            } else if (rune.type == RuneEnchantment.Type.MAJOR) {
+                                net.stones.advancement.StonesAdvancementHelper.grantAdvancement(player, "power/words_of_power");
+                            }                             
+                            if (mult > 1.0) {
+                                net.stones.advancement.StonesAdvancementHelper.grantAdvancement(player, "power/amplified_echo");
+                            }
 							
-							// KORREKTUR: Milestones mit dem kompletten Kontext in den Cache packen!
 							if (rune.type == RuneEnchantment.Type.MILESTONE) {
 								ResourceLocation runeId = ForgeRegistries.ENCHANTMENTS.getKey(rune);
 								currentMilestones.add(new CachedMilestone(rune, runeLevel, socketLevel, mult, runeId));
+								net.stones.advancement.StonesAdvancementHelper.grantAdvancement(player, "power/milestone_path");
 							}
 							if (rune.targetAttribute != null) {
 								double bonus = calculateAttributeBonus(rune, runeLevel, player.experienceLevel, socketLevel, mult);

@@ -30,7 +30,7 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * Finaler Renderer für den Runenschrein (Void Altar).
+ * Finaler Renderer für den Runenschrein.
  * Korrektur:
  * - Entfernung der manuellen Y-Rotation ("Facing Fix"), da diese die Ausrichtung verfälscht hat.
  * - Striktes Anwenden der JSON-Transformationsdaten.

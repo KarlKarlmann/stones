@@ -1,0 +1,23 @@
+{
+    "display": {
+        "icon": {
+            "item": "minecraft:skeleton_skull"
+        },
+        "title": {
+            "translate": "advancement.stones.legacy_end.title"
+        },
+        "description": {
+            "translate": "advancement.stones.legacy_end.desc"
+        },
+        "frame": "task",
+        "show_toast": true,
+        "announce_to_chat": true,
+        "hidden": false
+    },
+    "parent": "stones:root/soul_bond",
+    "criteria": {
+        "triggered_by_code": {
+            "trigger": "minecraft:impossible"
+        }
+    }
+}

@@ -43,7 +43,7 @@
       "actions": [
         {
           "type": "stones:cooldown",
-          "ticks_var": "sonar_cooldown"
+          "ticks": "$sonar_cooldown"
         },
         {
           "type": "stones:find_blocks",

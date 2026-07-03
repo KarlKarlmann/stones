@@ -29,6 +29,16 @@
       }
     ]
   },
+  "music.rune_empty": {
+    "category": "music",
+    "subtitle": "subtitles.stones.rune_empty",
+    "sounds": [
+      {
+        "name": "stones:music/rune_empty",
+        "stream": true
+      }
+    ]
+  },
   "echo_trader_emerge": {
     "category": "neutral",
     "subtitle": "subtitles.stones.echo_trader_emerge",

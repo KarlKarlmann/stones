@@ -238,10 +238,16 @@ public boolean overrideOtherStackedOnMe(
 
     private void playInsertSound(Entity entity) {
         entity.playSound(SoundEvents.BUNDLE_INSERT, 0.8f, 0.8f + entity.level().getRandom().nextFloat() * 0.4f);
+		if (entity instanceof net.minecraft.server.level.ServerPlayer player) {
+            net.stones.advancement.StonesAdvancementHelper.grantAdvancement(player, "endgame/order_in_chaos");
+        }
     }
 
     private void playRemoveSound(Entity entity) {
         entity.playSound(SoundEvents.BUNDLE_REMOVE_ONE, 0.8f, 0.8f + entity.level().getRandom().nextFloat() * 0.4f);
+        if (entity instanceof net.minecraft.server.level.ServerPlayer player) {
+            net.stones.advancement.StonesAdvancementHelper.grantAdvancement(player, "endgame/order_in_chaos");
+        }
     }
 
     @Override

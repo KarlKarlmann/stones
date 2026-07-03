@@ -6,7 +6,13 @@ import java.util.List;
 public class StonesModConfig {
     public static final ForgeConfigSpec.Builder BUILDER = new ForgeConfigSpec.Builder();
     public static final ForgeConfigSpec SPEC;
-
+    public static final ForgeConfigSpec.BooleanValue SHOW_STAT_TOASTS;
+    public static final ForgeConfigSpec.BooleanValue SHOW_MILESTONE_TOASTS;
+    public static final ForgeConfigSpec.ConfigValue<String> STAT_TOAST_COLOR;
+    public static final ForgeConfigSpec.ConfigValue<String> MILESTONE_TOAST_COLOR;
+    public static final ForgeConfigSpec.IntValue STAT_TOAST_DURATION;
+    public static final ForgeConfigSpec.IntValue MILESTONE_TOAST_DURATION;
+	
     public static final ForgeConfigSpec.IntValue REWARD_SCORE_THRESHOLD;
     
     // --- Echo Trader Config ---
@@ -29,6 +35,28 @@ public class StonesModConfig {
     public static final ForgeConfigSpec.IntValue TRADER_COST_RESOURCE_DIVISOR;
 
     static {
+		
+        BUILDER.push("ClientUI");
+        SHOW_STAT_TOASTS = BUILDER
+                .comment("Show a toast notification when a normal stat increases on level up.")
+                .define("showStatToasts", true);
+        SHOW_MILESTONE_TOASTS = BUILDER
+                .comment("Show a toast notification when a new milestone is activated.")
+                .define("showMilestoneToasts", true);
+        STAT_TOAST_COLOR = BUILDER
+                .comment("Hex color code for the border of stat toasts (ARGB or RGB).")
+                .define("statToastColor", "FF00FFFF");
+        MILESTONE_TOAST_COLOR = BUILDER
+                .comment("Hex color code for the border of milestone toasts (ARGB or RGB).")
+                .define("milestoneToastColor", "FFFF55FF");
+        STAT_TOAST_DURATION = BUILDER
+                .comment("Duration in milliseconds for stat toasts.")
+                .defineInRange("statToastDuration", 2500, 500, 10000);
+        MILESTONE_TOAST_DURATION = BUILDER
+                .comment("Duration in milliseconds for milestone toasts.")
+                .defineInRange("milestoneToastDuration", 4000, 500, 10000);
+        BUILDER.pop();
+		
         BUILDER.push("Rewards");
 
         REWARD_SCORE_THRESHOLD = BUILDER

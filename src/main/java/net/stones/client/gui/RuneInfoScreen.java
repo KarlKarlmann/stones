@@ -52,9 +52,14 @@ public class RuneInfoScreen extends Screen {
     private static final int COL_OFF_WHITE     = 0xFFF5F5E0; // Lesbarer Basistext
     private static final int COL_ACCENT_RED    = 0xFFA01414; // Fluch des Bindens / Kritische Highlights
     private static final int COL_CYAN_GLOW     = 0xFF00FFFF; // Magisches Leuchten (Amplify)
+    
+    // Leerer Zustand (Grau)
+    private static final int COL_EMPTY_GRAY    = 0xFF888888;
+    private static final int COL_EMPTY_DARK    = 0xFF444444;
 
     private final ItemStack runeStack;
     private final boolean isCorrupted; // Curse Aktivitaet (Generelles Theme)
+    private final boolean isEmptyRune; // Keine Verzauberungen (Inaktives Theme)
     private final double amplifyMultiplier;
 
     // --- RETAINED MODE DATA MODEL (Row Cache) ---
@@ -82,6 +87,7 @@ public class RuneInfoScreen extends Screen {
 
         // Visual Checks initial beim Laden
         Map<Enchantment, Integer> enchants = EnchantmentHelper.getEnchantments(runeStack);
+        this.isEmptyRune = enchants.isEmpty();
         this.isCorrupted = enchants.keySet().stream().anyMatch(Enchantment::isCurse);
 
         int ampLvl = 0;
@@ -131,15 +137,22 @@ public class RuneInfoScreen extends Screen {
 
         // --- SOUND LOGIK ---
         if (this.ambientSound == null && this.minecraft != null) {
-            ResourceLocation soundLoc = this.isCorrupted ?
-                    new ResourceLocation("stones", "music.rune_cursed") :
-                    new ResourceLocation("stones", "music.rune_ambient");
+            ResourceLocation soundLoc;
+            
+            // Auswahl des Ambient-Sounds basierend auf dem Zustand
+            if (this.isEmptyRune) {
+                soundLoc = new ResourceLocation("stones", "music.rune_empty");
+            } else if (this.isCorrupted) {
+                soundLoc = new ResourceLocation("stones", "music.rune_cursed");
+            } else {
+                soundLoc = new ResourceLocation("stones", "music.rune_ambient");
+            }
 
-            // Wir nutzen SoundSource.AMBIENT, damit es als unheimliches Hintergrundgeräusch
-            // abspielt und man es über die normalen Soundeinstellungen regeln kann.
+            // Wir nutzen SoundSource.MUSIC, damit es als Hintergrundmusik
+            // abspielt und man es über die normalen Musik-Einstellungen regeln kann.
             this.ambientSound = new SimpleSoundInstance(
                     soundLoc,
-                    SoundSource.AMBIENT,
+                    SoundSource.MUSIC,
                     1.0f, 1.0f,
                     RandomSource.create(),
                     true, 0, SoundInstance.Attenuation.NONE, 0.0, 0.0, 0.0, true 
@@ -420,7 +433,9 @@ public class RuneInfoScreen extends Screen {
 
         // Footer Search Field Decoration / Outline
         gui.fill(centerX - 87, centerY + 51, centerX + 87, centerY + 65, 0xEE0A0A0A);
-        gui.renderOutline(centerX - 87, centerY + 51, 174, 14, isCorrupted ? COL_ACCENT_RED : COL_DARK_BROWN);
+        
+        int outlineColor = this.isEmptyRune ? COL_EMPTY_DARK : (isCorrupted ? COL_ACCENT_RED : COL_DARK_BROWN);
+        gui.renderOutline(centerX - 87, centerY + 51, 174, 14, outlineColor);
 
         // Let standard screen elements draw (Buttons, search field itself)
         super.render(gui, mouseX, mouseY, partialTicks);
@@ -445,7 +460,12 @@ public class RuneInfoScreen extends Screen {
         int bgX = (this.width - bgSize) / 2;
         int bgY = (this.height - bgSize) / 2;
 
-        RenderSystem.setShaderColor(isCorrupted ? 0.8f : 0.4f, 0.2f, isCorrupted ? 0.2f : 0.6f, 0.8F);
+        if (this.isEmptyRune) {
+            RenderSystem.setShaderColor(0.3f, 0.3f, 0.3f, 0.8F);
+        } else {
+            RenderSystem.setShaderColor(isCorrupted ? 0.8f : 0.4f, 0.2f, isCorrupted ? 0.2f : 0.6f, 0.8F);
+        }
+        
         gui.blit(BG_NEBULA, bgX - offX, bgY - offY, 0, 0, bgSize, bgSize, 256, 256);
         RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, 1.0F);
         poseStack.popPose();
@@ -464,12 +484,19 @@ public class RuneInfoScreen extends Screen {
                 double pvy = (this.minecraft.level.random.nextDouble() - 0.5D) * 0.3D;
                 float psize = 1.0F + this.minecraft.level.random.nextFloat() * 1.5F;
                 int pMaxAge = 60 + this.minecraft.level.random.nextInt(120);
-                int pcolor = isCorrupted ? COL_ACCENT_RED : (this.minecraft.level.random.nextBoolean() ? COL_SICKLY_YELLOW : COL_CYAN_GLOW);
+                
+                int pcolor;
+                if (this.isEmptyRune) {
+                    pcolor = COL_EMPTY_GRAY;
+                } else {
+                    pcolor = isCorrupted ? COL_ACCENT_RED : (this.minecraft.level.random.nextBoolean() ? COL_SICKLY_YELLOW : COL_CYAN_GLOW);
+                }
+                
                 this.particles.add(new UIParticle(px, py, pvx, pvy, psize, pMaxAge, pcolor));
             }
             
-            // Rune specific emanating particles
-            if (this.minecraft.level.random.nextInt(2) == 0) {
+            // Rune specific emanating particles - Nur wenn die Rune verzaubert ist!
+            if (!this.isEmptyRune && this.minecraft.level.random.nextInt(2) == 0) {
                 int runeX = centerX - 155;
                 int runeY = centerY - 15;
                 double px = runeX + (this.minecraft.level.random.nextDouble() - 0.5) * 30.0;
@@ -511,24 +538,32 @@ public class RuneInfoScreen extends Screen {
         gui.drawCenteredString(this.font, this.title, centerX + 1, centerY - 105, 0);
         gui.drawCenteredString(this.font, this.title, centerX - 1, centerY - 105, 0);
 
-        int titleColor = isCorrupted ? COL_ACCENT_RED : COL_SICKLY_YELLOW;
+        int titleColor;
+        if (this.isEmptyRune) {
+            titleColor = COL_EMPTY_GRAY;
+        } else {
+            titleColor = isCorrupted ? COL_ACCENT_RED : COL_SICKLY_YELLOW;
+        }
+        
         gui.drawCenteredString(this.font, this.title, centerX, centerY - 105, titleColor);
 
         poseStack.popPose();
     }
 
     private void renderTriptychBorders(GuiGraphics gui, int centerX, int centerY) {
+        int borderColor = this.isEmptyRune ? COL_EMPTY_DARK : (isCorrupted ? COL_ACCENT_RED : COL_DARK_BROWN);
+        
         // Links: 3D Hologramm Box
         gui.fill(centerX - 210, paneY, centerX - 100, paneY + paneHeight, COL_DEEP_BLACK);
-        gui.renderOutline(centerX - 210, paneY, 110, paneHeight, isCorrupted ? COL_ACCENT_RED : COL_DARK_BROWN);
+        gui.renderOutline(centerX - 210, paneY, 110, paneHeight, borderColor);
 
         // Mitte: Scrollable List Panel
         gui.fill(centerX - 90, paneY, centerX + 90, paneY + paneHeight, COL_DEEP_BLACK);
-        gui.renderOutline(centerX - 90, paneY, 180, paneHeight, isCorrupted ? COL_ACCENT_RED : COL_DARK_BROWN);
+        gui.renderOutline(centerX - 90, paneY, 180, paneHeight, borderColor);
 
         // Rechts: Squished Character Stats
         gui.fill(centerX + 100, paneY, centerX + 210, paneY + paneHeight, COL_DEEP_BLACK);
-        gui.renderOutline(centerX + 100, paneY, 110, paneHeight, isCorrupted ? COL_ACCENT_RED : COL_DARK_BROWN);
+        gui.renderOutline(centerX + 100, paneY, 110, paneHeight, borderColor);
     }
 
     private void renderHolographicArtifact(GuiGraphics gui, int centerX, int centerY) {
@@ -610,7 +645,8 @@ public class RuneInfoScreen extends Screen {
     }
 
     private void renderRightPaneSummary(GuiGraphics gui, int centerX, int centerY) {
-        gui.drawString(this.font, Component.translatable("gui.stones.rune_info.properties").withStyle(ChatFormatting.GOLD, ChatFormatting.UNDERLINE), centerX + 108, paneY + 10, COL_SICKLY_YELLOW, false);
+        int titleColor = this.isEmptyRune ? COL_EMPTY_GRAY : COL_SICKLY_YELLOW;
+        gui.drawString(this.font, Component.translatable("gui.stones.rune_info.properties").withStyle(ChatFormatting.GOLD, ChatFormatting.UNDERLINE), centerX + 108, paneY + 10, titleColor, false);
 
         int statY = paneY + 28;
         for (FormattedCharSequence statComp : this.squishedStats) {
@@ -621,7 +657,12 @@ public class RuneInfoScreen extends Screen {
     }
 
     private void drawOrnateSeparator(GuiGraphics gui, int x, int y, int width) {
-        int colorStart = isCorrupted ? COL_ACCENT_RED : COL_SICKLY_YELLOW;
+        int colorStart;
+        if (this.isEmptyRune) {
+            colorStart = COL_EMPTY_GRAY;
+        } else {
+            colorStart = isCorrupted ? COL_ACCENT_RED : COL_SICKLY_YELLOW;
+        }
         int colorEnd = 0x001E1914;
 
         // Left fading gradient

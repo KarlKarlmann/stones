@@ -127,7 +127,20 @@ public static void onPlayerRespawn(PlayerEvent.PlayerRespawnEvent event) {
     private static void recalculateAttributes(ServerPlayer player) {
 		LAST_KNOWN_LEVELS.put(player.getUUID(), player.experienceLevel);
         RuneCalculator.updatePlayer(player);
-
+		//Advancements
+        player.getCapability(PlayerShrineCapProvider.SHRINE_LINK).ifPresent(cap -> {
+            if (cap.isLinked()) {
+                ShrineInstance shrine = ShrineSavedData.get(player.serverLevel()).getShrine(cap.getLinkedShrine());
+                if (shrine != null) {
+                    for (int i = 0; i < shrine.getInventory().getSlots(); i++) {
+                        if (!shrine.getInventory().getStackInSlot(i).isEmpty()) {
+                            net.stones.advancement.StonesAdvancementHelper.grantAdvancement(player, "power/growing_resonance");
+                            break;
+                        }
+                    }
+                }
+            }
+        });
         // 2. Client informieren (Level für Toasts)
         StonesMod.PACKET_HANDLER.send(
             PacketDistributor.PLAYER.with(() -> player),

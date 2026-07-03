@@ -1,0 +1,32 @@
+{
+    "display": {
+        "icon": {
+            "item": "stones:runestone"
+        },
+        "title": {
+            "translate": "advancement.stones.root.title"
+        },
+        "description": {
+            "translate": "advancement.stones.root.desc"
+        },
+        "frame": "task",
+        "show_toast": true,
+        "announce_to_chat": true,
+        "hidden": false,
+        "background": "minecraft:textures/block/deepslate_tiles.png"
+    },
+    "criteria": {
+        "has_runestone": {
+            "trigger": "minecraft:inventory_changed",
+            "conditions": {
+                "items": [
+                    {
+                        "items": [
+                            "stones:runestone"
+                        ]
+                    }
+                ]
+            }
+        }
+    }
+}

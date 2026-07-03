@@ -1,0 +1,23 @@
+{
+    "display": {
+        "icon": {
+            "item": "minecraft:experience_bottle"
+        },
+        "title": {
+            "translate": "advancement.stones.growing_resonance.title"
+        },
+        "description": {
+            "translate": "advancement.stones.growing_resonance.desc"
+        },
+        "frame": "task",
+        "show_toast": true,
+        "announce_to_chat": true,
+        "hidden": false
+    },
+    "parent": "stones:power/first_resonance",
+    "criteria": {
+        "triggered_by_code": {
+            "trigger": "minecraft:impossible"
+        }
+    }
+}

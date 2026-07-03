@@ -1,0 +1,23 @@
+{
+    "display": {
+        "icon": {
+            "item": "minecraft:wither_rose"
+        },
+        "title": {
+            "translate": "advancement.stones.blood_toll.title"
+        },
+        "description": {
+            "translate": "advancement.stones.blood_toll.desc"
+        },
+        "frame": "challenge",
+        "show_toast": true,
+        "announce_to_chat": true,
+        "hidden": false
+    },
+    "parent": "stones:trader/shadow_trade",
+    "criteria": {
+        "triggered_by_code": {
+            "trigger": "minecraft:impossible"
+        }
+    }
+}

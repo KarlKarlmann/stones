@@ -1,19 +1,10 @@
 package net.stones.client.util;
 
 import net.minecraft.ChatFormatting;
-import net.minecraft.advancements.Advancement;
-import net.minecraft.advancements.AdvancementRewards;
-import net.minecraft.advancements.Criterion;
-import net.minecraft.advancements.DisplayInfo;
-import net.minecraft.advancements.FrameType;
-import net.minecraft.advancements.critereon.ImpossibleTrigger;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.components.toasts.AdvancementToast;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.ResourceLocation;
-import net.minecraft.world.item.ItemStack;
-import net.stones.init.StonesModItems;
 import net.stones.client.gui.toasts.SimpleLevelToast;
+import net.stones.init.StonesModConfig;
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -23,6 +14,7 @@ import java.util.Set;
 /**
  * REFAKTORIERTER HELPER
  * Nutzt nun den ClientShrineCache für architektonische Sauberkeit.
+ * Toasts sind über die Config nun zu-/abschaltbar.
  */
 public class ClientAdvancementHelper {
 
@@ -34,57 +26,76 @@ public class ClientAdvancementHelper {
         if (mc.player == null) return;
 
         boolean isFirstRun = lastKnownStats.isEmpty() && knownMilestones.isEmpty();
+        Set<String> currentActiveMilestones = new HashSet<>();
 
         for (Component bonusComponent : bonuses) {
             String rawText = bonusComponent.getString();
             boolean isMilestone = detectMilestone(bonusComponent);
 
             if (isMilestone) {
+                currentActiveMilestones.add(rawText);
                 if (!knownMilestones.contains(rawText)) {
                     knownMilestones.add(rawText);
-                    if (!isFirstRun) showMilestoneToast(bonusComponent);
+                    // Config Check für Meilensteine
+                    if (!isFirstRun && StonesModConfig.SHOW_MILESTONE_TOASTS.get()) {
+                        showMilestoneToast(bonusComponent);
+                    }
                 }
             } else {
                 if (!lastKnownStats.contains(rawText)) {
-                    if (!isFirstRun) {
+                    // Config Check für normale Stats
+                    if (!isFirstRun && StonesModConfig.SHOW_STAT_TOASTS.get()) {
                         Component feedback = Component.literal("✦ ").withStyle(ChatFormatting.AQUA)
                             .append(bonusComponent.copy().withStyle(ChatFormatting.WHITE));
-                        mc.getToasts().addToast(new SimpleLevelToast(level, feedback));
+                        int color = parseHexColor(StonesModConfig.STAT_TOAST_COLOR.get(), 0xFF00FFFF);
+                        long duration = StonesModConfig.STAT_TOAST_DURATION.get();
+                        mc.getToasts().addToast(new SimpleLevelToast(feedback, color, duration));
                     }
                 }
             }
         }
 
+        // FIX: Veraltete (nicht mehr aktive) Meilensteine aus dem Cache werfen!
+        // Dadurch triggert der Toast erneut, falls man die Rune entfernt und wieder einsetzt.
+        knownMilestones.retainAll(currentActiveMilestones);
+
         lastKnownStats.clear();
-        for (Component c : bonuses) if (!detectMilestone(c)) lastKnownStats.add(c.getString());
+        for (Component c : bonuses) {
+            if (!detectMilestone(c)) {
+                lastKnownStats.add(c.getString());
+            }
+        }
     }
 
+    // Bombensichere Erkennung: Wir suchen einfach nach dem Text!
     private static boolean detectMilestone(Component c) {
-        if (c.getStyle().getColor() != null && c.getStyle().getColor().getValue() == ChatFormatting.LIGHT_PURPLE.getColor()) return true;
-        for (Component sib : c.getSiblings()) {
-            if (sib.getStyle().getColor() != null && sib.getStyle().getColor().getValue() == ChatFormatting.LIGHT_PURPLE.getColor()) return true;
-        }
-        return false;
+        return c.getString().endsWith("(Aktiv)");
     }
 
     private static void showMilestoneToast(Component milestoneName) {
         Minecraft mc = Minecraft.getInstance();
-        Component description = Component.literal("Meilenstein erreicht!").withStyle(ChatFormatting.LIGHT_PURPLE);
+
         String cleanName = milestoneName.getString().replace(" ➤ ", "").replace(" (Aktiv)", "");
-        Component title = Component.literal(cleanName).withStyle(ChatFormatting.GRAY);
 
-        DisplayInfo displayInfo = new DisplayInfo(
-            new ItemStack(StonesModItems.RUNE_MILESTONE.get()), 
-            title, description, null, FrameType.CHALLENGE, true, false, true
-        );
+        Component feedback = Component.literal("✦ ").withStyle(ChatFormatting.LIGHT_PURPLE)
+            .append(Component.literal(cleanName).withStyle(ChatFormatting.GOLD));
+            
+        int color = parseHexColor(StonesModConfig.MILESTONE_TOAST_COLOR.get(), 0xFFFF55FF);
+        long duration = StonesModConfig.MILESTONE_TOAST_DURATION.get();
+        mc.getToasts().addToast(new SimpleLevelToast(feedback, color, duration));
 
-        ResourceLocation dummyId = new ResourceLocation("stones", "toast_" + System.currentTimeMillis());
-        Advancement advancement = Advancement.Builder.advancement()
-            .display(displayInfo)
-            .rewards(AdvancementRewards.EMPTY)
-            .addCriterion("dummy", new Criterion(new ImpossibleTrigger.TriggerInstance()))
-            .build(dummyId);
+        if (mc.player != null) {
+            mc.player.playSound(net.minecraft.sounds.SoundEvents.AMETHYST_BLOCK_CHIME, 1.0F, 1.2F);
+        }
+    }
 
-        mc.getToasts().addToast(new AdvancementToast(advancement));
+    private static int parseHexColor(String hex, int defaultColor) {
+        try {
+            if (hex.startsWith("#")) hex = hex.substring(1);
+            if (hex.length() == 6) hex = "FF" + hex;
+            return (int) Long.parseLong(hex, 16);
+        } catch (Exception e) {
+            return defaultColor;
+        }
     }
 }

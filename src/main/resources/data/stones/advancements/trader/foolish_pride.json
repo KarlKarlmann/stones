@@ -1,0 +1,23 @@
+{
+    "display": {
+        "icon": {
+            "item": "minecraft:wither_skeleton_skull"
+        },
+        "title": {
+            "translate": "advancement.stones.foolish_pride.title"
+        },
+        "description": {
+            "translate": "advancement.stones.foolish_pride.desc"
+        },
+        "frame": "task",
+        "show_toast": false,
+        "announce_to_chat": false,
+        "hidden": true
+    },
+    "parent": "stones:trader/wanderer",
+    "criteria": {
+        "triggered_by_code": {
+            "trigger": "minecraft:impossible"
+        }
+    }
+}

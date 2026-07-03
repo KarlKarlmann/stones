@@ -290,6 +290,11 @@ public class RunestoneScreen extends AbstractContainerScreen<RunestoneMenu> {
         // 6. Stat Panel (Nur wenn gebunden)
         if (this.isBound) {
             this.renderStatsPanel(guiGraphics);
+            
+            // 7. Info-Text für SHIFT-Funktion (verschwindet, wenn man SHIFT drückt)
+            if (!net.minecraft.client.gui.screens.Screen.hasShiftDown()) {
+                guiGraphics.drawString(this.font, Component.literal("Halte [SHIFT] für Sockel-Infos").withStyle(ChatFormatting.GRAY), 10, this.height - 15, 0xFFFFFF);
+            }
         }
     }
 
@@ -530,6 +535,29 @@ public class RunestoneScreen extends AbstractContainerScreen<RunestoneMenu> {
                 RenderSystem.disableDepthTest();
                 gui.fill(-8, -8, 8, 8, 0x80FFFFFF);
                 RenderSystem.enableDepthTest();
+            }
+
+            // --- SHIFT INFO OVERLAY ---
+            if (this.isBound && net.minecraft.client.gui.screens.Screen.hasShiftDown()) {
+                pose.pushPose();
+                pose.translate(0, -14, 250.0f); 
+                float effScale = 0.6f;
+                // Skalierung gegen den Zoom, damit die Schrift nicht unlesbar klein wird
+                float dynamicScale = effScale * (1.0f / this.zoom); 
+                pose.scale(dynamicScale, dynamicScale, 1.0f);
+                
+                Component infoText = Component.literal(cfg.type.name() + " (Lvl " + cfg.requiredLevel + ")");
+                int textWidth = this.font.width(infoText);
+                int color = switch (cfg.type) {
+                    case MINOR -> 0xAAAAAA;
+                    case MAJOR -> 0xFFAA00;
+                    case MILESTONE -> 0xFF55FF;
+                };
+                
+                gui.fill(-textWidth / 2 - 2, -2, textWidth / 2 + 1, 10, 0xCC000000);
+                gui.drawString(this.font, infoText, -textWidth / 2, 0, color, false);
+                
+                pose.popPose();
             }
 
             pose.popPose();

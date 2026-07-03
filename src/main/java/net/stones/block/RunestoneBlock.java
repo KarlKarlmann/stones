@@ -43,7 +43,7 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * Der Runenstein-Block (Void Altar).
+ * Der Runenstein-Block.
  * Im inaktiven Zustand ein massiver schwarzer Monolith.
  * Nach der Aktivierung (Binding) wird er transparent und offenbart das innere "Logic Sheet".
  */
@@ -126,6 +126,9 @@ public class RunestoneBlock extends Block implements EntityBlock {
                                 CompoundTag tag = dropStack.getOrCreateTag();
                                 tag.putUUID("shrineId", id);
                                 Containers.dropItemStack(level, pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5, dropStack);
+                                if (player instanceof net.minecraft.server.level.ServerPlayer serverPlayer) {
+                                    net.stones.advancement.StonesAdvancementHelper.grantAdvancement(serverPlayer, "root/critical_cargo");
+                                }
                             } else {
                                 // Kein Silk Touch: Der Altar zerbricht!
                                 // Runen werden fallen gelassen, damit sie nicht im Nirgendwo verschwinden

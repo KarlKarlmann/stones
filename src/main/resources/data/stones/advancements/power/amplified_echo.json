@@ -1,0 +1,23 @@
+{
+    "display": {
+        "icon": {
+            "item": "minecraft:amethyst_shard"
+        },
+        "title": {
+            "translate": "advancement.stones.amplified_echo.title"
+        },
+        "description": {
+            "translate": "advancement.stones.amplified_echo.desc"
+        },
+        "frame": "goal",
+        "show_toast": true,
+        "announce_to_chat": true,
+        "hidden": false
+    },
+    "parent": "stones:power/words_of_power",
+    "criteria": {
+        "triggered_by_code": {
+            "trigger": "minecraft:impossible"
+        }
+    }
+}

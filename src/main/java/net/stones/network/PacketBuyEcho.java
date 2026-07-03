@@ -46,6 +46,7 @@ public class PacketBuyEcho {
                 if (stockItem.hasTag() && stockItem.getTag().getBoolean("EchoSacrifice")) {
                     applySacrifice(player, stockItem.getTag().getInt("SacrificeType"));
                     trader.consumeResonance();
+					net.stones.advancement.StonesAdvancementHelper.grantAdvancement(player, "trader/blood_toll");
                 } 
                 // --- FALL B: NORMALER KAUF ---
                 else {
@@ -63,6 +64,7 @@ public class PacketBuyEcho {
                         if (!player.getInventory().add(buy)) player.drop(buy, false);
                         trader.consumeResonance();
                         player.level().playSound(null, player.getX(), player.getY(), player.getZ(), SoundEvents.EXPERIENCE_ORB_PICKUP, SoundSource.PLAYERS, 0.5f, 1.0f);
+                        net.stones.advancement.StonesAdvancementHelper.grantAdvancement(player, "trader/shadow_trade");
                     }
                 }
             }

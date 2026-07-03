@@ -251,6 +251,7 @@ public class EchoTraderEntity extends WanderingTrader {
     public InteractionResult mobInteract(Player player, InteractionHand hand) {
         if (hand == InteractionHand.MAIN_HAND) {
             if (!this.level().isClientSide && player instanceof ServerPlayer serverPlayer) {
+                net.stones.advancement.StonesAdvancementHelper.grantAdvancement(serverPlayer, "trader/wanderer");
                 NetworkHooks.openScreen(serverPlayer, new SimpleMenuProvider(
                     (id, inv, p) -> new EchoTraderMenu(id, inv, this),
                     Component.translatable("entity.stones.echo_trader").withStyle(net.minecraft.ChatFormatting.DARK_AQUA)
@@ -278,6 +279,9 @@ public class EchoTraderEntity extends WanderingTrader {
             // Strafe für den Angreifer: 3 Minuten Dunkelheit (3600 Ticks)
             attacker.addEffect(new net.minecraft.world.effect.MobEffectInstance(net.minecraft.world.effect.MobEffects.DARKNESS, 3600, 0));
             attacker.displayClientMessage(Component.translatable("chat.stones.echo_trader.curse").withStyle(net.minecraft.ChatFormatting.DARK_GRAY, net.minecraft.ChatFormatting.ITALIC), true);
+            if (attacker instanceof net.minecraft.server.level.ServerPlayer serverPlayer) {
+                net.stones.advancement.StonesAdvancementHelper.grantAdvancement(serverPlayer, "trader/foolish_pride");
+            }
         }
 
         // Void Escape (für jeglichen Schaden, sodass er unsterblich und ätherisch wirkt)

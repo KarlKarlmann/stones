@@ -1,0 +1,23 @@
+{
+    "display": {
+        "icon": {
+            "item": "stones:resonance_box"
+        },
+        "title": {
+            "translate": "advancement.stones.ancestral_inheritance.title"
+        },
+        "description": {
+            "translate": "advancement.stones.ancestral_inheritance.desc"
+        },
+        "frame": "goal",
+        "show_toast": true,
+        "announce_to_chat": true,
+        "hidden": false
+    },
+    "parent": "stones:legacy/end_is_beginning",
+    "criteria": {
+        "triggered_by_code": {
+            "trigger": "minecraft:impossible"
+        }
+    }
+}

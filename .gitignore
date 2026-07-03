@@ -8,3 +8,5 @@ bin/
 *.iml
 .vscode/
 local-git.gradle
+.gitignore
+work/

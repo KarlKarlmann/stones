@@ -231,11 +231,20 @@ public class RuneEnchantment extends Enchantment {
                 }
                 
                 // Automatischer Sicherheits-Gurt für den CD
-                if (hasCooldownAction && conditionsList.stream().noneMatch(c -> c.getId().equals("stones:is_ready"))) {
-                    JsonObject condObj = new JsonObject();
-                    condObj.addProperty("type", "stones:is_ready");
-                    conditionsList.add(ConditionRegistry.create("stones:is_ready", condObj));
-                }
+				if (hasCooldownAction && conditionsList.stream().noneMatch(c -> c.getId().equals("stones:is_ready"))) {
+					JsonObject condObj = new JsonObject();
+					condObj.addProperty("type", "stones:is_ready");
+					
+					// NEU: Suche den Namen in der Cooldown-Action und kopiere ihn!
+					for (RuneBehavior.ConfiguredRuneAction act : actionsList) {
+						if (act.action != null && act.action.getId().equals("stones:cooldown") && act.params.has("name")) {
+							condObj.addProperty("name", act.params.get("name").getAsString());
+							break;
+						}
+					}
+					
+					conditionsList.add(ConditionRegistry.create("stones:is_ready", condObj));
+				}
                 
                 this.addBehavior(new RuneBehavior(trigger, conditionsList, actionsList));
             }

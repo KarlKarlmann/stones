@@ -46,6 +46,8 @@ public class PacketUpdateEpitaph {
                 // Aktualisiere das Leaderboard auf dem Server
                 GlobalLeaderboardData data = GlobalLeaderboardData.get(player.serverLevel());
                 data.updateLastRunReason(player.getName().getString(), msg.score, cleanText);
+				
+				net.stones.advancement.StonesAdvancementHelper.grantAdvancement(player, "legacy/epitaph");
             }
         });
         ctx.get().setPacketHandled(true);

@@ -1,0 +1,23 @@
+{
+    "display": {
+        "icon": {
+            "item": "stones:rune_milestone"
+        },
+        "title": {
+            "translate": "advancement.stones.milestone_path.title"
+        },
+        "description": {
+            "translate": "advancement.stones.milestone_path.desc"
+        },
+        "frame": "challenge",
+        "show_toast": true,
+        "announce_to_chat": true,
+        "hidden": false
+    },
+    "parent": "stones:power/words_of_power",
+    "criteria": {
+        "triggered_by_code": {
+            "trigger": "minecraft:impossible"
+        }
+    }
+}

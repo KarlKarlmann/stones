@@ -61,6 +61,7 @@ public class ScoreRewardSystem {
                 persist.put(NBT_LIST_KEY, legacyList);
                 
                 LOGGER.info("[Stones] Legacy-Run für Belohnung registriert: {} (Grund: {})", currentRunScore, deathReason);
+				net.stones.advancement.StonesAdvancementHelper.grantAdvancement(player, "legacy/end_is_beginning");
             } else {
                 LOGGER.info("[Stones] Legacy-Run ignoriert (< 300 Punkte & nicht Top 3): {}", currentRunScore);
             }

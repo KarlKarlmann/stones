@@ -235,7 +235,8 @@ public class PacketBindShrine {
                                         // Kosmischen Saturn-Sound ertönen lassen
                                         level.playSound(null, pos, StonesMod.SHRINE_BIND.get(), net.minecraft.sounds.SoundSource.PLAYERS, 1.0f, 1.0f);
                                         
-                                        // Unaufdringliche Erfolgsmeldung in die Actionbar
+                                        // Unaufdringliche Erfolgsmeldung
+										//TODO get rid of ShrineID in Textblock
                                         player.displayClientMessage(
                                             net.minecraft.network.chat.Component.translatable(
                                                 "chat.stones.shrine.bound_success", 
@@ -243,7 +244,7 @@ public class PacketBindShrine {
                                             ), 
                                             true
                                         );
-                                        
+                                        net.stones.advancement.StonesAdvancementHelper.grantAdvancement(player, "root/soul_bond");
                                         RuneCalculator.updatePlayer(player);
                                         StonesMod.PACKET_HANDLER.send(PacketDistributor.PLAYER.with(() -> player), new PacketSyncPlayerShrine(shrineId, globalPos));
                                     } else {

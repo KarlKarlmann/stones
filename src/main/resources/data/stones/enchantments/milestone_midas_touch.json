@@ -15,7 +15,7 @@
     },
     {
       "id": "midas_cooldown",
-      "label": "DICT:stat.stones.pyro_recharge",
+      "label": "DICT:stat.stones.midas_recharge",
       "base": 600.0,
       "scaling": "PLAYER_LEVEL",
       "per_level": -2.0,
@@ -37,7 +37,8 @@
       "trigger": "ON_ACTION_BUTTON",
       "conditions": [
         {
-          "type": "stones:is_ready"
+          "type": "stones:is_ready",
+		  "name": "midas_shot"
         },
         {
           "type": "stones:block_check",
@@ -52,6 +53,7 @@
       "actions": [
         {
           "type": "stones:cooldown",
+		  "name": "midas_shot",
           "ticks": "$midas_cooldown"
         },
         {

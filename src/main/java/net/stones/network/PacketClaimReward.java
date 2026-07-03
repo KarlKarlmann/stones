@@ -19,6 +19,7 @@ public class PacketClaimReward {
             ServerPlayer player = ctx.get().getSender();
             if (player != null) {
                 ScoreRewardSystem.claimReward(player);
+				net.stones.advancement.StonesAdvancementHelper.grantAdvancement(player, "legacy/ancestral_inheritance");
             }
         });
         ctx.get().setPacketHandled(true);
