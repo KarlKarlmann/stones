@@ -20,7 +20,7 @@
       "trigger": "ON_ACTION_BUTTON",
       "conditions": [
         {
-          "type": "stones:is_ready",
+          "type": "stones:is_ready"
         }
       ],
       "actions": [
@@ -29,10 +29,10 @@
           "ticks": "$aeon_cooldown"
         },
         {
-          "type": "stones:case",
+          "type": "stones:cases",
           "cases": [
             {
-              "condition": {
+              "conditions": {
                 "type": "stones:variable_compare",
                 "variable": "playerLevel",
                 "operator": ">=",

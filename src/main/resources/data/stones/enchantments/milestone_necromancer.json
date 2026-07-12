@@ -90,7 +90,7 @@
           "type": "stones:case",
           "cases": [
             {
-              "condition": {
+              "conditions": {
                 "type": "stones:variable_compare",
                 "variable": "check_souls",
                 "operator": ">=",

@@ -17,14 +17,12 @@ import net.minecraftforge.items.IItemHandler;
 import net.minecraftforge.network.PacketDistributor;
 import net.minecraftforge.server.ServerLifecycleHooks;
 import net.stones.StonesMod;
-import net.stones.network.PacketSyncShrineMirror; // WICHTIG: Import der neuen Klasse
+import net.stones.gui.layout.ShrineLayout;
+import net.stones.init.StonesModConfig;
+import net.stones.network.PacketSyncShrineMirror;
 
 import java.util.*;
 
-/**
- * Erweitere Schrein-Instanz mit Netzwerk-Synchronisation.
- * Implementiert das "Dirty-Flag" Prinzip für effiziente Client-Mirror Updates.
- */
 public class ShrineInstance implements INBTSerializable<CompoundTag> {
 
     public enum SlotType { MINOR, MAJOR, MILESTONE }
@@ -44,34 +42,28 @@ public class ShrineInstance implements INBTSerializable<CompoundTag> {
     private final UUID id;
     private final Set<UUID> owners = new HashSet<>();
     private GlobalPos worldPosition;
+    private int maxLevel = 100;
 
-    // Das Inventar triggert nun bei jeder Änderung eine Synchronisation
     private ItemStackHandler inventory = new ItemStackHandler(5) {
         @Override
         protected void onContentsChanged(int slot) {
             if (ShrineSavedData.get() != null) {
                 ShrineSavedData.get().setDirty();
             }
-            // NEU: Sofortige Spiegelung an alle verbundenen Spieler (Mirror-Modell)
             syncToAllOwners();
         }
     };
     
     private final List<SlotConfig> slotLayout = new ArrayList<>();
-    
-    private static final List<Integer> RUNE_UNLOCK_LEVELS = Arrays.asList(1, 2, 3, 4, 7, 11, 18, 29, 47, 76, 100);
-    private static final List<Integer> POOL_MILESTONE = Arrays.asList(5, 8, 13, 21, 34, 55, 89);
 
     public ShrineInstance(UUID id) {
         this.id = id;
     }
 
-    // --- TEAM LOGIK & SYNC ---
-    
     public void addOwner(UUID playerUUID) {
         if (owners.add(playerUUID)) {
             ShrineSavedData.get().setDirty();
-            syncToAllOwners(); // Neuen Besitzer initial synchronisieren
+            syncToAllOwners();
         }
     }
     
@@ -81,17 +73,11 @@ public class ShrineInstance implements INBTSerializable<CompoundTag> {
         }
     }
 
-    /**
-     * Sendet den aktuellen Zustand des Schreins (Inventar + Layout) an alle Besitzer.
-     * Dies ist die Basis für die Client-seitige Simulation ohne Netzwerk-Verzögerung.
-     */
     public void syncToAllOwners() {
         if (ServerLifecycleHooks.getCurrentServer() == null) return;
-
         for (UUID ownerId : owners) {
             ServerPlayer player = ServerLifecycleHooks.getCurrentServer().getPlayerList().getPlayer(ownerId);
             if (player != null) {
-                // FIXED: Benutze die separate PacketSyncShrineMirror Klasse
                 StonesMod.PACKET_HANDLER.send(
                     PacketDistributor.PLAYER.with(() -> player),
                     new PacketSyncShrineMirror(this.inventory, this.slotLayout)
@@ -100,36 +86,24 @@ public class ShrineInstance implements INBTSerializable<CompoundTag> {
         }
     }
     
-    // ... Rest der Klasse (Getter, Setter, serializeNBT, etc.) bleibt unverändert ...
-    
     public boolean isOwner(UUID playerUUID) { return owners.contains(playerUUID); }
     public Set<UUID> getOwners() { return Collections.unmodifiableSet(owners); }
     public void setLocation(GlobalPos pos) { this.worldPosition = pos; ShrineSavedData.get().setDirty(); }
     public GlobalPos getLocation() { return worldPosition; }
+    public int getMaxLevel() { return this.maxLevel; }
 
+    /**
+     * Nutzt jetzt die saubere "Single Source of Truth" Klasse.
+     */
     public void generateRandomLayout() {
-        slotLayout.clear();
-        long seed = (id.getMostSignificantBits() ^ id.getLeastSignificantBits());
-        Random rand = new Random(seed);
-        int currentIndex = 0;
-        List<Integer> sortedLevels = RUNE_UNLOCK_LEVELS.stream().sorted().toList();
-        for (int lvl : sortedLevels) {
-            float roll = rand.nextFloat();
-            if (lvl == 1) {
-                if (roll < 0.90f) slotLayout.add(new SlotConfig(SlotType.MINOR, lvl, currentIndex++));
-                else slotLayout.add(new SlotConfig(SlotType.MAJOR, lvl, currentIndex++));
-                continue;
-            }
-            if (roll < 0.45f) slotLayout.add(new SlotConfig(SlotType.MINOR, lvl, currentIndex++));
-            else if (roll < 0.60f) slotLayout.add(new SlotConfig(SlotType.MAJOR, lvl, currentIndex++));
-        }
-        int milestoneCount = rand.nextInt(8);
-        List<Integer> milestoneSelection = new ArrayList<>(POOL_MILESTONE);
-        Collections.shuffle(milestoneSelection, rand);
-        List<Integer> selectedMilestones = milestoneSelection.subList(0, Math.min(milestoneCount, milestoneSelection.size()));
-        selectedMilestones.sort(Integer::compareTo);
-        for (int lvl : selectedMilestones) slotLayout.add(new SlotConfig(SlotType.MILESTONE, lvl, currentIndex++));
-        resizeInventory(currentIndex);
+        int configMax = StonesModConfig.GLOBAL_MAX_SHRINE_LEVEL.get();
+        if (configMax < 1) configMax = 100;
+        this.maxLevel = configMax;
+
+        this.slotLayout.clear();
+        this.slotLayout.addAll(ShrineLayout.generateDeterministicLayout(this.id, this.maxLevel));
+
+        resizeInventory(this.slotLayout.size());
     }
 
     private void resizeInventory(int size) {
@@ -154,6 +128,7 @@ public class ShrineInstance implements INBTSerializable<CompoundTag> {
     public CompoundTag serializeNBT() {
         CompoundTag tag = new CompoundTag();
         tag.putUUID("id", id);
+        tag.putInt("maxLevel", this.maxLevel);
         ListTag ownerList = new ListTag();
         for (UUID owner : owners) {
             CompoundTag ownerTag = new CompoundTag();
@@ -185,6 +160,11 @@ public class ShrineInstance implements INBTSerializable<CompoundTag> {
         if (nbt.contains("owners", Tag.TAG_LIST)) {
             ListTag list = nbt.getList("owners", Tag.TAG_COMPOUND);
             for (Tag t : list) owners.add(((CompoundTag)t).getUUID("uuid"));
+        }
+        if (nbt.contains("maxLevel")) {
+            this.maxLevel = nbt.getInt("maxLevel");
+        } else {
+            this.maxLevel = 100;
         }
         if (nbt.contains("pos") && nbt.contains("dim")) {
             BlockPos bp = NbtUtils.readBlockPos(nbt.getCompound("pos"));

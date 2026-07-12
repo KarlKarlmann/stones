@@ -24,18 +24,13 @@ import net.minecraft.world.phys.Vec3;
 import net.stones.block.entity.RunestoneBlockEntity;
 import net.stones.init.StonesModClient;
 import org.joml.Matrix4f;
-import org.joml.Vector3f;
 
 import java.util.List;
 import java.util.UUID;
 
 /**
  * Finaler Renderer für den Runenschrein.
- * Korrektur:
- * - Entfernung der manuellen Y-Rotation ("Facing Fix"), da diese die Ausrichtung verfälscht hat.
- * - Striktes Anwenden der JSON-Transformationsdaten.
- * - Wächter-Scaling vereinfacht (-X, -Y, Z) für korrekte Normalen.
- * - FIX: Null-Check für Skin-Texturen hinzugefügt (Verhindert Crash mit Oculus/Embeddium).
+ * Setzt nun korrekterweise die ID + das clientMaxLevel ein, um den Skin zu holen.
  */
 public class RunestoneRenderer implements BlockEntityRenderer<RunestoneBlockEntity> {
 
@@ -63,8 +58,9 @@ public class RunestoneRenderer implements BlockEntityRenderer<RunestoneBlockEnti
     }
 
     private void renderInventoryOverlay(RunestoneBlockEntity be, PoseStack stack, MultiBufferSource buffer) {
-        ResourceLocation overlayTex = ClientRunestoneTextureManager.getOrCreate(be.getShrineId());
-        if (overlayTex == null) return; // Safety check
+        // Zieht sich nun sauber das deterministische Layout anhand vom MaxLevel (Single Source of Truth)
+        ResourceLocation overlayTex = ClientRunestoneTextureManager.getOrCreate(be.getShrineId(), be.getClientMaxLevel());
+        if (overlayTex == null) return; 
 
         int glowLight = 15728880;
         VertexConsumer vc = buffer.getBuffer(RenderType.entityTranslucentEmissive(overlayTex));
@@ -87,7 +83,7 @@ public class RunestoneRenderer implements BlockEntityRenderer<RunestoneBlockEnti
 
     private void renderHolographicLabel(UUID shrineId, PoseStack poseStack, MultiBufferSource buffer, int light) {
         ResourceLocation labelTex = ClientDynamicLabelHandler.getOrGenerate(shrineId);
-        if (labelTex == null) return; // Safety check
+        if (labelTex == null) return; 
 
         long time = System.currentTimeMillis();
         poseStack.pushPose();
@@ -128,42 +124,31 @@ public class RunestoneRenderer implements BlockEntityRenderer<RunestoneBlockEnti
             GrimdarkSkinManager.getOrProcess(ownerId);
             ResourceLocation texture = isDark ? GrimdarkSkinManager.getNightSkin(ownerId) : GrimdarkSkinManager.getDaySkin(ownerId);
             
-            // --- CRASH FIX ---
-            // Oculus/Sodium crasht, wenn texture null ist. Wir müssen sicherstellen, dass sie existiert.
-            // Wenn der SkinManager noch lädt oder fehlschlägt, ist texture null.
             if (texture == null) {
-                continue; // Überspringe diesen Wächter für diesen Frame
+                continue; 
             }
 
             RenderType renderType = isDark ? RenderType.entityTranslucentEmissive(texture) : RenderType.entityTranslucent(texture);
             int packedLight = isDark ? 15728880 : LevelRenderer.getLightColor(be.getLevel(), spotPos);
 
             poseStack.pushPose();
-            // 1. Position in der Welt
             poseStack.translate(spot.x - be.getBlockPos().getX(), spot.y - be.getBlockPos().getY(), spot.z - be.getBlockPos().getZ());
             
-            // 2. Billboard Y-Rotation (Zum Spieler)
             Vec3 dir = localPlayer.position().subtract(spot);
             float yaw = (float)(Mth.atan2(dir.z, dir.x) * (180 / Math.PI)) - 90;
             poseStack.mulPose(Axis.YP.rotationDegrees(180.0F - yaw));
 
-            // 3. Entity Scale & Fixes
             poseStack.pushPose();
-            // Standard Entity Rendering: Scale(-1, -1, 1) wäre Spiegelverkehrt.
-            // Wir nutzen Scale(-X, -Y, Z) um die Spiegelung zu verhindern und die Normalen korrekt zu halten.
             poseStack.scale(-0.9375F, -0.9375F, 0.9375F);
             poseStack.translate(0, -1.501, 0); 
 
-            // 4. BEIDHÄNDIGE HALTUNG (Bauchhöhe)
             playerModel.rightArm.xRot = -0.6f; 
             playerModel.rightArm.yRot = -0.4f;
             playerModel.leftArm.xRot = -0.6f;
             playerModel.leftArm.yRot = 0.4f;
             
-            // Wächter rendern
             playerModel.renderToBuffer(poseStack, buffer.getBuffer(renderType), packedLight, overlay, 1.0f, 1.0f, 1.0f, 1.0f);
 
-            // 6. ARTEFAKT RENDERING (Zentriert Bauchhöhe)
             if (!StonesModClient.SHRINE_ARTIFACTS.isEmpty()) {
                 long sMSB = be.getShrineId().getMostSignificantBits();
                 long sLSB = be.getShrineId().getLeastSignificantBits();
@@ -176,27 +161,13 @@ public class RunestoneRenderer implements BlockEntityRenderer<RunestoneBlockEnti
 
                 if (artifactModel != null && artifactModel != Minecraft.getInstance().getModelManager().getMissingModel()) {
                     poseStack.pushPose();
-                    
-                    // A. Parenting am BODY
                     playerModel.body.translateAndRotate(poseStack);
-
-                    // B. Positionierung auf Bauchhöhe
                     poseStack.translate(0, 0.4, -0.4);
-
-                    // C. KRITISCHER FIX: Erst Y-Rotation 180° BEVOR der X-Flip kommt!
-                    // Das kompensiert die "Rückwärts"-Ausrichtung
                     poseStack.mulPose(Axis.YP.rotationDegrees(180));
-
-                    // D. Item Rotation Basis (X-Flip + Vorwärts-Neigung)
-                    // Jetzt erst der 180° X-Flip für Item-Koordinaten
                     poseStack.mulPose(Axis.XP.rotationDegrees(180));
-                    
-                    // E. 45° nach vorne neigen (um die lokale X-Achse im Item-Space)
                     poseStack.mulPose(Axis.XP.rotationDegrees(-45));
 
-                    // E. JSON Transforms
                     ItemTransform transform = artifactModel.getTransforms().getTransform(ItemDisplayContext.THIRD_PERSON_RIGHT_HAND);
-                    
                     if (transform != ItemTransform.NO_TRANSFORM) {
                         poseStack.translate(transform.translation.x() / 16.0f, transform.translation.y() / 16.0f, transform.translation.z() / 16.0f);
                         poseStack.mulPose(Axis.XP.rotationDegrees(transform.rotation.x()));
@@ -221,7 +192,6 @@ public class RunestoneRenderer implements BlockEntityRenderer<RunestoneBlockEnti
                 }
             }
 
-            // Reset
             playerModel.rightArm.xRot = 0; playerModel.leftArm.xRot = 0;
             playerModel.rightArm.yRot = 0; playerModel.leftArm.yRot = 0;
             

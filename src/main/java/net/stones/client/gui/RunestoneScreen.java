@@ -13,9 +13,7 @@ import net.minecraft.client.renderer.GameRenderer;
 import net.minecraft.client.renderer.texture.DynamicTexture;
 import net.minecraft.client.resources.sounds.SimpleSoundInstance;
 import net.minecraft.client.resources.sounds.SoundInstance;
-import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
-import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.util.Mth;
@@ -26,18 +24,11 @@ import net.minecraftforge.items.IItemHandler;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.enchantment.Enchantment;
-import net.minecraft.world.item.enchantment.EnchantmentHelper;
-import net.minecraft.world.item.enchantment.Enchantments;
 import net.minecraft.world.phys.Vec2;
-import net.minecraftforge.common.capabilities.ForgeCapabilities;
-import net.minecraftforge.items.ItemStackHandler;
 import net.stones.gui.RunestoneMenu; 
 import net.stones.gui.layout.ShrineLayout;
 import net.stones.data.ShrineInstance.SlotConfig;
 import net.stones.data.ShrineInstance.SlotType;
-import net.stones.enchantment.RuneEnchantment;
-import net.stones.enchantment.AmplifyEnchantment;
 import net.stones.item.ClusterJewelItem;
 import net.stones.item.StoneItem;
 import net.stones.logic.RuneCalculator;
@@ -45,18 +36,11 @@ import net.stones.util.ClusterTooltipHandler;
 import org.joml.Matrix4f;
 
 import net.stones.cap.PlayerShrineCapProvider;
-import net.stones.block.entity.RunestoneBlockEntity;
-import net.minecraft.world.phys.BlockHitResult;
-import net.minecraft.world.level.block.entity.BlockEntity;
-import net.minecraft.core.GlobalPos;
-import net.minecraft.world.phys.Vec3;
-
 import java.awt.Color;
 import java.util.*;
 
 public class RunestoneScreen extends AbstractContainerScreen<RunestoneMenu> {
 
-    // Texturen
     private static final ResourceLocation BG_NEBULA = new ResourceLocation("stones", "textures/gui/shrine_nebula.png");
     private static final ResourceLocation BG_STONE = new ResourceLocation("stones", "textures/block/runestone.png");
     private static final ResourceLocation SLOT_MINOR = new ResourceLocation("stones", "textures/gui/slot_minor.png");
@@ -145,11 +129,15 @@ public class RunestoneScreen extends AbstractContainerScreen<RunestoneMenu> {
             });
         }
 
+        // ==========================================
+        // 100% SYNC: Wir nutzen AUSSCHLIESSLICH das vom Server übertragene Layout.
+        // Keine Spekulationen mehr über maxLevel oder NBT-Caches!
+        // ==========================================
         int runeCount = this.menu.layoutData.size();
         if (runeCount > 0) {
             List<Vec2> rawPositions = ShrineLayout.generateSpiralPositions(runeCount);
             
-            // FIX: Komplettes Screen-Layout an der X-Achse spiegeln, damit es zur 3D Block-Textur passt
+            // Spiegelung X-Achse
             this.cachedPositions.clear();
             for (Vec2 p : rawPositions) {
                 this.cachedPositions.add(new Vec2(-p.x, p.y));
@@ -416,7 +404,9 @@ public class RunestoneScreen extends AbstractContainerScreen<RunestoneMenu> {
         pose.translate(scrollX, scrollY, 0);
 
         if (!this.isBound && this.viewedShrineId != null) {
-            ResourceLocation overlayTex = net.stones.client.renderer.ClientRunestoneTextureManager.getOrCreate(this.viewedShrineId);
+            // FIX: Wir nutzen absolut verlässlich die layoutData Size!
+            int exactCount = this.menu.layoutData.size();
+            ResourceLocation overlayTex = net.stones.client.renderer.ClientRunestoneTextureManager.getOrCreateExact(this.viewedShrineId, exactCount);
             if (overlayTex != null) {
                 RenderSystem.enableBlend();
                 RenderSystem.defaultBlendFunc();
@@ -426,22 +416,19 @@ public class RunestoneScreen extends AbstractContainerScreen<RunestoneMenu> {
                 int offset = -texSize / 2;
                 
                 pose.pushPose();
-                // FIX: Spiegelung der Hintergrundtextur zur korrekten Ausrichtung an unsere gespiegelten Slots
                 pose.scale(-1.0f, 1.0f, 1.0f);
-                RenderSystem.disableCull(); // Damit es durch die Umkehrung nicht unsichtbar wird
+                RenderSystem.disableCull(); 
                 gui.blit(overlayTex, offset, offset, 0, 0, texSize, texSize, texSize, texSize);
                 RenderSystem.enableCull();
                 pose.popPose();
             }
         }
 
-        // Sicherer Bail-Out, falls doch leer
         if (this.cachedPositions.isEmpty() || this.sortedIndices.isEmpty()) {
             pose.popPose();
             return;
         }
 
-        // --- LEY-LINIEN (VERBINDUNGEN) ZEICHNEN ---
         if (this.isBound && !this.cachedConnections.isEmpty()) {
             for (int[] conn : this.cachedConnections) {
                 if (conn[0] < this.cachedPositions.size() && conn[1] < this.cachedPositions.size()) {
@@ -468,11 +455,15 @@ public class RunestoneScreen extends AbstractContainerScreen<RunestoneMenu> {
             
             int logicIndex = sortedIndices.get(i); 
             Vec2 pos = cachedPositions.get(i); 
-            Slot slot = this.menu.slots.get(logicIndex);
-            SlotConfig cfg = this.menu.layoutData.get(logicIndex);
             
+            boolean hasServerSlot = logicIndex < this.menu.layoutData.size() && logicIndex < this.menu.slots.size();
+            Slot slot = hasServerSlot ? this.menu.slots.get(logicIndex) : null;
+            SlotConfig cfg = hasServerSlot ? this.menu.layoutData.get(logicIndex) : null;
+            
+            if (cfg == null) continue;
+
             boolean isHovered = (vx >= pos.x - 9 && vx <= pos.x + 9 && vy >= pos.y - 9 && vy <= pos.y + 9);
-            if (isHovered) {
+            if (isHovered && slot != null) {
                 this.hoveredSlot = slot;
             }
 
@@ -505,7 +496,7 @@ public class RunestoneScreen extends AbstractContainerScreen<RunestoneMenu> {
 
                 pose.scale(finalScale, finalScale, 1.0f);
 
-                if (isHovered || isResonating || slot.hasItem() || isMilestone) {
+                if (isHovered || isResonating || (slot != null && slot.hasItem()) || isMilestone) {
                     float glowIntensity = isMilestone ? 1.5f : 1.0f;
                     if (isHovered) glowIntensity += 0.8f;
                     if (isResonating) glowIntensity += 0.4f;
@@ -525,7 +516,7 @@ public class RunestoneScreen extends AbstractContainerScreen<RunestoneMenu> {
                 gui.blit(tex, -9, -9, 0, 0, 18, 18, 18, 18);
             }
 
-            if (slot.hasItem()) {
+            if (slot != null && slot.hasItem()) {
                 ItemStack stack = slot.getItem();
                 gui.renderItem(stack, -8, -8);
                 gui.renderItemDecorations(this.font, stack, -8, -8);
@@ -542,7 +533,6 @@ public class RunestoneScreen extends AbstractContainerScreen<RunestoneMenu> {
                 pose.pushPose();
                 pose.translate(0, -14, 250.0f); 
                 float effScale = 0.6f;
-                // Skalierung gegen den Zoom, damit die Schrift nicht unlesbar klein wird
                 float dynamicScale = effScale * (1.0f / this.zoom); 
                 pose.scale(dynamicScale, dynamicScale, 1.0f);
                 

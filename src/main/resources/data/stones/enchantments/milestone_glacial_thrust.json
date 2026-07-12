@@ -82,7 +82,7 @@
               "type": "stones:case",
               "cases": [
                 {
-                  "condition": {
+                  "conditions": {
                     "type": "stones:variable_compare",
                     "variable": "target",
                     "operator": "!=",

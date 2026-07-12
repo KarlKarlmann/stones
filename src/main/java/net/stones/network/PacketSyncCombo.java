@@ -5,10 +5,15 @@ import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.fml.DistExecutor;
 import net.minecraftforge.network.NetworkEvent;
 
-import java.util.function.Supplier;
+import java.util.function.Supplier; // Hier lag der Fehler - korrigiert auf java.util.function.Supplier
 
+/**
+ * S2C Paket: Synchronisiert Combo-Punkte und deren Darstellungsparameter
+ * für bestimmte Entities vom Server an alle Clients im Sichtbereich.
+ */
 public class PacketSyncCombo {
     public final String comboId;
+    public final int entityId;
     public final int count;
     public final int maxCount;
     public final String texture;
@@ -18,8 +23,9 @@ public class PacketSyncCombo {
     public final float r, g, b, a;
     public final int timeoutTicks;
 
-    public PacketSyncCombo(String comboId, int count, int maxCount, String texture, float size, float radius, float speed, float r, float g, float b, float a, int timeoutTicks) {
+    public PacketSyncCombo(String comboId, int entityId, int count, int maxCount, String texture, float size, float radius, float speed, float r, float g, float b, float a, int timeoutTicks) {
         this.comboId = comboId;
+        this.entityId = entityId;
         this.count = count;
         this.maxCount = maxCount;
         this.texture = texture;
@@ -32,6 +38,7 @@ public class PacketSyncCombo {
 
     public PacketSyncCombo(FriendlyByteBuf buf) {
         this.comboId = buf.readUtf();
+        this.entityId = buf.readInt();
         this.count = buf.readInt();
         this.maxCount = buf.readInt();
         this.texture = buf.readUtf();
@@ -47,6 +54,7 @@ public class PacketSyncCombo {
 
     public void encode(FriendlyByteBuf buf) {
         buf.writeUtf(comboId);
+        buf.writeInt(entityId);
         buf.writeInt(count);
         buf.writeInt(maxCount);
         buf.writeUtf(texture);
@@ -62,7 +70,7 @@ public class PacketSyncCombo {
 
     public static void handle(PacketSyncCombo msg, Supplier<NetworkEvent.Context> ctx) {
         ctx.get().enqueueWork(() -> {
-            // Isolierter Client-Code Aufruf (Firewall gegen Server-Crashes)
+            // Ausführung sicher auf den Client-Thread umleiten
             DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> ClientHandler.handlePacket(msg));
         });
         ctx.get().setPacketHandled(true);

@@ -19,6 +19,7 @@ import net.minecraftforge.registries.ForgeRegistries;
 import net.stones.cap.PlayerShrineCapProvider;
 import net.stones.data.ShrineInstance;
 import net.stones.data.ShrineInstance.SlotConfig;
+import net.stones.data.ShrineInstance.SlotType;
 import net.stones.data.ShrineSavedData;
 import net.stones.enchantment.AmplifyEnchantment;
 import net.stones.enchantment.RuneEnchantment;
@@ -27,6 +28,7 @@ import net.stones.init.StonesModTags;
 import net.stones.item.ClusterJewelItem;
 import net.minecraft.resources.ResourceLocation;
 import net.stones.item.StoneItem;
+import net.stones.network.PacketSyncCombo;
 import java.util.HashMap;
 import java.util.ArrayList;
 import java.util.List;
@@ -35,50 +37,42 @@ import java.util.UUID;
 
 /**
  * Die Mathematik hinter den Rune-Boni (Tooltips, Server-System, Action-System).
- *
- * Wichtig: updatePlayer() rechnet NICHT nur, sondern wendet die Werte auch direkt an
- * (AttributeModifier am Player) und pflegt den ACTIVE_MILESTONES-Cache. Wer hier was
- * ändert, sollte beide Seiten im Blick haben – ist also keine reine Rechen-Klasse.
+ * Aktualisiert für periodische Server-Decay-Prüfungen auf Mobs und Spieler-Combos.
  */
 public class RuneCalculator {
 
-	public static class CachedMilestone {
-		public final RuneEnchantment rune;
-		public final int runeLevel;
-		public final int socketLevel;
-		public final double mult;
-		public final ResourceLocation runeId;   // NEU
+    public static class CachedMilestone {
+        public final RuneEnchantment rune;
+        public final int runeLevel;
+        public final int socketLevel;
+        public final double mult;
+        public final ResourceLocation runeId;
 
-		public CachedMilestone(RuneEnchantment rune, int runeLevel, int socketLevel, double mult, ResourceLocation runeId) {
-			this.rune = rune;
-			this.runeLevel = runeLevel;
-			this.socketLevel = socketLevel;
-			this.mult = mult;
-			this.runeId = runeId;
-		}
-	}
-	
-	public static final Map<UUID, List<CachedMilestone>> ACTIVE_MILESTONES = new HashMap<>();
-	
-	
+        public CachedMilestone(RuneEnchantment rune, int runeLevel, int socketLevel, double mult, ResourceLocation runeId) {
+            this.rune = rune;
+            this.runeLevel = runeLevel;
+            this.socketLevel = socketLevel;
+            this.mult = mult;
+            this.runeId = runeId;
+        }
+    }
+    
+    public static final Map<UUID, List<CachedMilestone>> ACTIVE_MILESTONES = new HashMap<>();
+    
     public static List<CachedMilestone> getActiveMilestones(ServerPlayer player) {
         return ACTIVE_MILESTONES.getOrDefault(player.getUUID(), new ArrayList<>());
     }
+
     private static UUID getUniqueModifierID(int mainSlot, int subSlot, String attributeName) {
         String seed = "Runestone_" + mainSlot + "_" + subSlot + "_" + attributeName;
         return UUID.nameUUIDFromBytes(seed.getBytes());
     }
 
-    // --- NEU: Consumer Interface für zentrale Logik ---
     @FunctionalInterface
     public interface ActiveRuneConsumer {
         void accept(RuneEnchantment rune, int runeLevel, int socketLevel, double multiplier, int mainSlot, int subSlot);
     }
 
-    /**
-     * Ermittelt den aktuellen Verstärkungs-Multiplikator eines ItemStacks.
-     * Nutzt Instance-Check um Registry-Probleme zu umgehen.
-     */
     public static double getAmplifyMultiplier(ItemStack stack) {
         int lvl = 0;
         Map<Enchantment, Integer> enchants = EnchantmentHelper.getEnchantments(stack);
@@ -91,26 +85,63 @@ public class RuneCalculator {
         return AmplifyEnchantment.getMultiplier(lvl);
     }
 
-    /**
-     * Zentralisierte Berechnung für Attribut-Boni (Minor/Major Runen).
-     */
     public static double calculateAttributeBonus(RuneEnchantment rune, int runeLevel, int playerLevel, int socketLevel, double amplifyMultiplier) {
         double baseBonus = rune.calculateBonus(runeLevel, playerLevel, socketLevel);
         return baseBonus * amplifyMultiplier;
     }
 
-    /**
-     * Zentralisierte Berechnung für dynamische Milestone-Werte.
-     */
     public static float calculateStatValue(RuneStat stat, int runeLvl, int sockLvl, int playerLvl, double amplifyMultiplier) {
         return stat.calculate(runeLvl, sockLvl, playerLvl, amplifyMultiplier);
     }
 
     /**
-     * NEU: Zentrale Methode zum Sammeln aller aktiven Runen (inkl. Cluster).
-     * Wird vom GUI und vom Server genutzt.
-     * FIX: Prüft nun auch die Level-Anforderung der Rune selbst, nicht nur des Slots.
+     * Prüft periodisch im Player-Tick, ob eine Combo abgelaufen ist und bereinigt sie.
+     * Ignoriert unendliche Combos (mit Ablaufwert -1) fehlerfrei.
      */
+    public static void tickCombos(ServerPlayer player) {
+        CompoundTag persist = player.getPersistentData();
+        long now = player.level().getGameTime();
+        boolean changed = false;
+        
+        List<String> comboIds = new ArrayList<>();
+        for (String key : persist.getAllKeys()) {
+            if (key.startsWith("stones_combo_") && key.endsWith("_expire")) {
+                String id = key.substring("stones_combo_".length(), key.length() - "_expire".length());
+                comboIds.add(id);
+            }
+        }
+        
+        for (String id : comboIds) {
+            long expire = persist.getLong("stones_combo_" + id + "_expire");
+            
+            // expire == -1L signalisiert eine unendliche Combo, die nicht von selbst verfällt
+            if (expire != -1L && expire > 0L && now >= expire) {
+                persist.putFloat("stones_combo_" + id + "_count", 0.0f);
+                persist.putLong("stones_combo_" + id + "_expire", 0L);
+                persist.remove("stones_combo_" + id + "_max");
+                persist.remove("stones_combo_" + id + "_texture");
+                persist.remove("stones_combo_" + id + "_size");
+                persist.remove("stones_combo_" + id + "_radius");
+                persist.remove("stones_combo_" + id + "_speed");
+                persist.remove("stones_combo_" + id + "_color");
+                
+                // Client-HUD-Reset erzwingen
+                if (!player.level().isClientSide) {
+                    net.minecraftforge.network.PacketDistributor.PacketTarget target = 
+                        net.minecraftforge.network.PacketDistributor.TRACKING_ENTITY_AND_SELF.with(() -> player);
+                    net.stones.StonesMod.PACKET_HANDLER.send(target, new net.stones.network.PacketSyncCombo(
+                        id, player.getId(), 0, 100, "minecraft:textures/particle/glint.png", 0, 0, 0, 0, 0, 0, 0, 0
+                    ));
+                }
+                changed = true;
+            }
+        }
+        
+        if (changed) {
+            RuneCalculator.updatePlayer(player);
+        }
+    }
+
     public static void collectActiveRunes(IItemHandler inventory, List<SlotConfig> layout, int playerLevel, ActiveRuneConsumer action) {
         for (int i = 0; i < inventory.getSlots(); i++) {
             ItemStack stack = inventory.getStackInSlot(i);
@@ -125,10 +156,8 @@ public class RuneCalculator {
             }
             if (config == null) continue;
 
-            // 1. Slot-Anforderung prüfen
             if (playerLevel < config.requiredLevel) continue;
 
-            // A: Cluster Jewel Logic
             if (stack.getItem() instanceof ClusterJewelItem) {
                 final int mainSlotIdx = i;
                 final int socketLvl = config.requiredLevel;
@@ -149,7 +178,6 @@ public class RuneCalculator {
                     if (playerLevel >= clusterReq) {
                         for (int sub = 0; sub < activeHandler.getSlots(); sub++) {
                             ItemStack subStack = activeHandler.getStackInSlot(sub);
-                            // FIX: Prüfe Rune-Anforderung im Cluster
                             if (!subStack.isEmpty() && isRune(subStack) && playerLevel >= getRequiredLevel(subStack)) {
                                 processSingleStack(subStack, socketLvl, playerLevel, mainSlotIdx, sub, action);
                             }
@@ -157,8 +185,6 @@ public class RuneCalculator {
                     }
                 }
             } 
-            // B: Standard Rune Logic
-            // FIX: Prüfe Rune-Anforderung direkt
             else if (isRune(stack) && playerLevel >= getRequiredLevel(stack)) {
                 processSingleStack(stack, config.requiredLevel, playerLevel, i, -1, action);
             }
@@ -176,24 +202,18 @@ public class RuneCalculator {
         }
     }
 
-    /**
-     * Wendet alle aktiven Schrein-Effekte auf den Spieler an (Server-Side).
-     */
-	public static void updatePlayer(ServerPlayer player) {
-		// 1. Liste GANZ OBEN initialisieren, damit sie IMMER existiert
-		List<CachedMilestone> currentMilestones = new ArrayList<>();
-		player.getCapability(PlayerShrineCapProvider.SHRINE_LINK).ifPresent(cap -> {
-			UUID shrineId = cap.getLinkedShrine();
-			if (shrineId != null) {
-				ShrineInstance shrine = ShrineSavedData.get(player.serverLevel()).getShrine(shrineId);
-				if (shrine != null) {
-					// 1. Alle alten Modifier entfernen
-					for (int i = 0; i < shrine.getInventory().getSlots(); i++) {
-						removeAllModifiersFromSlot(player, i);
-					}
-					// 2. Neue Modifier berechnen und anwenden
-					collectActiveRunes(shrine.getInventory(), shrine.getLayout(), player.experienceLevel, 
-						(rune, runeLevel, socketLevel, mult, mainSlot, subSlot) -> {
+    public static void updatePlayer(ServerPlayer player) {
+        List<CachedMilestone> currentMilestones = new ArrayList<>();
+        player.getCapability(PlayerShrineCapProvider.SHRINE_LINK).ifPresent(cap -> {
+            UUID shrineId = cap.getLinkedShrine();
+            if (shrineId != null) {
+                ShrineInstance shrine = ShrineSavedData.get(player.serverLevel()).getShrine(shrineId);
+                if (shrine != null) {
+                    for (int i = 0; i < shrine.getInventory().getSlots(); i++) {
+                        removeAllModifiersFromSlot(player, i);
+                    }
+                    collectActiveRunes(shrine.getInventory(), shrine.getLayout(), player.experienceLevel, 
+                        (rune, runeLevel, socketLevel, mult, mainSlot, subSlot) -> {
                             if (rune.type == RuneEnchantment.Type.MINOR) {
                                 net.stones.advancement.StonesAdvancementHelper.grantAdvancement(player, "power/first_resonance");
                             } else if (rune.type == RuneEnchantment.Type.MAJOR) {
@@ -202,47 +222,39 @@ public class RuneCalculator {
                             if (mult > 1.0) {
                                 net.stones.advancement.StonesAdvancementHelper.grantAdvancement(player, "power/amplified_echo");
                             }
-							
-							if (rune.type == RuneEnchantment.Type.MILESTONE) {
-								ResourceLocation runeId = ForgeRegistries.ENCHANTMENTS.getKey(rune);
-								currentMilestones.add(new CachedMilestone(rune, runeLevel, socketLevel, mult, runeId));
-								net.stones.advancement.StonesAdvancementHelper.grantAdvancement(player, "power/milestone_path");
-							}
-							if (rune.targetAttribute != null) {
-								double bonus = calculateAttributeBonus(rune, runeLevel, player.experienceLevel, socketLevel, mult);
-								if (bonus != 0) {
-									AttributeInstance inst = player.getAttribute(rune.targetAttribute);
-									if (inst != null) {
-										UUID modifierId = getUniqueModifierID(mainSlot, subSlot, rune.targetAttribute.getDescriptionId());
-										String modName = "Runestone Bonus " + mainSlot + (subSlot >= 0 ? "_" + subSlot : "");
-										AttributeModifier mod = new AttributeModifier(modifierId, modName, bonus, rune.operation);
-										if (!inst.hasModifier(mod)) inst.addTransientModifier(mod);
-									}
-								}
-							}
-						}
-					);
-				}
-			}
-		});
-		// 3. Cache IMMER aktualisieren! Auch wenn der Schrein null ist.
-		// Wenn der Schrein fehlt (z.B. abgebaut), ist die Liste leer und der Cache wird fehlerfrei bereinigt.
-			ACTIVE_MILESTONES.remove(player.getUUID());
-			ACTIVE_MILESTONES.put(player.getUUID(), currentMilestones);
-	}
+                            
+                            if (rune.type == RuneEnchantment.Type.MILESTONE) {
+                                ResourceLocation runeId = ForgeRegistries.ENCHANTMENTS.getKey(rune);
+                                currentMilestones.add(new CachedMilestone(rune, runeLevel, socketLevel, mult, runeId));
+                                net.stones.advancement.StonesAdvancementHelper.grantAdvancement(player, "power/milestone_path");
+                            }
+                            if (rune.targetAttribute != null) {
+                                double bonus = calculateAttributeBonus(rune, runeLevel, player.experienceLevel, socketLevel, mult);
+                                if (bonus != 0) {
+                                    AttributeInstance inst = player.getAttribute(rune.targetAttribute);
+                                    if (inst != null) {
+                                        UUID modifierId = getUniqueModifierID(mainSlot, subSlot, rune.targetAttribute.getDescriptionId());
+                                        String modName = "Runestone Bonus " + mainSlot + (subSlot >= 0 ? "_" + subSlot : "");
+                                        AttributeModifier mod = new AttributeModifier(modifierId, modName, bonus, rune.operation);
+                                        if (!inst.hasModifier(mod)) inst.addTransientModifier(mod);
+                                    }
+                                }
+                            }
+                        }
+                    );
+                }
+            }
+        });
+        ACTIVE_MILESTONES.remove(player.getUUID());
+        ACTIVE_MILESTONES.put(player.getUUID(), currentMilestones);
+    }
 
-    /**
-     * NEU: Berechnet die Boni lokal auf dem Client ohne Entity-Bezug.
-     * Ermöglicht dem Client, die Toasts selbst zu generieren (Mirror-Modell).
-     */
     public static List<Component> calculateBonusesLocally(IItemHandler inventory, List<SlotConfig> layout, int playerLevel) {
         List<Component> summary = new ArrayList<>();
         collectActiveRunes(inventory, layout, playerLevel, (rune, runeLevel, socketLevel, mult, mainSlot, subSlot) -> {
             if (rune.targetAttribute != null) {
                 double bonus = calculateAttributeBonus(rune, runeLevel, playerLevel, socketLevel, mult);
                 
-                // FORMATIERUNG ANPASSUNG für saubere Toasts:
-                // Statt StoneItem.formatAttributeLine (das "Active Bonus" schreibt), formatieren wir direkt.
                 boolean amplified = mult > 1.0;
                 String sign = bonus >= 0 ? "+" : "";
                 String valStr = (rune.operation != AttributeModifier.Operation.ADDITION) 
@@ -269,9 +281,6 @@ public class RuneCalculator {
         return summary;
     }
 
-    /**
-     * Berechnet die Anforderungen für ein Cluster Jewel.
-     */
     private static int calculateClusterRequirement(IItemHandler handler) {
         int maxLvl = 0;
         int count = 0;
@@ -285,9 +294,6 @@ public class RuneCalculator {
         return maxLvl + (count * 2);
     }
 
-    /**
-     * Berechnet die Levelanforderung eines Steins.
-     */
     public static int getRequiredLevel(ItemStack stack) {
         if (stack.isEmpty()) return 1;
 
@@ -295,16 +301,16 @@ public class RuneCalculator {
         Map<Enchantment, Integer> enchants = EnchantmentHelper.getEnchantments(stack);
         
         for (Map.Entry<Enchantment, Integer> entry : enchants.entrySet()) {
-            Enchantment ench = entry.getKey();
+            Enchantment companion = entry.getKey();
             int lvl = entry.getValue();
 
-            if (ench instanceof RuneEnchantment rune) {
+            if (companion instanceof RuneEnchantment rune) {
                 totalRequirement += (rune.baseRequiredLevel * lvl);
-            } else if (ench instanceof AmplifyEnchantment) {
+            } else if (companion instanceof AmplifyEnchantment) {
                 totalRequirement += (0.0f * lvl);
-            } else if (ench == Enchantments.VANISHING_CURSE) {
+            } else if (companion == Enchantments.VANISHING_CURSE) {
                 totalRequirement -= 15.0f;
-            } else if (ench == Enchantments.BINDING_CURSE) {
+            } else if (companion == Enchantments.BINDING_CURSE) {
                 totalRequirement -= 10.0f;
             }
         }
@@ -317,7 +323,8 @@ public class RuneCalculator {
             AttributeInstance inst = player.getAttribute(attr);
             if (inst != null) {
                 inst.getModifiers().stream()
-                    .filter(mod -> mod.getName().startsWith("Runestone Bonus " + slotIndex))
+                    .filter(mod -> mod.getName().equals("Runestone Bonus " + slotIndex) 
+                                || mod.getName().startsWith("Runestone Bonus " + slotIndex + "_"))
                     .toList()
                     .forEach(inst::removeModifier);
             }

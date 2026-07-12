@@ -21,6 +21,14 @@
       "scaling": "PLAYER_LEVEL",
       "per_level": 0.05,
       "suffix": "DICT:stat.stones.suffix.multiplier"
+    },
+    {
+      "id": "pyro_radius",
+      "label": "DICT:stat.stones.pyro_radius",
+      "base": 2.0,
+      "scaling": "RUNE_LEVEL",
+      "per_level": 0.5,
+      "suffix": " m"
     }
   ],
   "behaviors": [
@@ -37,6 +45,33 @@
           "type": "stones:cooldown",
           "name": "pyro_shot",
           "ticks": "$pyro_cooldown"
+        },
+        {
+          "type": "stones:add_combo",
+          "id": "pyro_charge",
+          "value": 1.0,
+          "max": 3.0,
+          "timeout": 60,
+          "texture": "stones:textures/gui/combo_fire.png",
+          "color": "#FF8800",
+          "on_max": [
+            {
+              "type": "stones:apply_effect",
+              "effect": "minecraft:fire_resistance",
+              "duration": 60
+            },
+            {
+              "type": "stones:play_sound",
+              "sound": "minecraft:block.lava.extinguish",
+              "pitch": 0.5
+            },
+            {
+              "type": "stones:spawn_particles",
+              "particle": "minecraft:lava",
+              "count": 10,
+              "speed": 0.1
+            }
+          ]
         },
         {
           "type": "stones:invoke",
@@ -114,9 +149,9 @@
         },
         {
           "type": "stones:play_sound",
-          "sound": "minecraft:entity.ghast.shoot",
+          "sound": "minecraft:entity.blaze.shoot",
           "volume": 1.0,
-          "pitch": 1.2
+          "pitch": 0.8
         },
         {
           "type": "stones:spawn_particles",
@@ -127,40 +162,45 @@
       ]
     },
     {
-      "trigger": "ON_ACTION_BUTTON",
+      "trigger": "ON_PROJECTILE_HIT",
       "conditions": [
         {
           "type": "stones:variable_compare",
-          "variable": "playerLevel",
-          "operator": ">=",
-          "value": 50.0
-        },
-        {
-          "type": "stones:is_ready",
-          "name": "pyro_shot_fx"
+          "variable": "$projectile.getType().toString()",
+          "operator": "==",
+          "value": "entity.minecraft.small_fireball"
         }
       ],
       "actions": [
         {
-          "type": "stones:invoke",
-          "call": "level.explode(net.minecraft.world.entity.Entity, double, double, double, float, boolean, net.minecraft.world.level.Level.ExplosionInteraction)",
-          "args": [
-            "$player",
-            "$player.getX",
-            "$player.getY",
-            "$player.getZ",
-            "3.0",
-            "false",
-            "NONE"
-          ]
+          "type": "stones:explode",
+          "radius": "$pyro_radius",
+          "pos": "$hitPos",
+          "fire": false
         },
         {
           "type": "stones:play_sound",
           "sound": "minecraft:entity.dragon_fireball.explode",
-          "volume": 0.5,
-          "pitch": 1.5
+          "pos": "$hitPos",
+          "volume": 0.8,
+          "pitch": 1.2
+        },
+        {
+          "type": "stones:spawn_particles",
+          "particle": "minecraft:lava",
+          "pos": "$hitPos",
+          "count": 25,
+          "speed": 0.5
+        },
+        {
+          "type": "stones:spawn_particles",
+          "particle": "minecraft:large_smoke",
+          "pos": "$hitPos",
+          "count": 20,
+          "speed": 0.1
         }
       ]
     }
   ]
 }
+```

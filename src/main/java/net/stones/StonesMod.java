@@ -91,7 +91,8 @@ public class StonesMod {
 
 	private void setup(final FMLCommonSetupEvent event) {
 		LOGGER.info("Registriere optimierte Netzwerk-Pakete für Stones Mod...");
-		
+		//Sussudio
+		StudioNetwork.registerPackets();
 		// --- C2S ---
 		addNetworkMessage(PacketBindShrine.class, PacketBindShrine::toBytes, PacketBindShrine::new, PacketBindShrine::handle);
 		addNetworkMessage(PacketOpenShrine.class, PacketOpenShrine::toBytes, PacketOpenShrine::new, PacketOpenShrine::handle);

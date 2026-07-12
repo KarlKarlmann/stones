@@ -27,13 +27,14 @@
       "trigger": "ON_ATTACK",
       "actions": [
         {
-          "type": "stones:get_persistent_var",
-          "name": "lightning_charge",
-          "into": "current_charge"
+          "type": "stones:get_combo",
+          "id": "storm_caller",
+          "target": "$target",
+          "into": "storm"
         },
         {
           "type": "stones:math",
-          "variable": "current_charge",
+          "variable": "storm_count",
           "operation": "add",
           "value": 1.0
         },
@@ -41,22 +42,18 @@
           "type": "stones:case",
           "cases": [
             {
-              "condition": {
+              "conditions": {
                 "type": "stones:variable_compare",
-                "variable": "current_charge",
+                "variable": "storm_count",
                 "operator": ">=",
                 "value": "$max_charge"
               },
               "actions": [
                 {
-                  "type": "stones:set_persistent_var",
-                  "name": "lightning_charge",
-                  "value": 0.0
-                },
-                {
                   "type": "stones:update_combo",
                   "id": "storm_caller",
-                  "count": 0
+                  "target": "$storm_target",
+                  "count": 0.0
                 },
                 {
                   "type": "stones:explode",
@@ -95,9 +92,17 @@
           ],
           "default": [
             {
-              "type": "stones:set_persistent_var",
-              "name": "lightning_charge",
-              "value": "$current_charge"
+              "type": "stones:update_combo",
+              "id": "storm_caller",
+              "target": "$storm_target",
+              "count": "$storm_count",
+              "max": "$max_charge",
+              "texture": "stones:textures/gui/orb.png",
+              "size": 0.4,
+              "radius": 1.5,
+              "speed": 0.15,
+              "color": "#00FFFF",
+              "timeout": 140
             },
             {
               "type": "stones:play_sound",
@@ -110,18 +115,6 @@
               "particle": "minecraft:electric_spark",
               "count": 3,
               "spread": 0.2
-            },
-            {
-              "type": "stones:update_combo",
-              "id": "storm_caller",
-              "count": "$current_charge",
-              "max": "$max_charge",
-              "texture": "stones:textures/gui/orb.png",
-              "size": 0.4,
-              "radius": 1.5,
-              "speed": 0.15,
-              "color": "#00FFFF",
-              "timeout": 140
             }
           ]
         }

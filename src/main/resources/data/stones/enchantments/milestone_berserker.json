@@ -41,7 +41,7 @@
           "type": "stones:case",
           "cases": [
             {
-              "condition": {
+              "conditions": {
                 "type": "stones:health_below",
                 "percent": "$berserk_threshold"
               },

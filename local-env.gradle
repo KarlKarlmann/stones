@@ -9,9 +9,19 @@ def instanceId       = 'StonesTest'
 def serverDir        = 'E:/StonesTestServer'
 def serverModsDir    = "${serverDir}/mods"
 
+// Synchronisiert NUR noch das gebaute Mod-JAR (libs-Ordner wird ignoriert)
 def filesToSync = {
-    [tasks.named('jar').get().archiveFile.get().asFile] +
-    fileTree(dir: 'libs', include: '*.jar').files
+    [tasks.named('jar').get().archiveFile.get().asFile]
+}
+
+// Extrahiert den reinen Mod-Namen ohne Version (z.B. "stones-1.0.23" -> "stones")
+def getBaseNames = {
+    filesToSync().collect { file ->
+        def nameWithoutExt = file.name.substring(0, file.name.lastIndexOf('.'))
+        // Trennt beim ersten Bindestrich gefolgt von einer Zahl ab
+        def parts = nameWithoutExt.split(/-\d/)
+        return parts[0]
+    }
 }
 
 // ---------------- CLIENT ----------------
@@ -19,9 +29,12 @@ tasks.register('syncModsToInstance', Copy) {
     dependsOn tasks.named('reobfJar')
 
     doFirst {
-        def names = filesToSync().collect { it.name }
+        def baseNames = getBaseNames()
         fileTree(instanceModsDir).matching {
-            include names
+            baseNames.each { base ->
+                include "${base}-*.jar"
+                include "${base}.jar"
+            }
         }.each { it.delete() }
     }
 
@@ -39,9 +52,12 @@ tasks.register('syncModsToServer', Copy) {
     dependsOn tasks.named('reobfJar')
 
     doFirst {
-        def names = filesToSync().collect { it.name }
+        def baseNames = getBaseNames()
         fileTree(serverModsDir).matching {
-            include names
+            baseNames.each { base ->
+                include "${base}-*.jar"
+                include "${base}.jar"
+            }
         }.each { it.delete() }
     }
 

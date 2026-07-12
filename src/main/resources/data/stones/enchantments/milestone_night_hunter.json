@@ -30,7 +30,7 @@
           "type": "stones:case",
           "cases": [
             {
-              "condition": {
+              "conditions": {
                 "type": "stones:is_day"
               },
               "actions": [
@@ -65,7 +65,7 @@
               "type": "stones:case",
               "cases": [
                 {
-                  "condition": {
+                  "conditions": {
                     "type": "stones:variable_compare",
                     "variable": "night_roll",
                     "operator": "<",

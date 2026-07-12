@@ -38,7 +38,7 @@
       "conditions": [
         {
           "type": "stones:is_ready",
-		  "name": "midas_shot"
+          "name": "midas_shot"
         },
         {
           "type": "stones:block_check",
@@ -53,7 +53,7 @@
       "actions": [
         {
           "type": "stones:cooldown",
-		  "name": "midas_shot",
+          "name": "midas_shot",
           "ticks": "$midas_cooldown"
         },
         {
@@ -150,7 +150,7 @@
               "type": "stones:case",
               "cases": [
                 {
-                  "condition": {
+                  "conditions": {
                     "type": "stones:variable_compare",
                     "variable": "roll",
                     "operator": "<",
@@ -176,7 +176,7 @@
                   ]
                 },
                 {
-                  "condition": {
+                  "conditions": {
                     "type": "stones:variable_compare",
                     "variable": "roll",
                     "operator": "<",
@@ -202,7 +202,7 @@
                   ]
                 },
                 {
-                  "condition": {
+                  "conditions": {
                     "type": "stones:variable_compare",
                     "variable": "roll",
                     "operator": "<",
@@ -228,7 +228,7 @@
                   ]
                 },
                 {
-                  "condition": {
+                  "conditions": {
                     "type": "stones:variable_compare",
                     "variable": "roll",
                     "operator": "<",

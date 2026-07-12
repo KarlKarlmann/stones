@@ -13,82 +13,86 @@ import java.util.Map;
 import java.util.Random;
 import java.util.UUID;
 
-/**
- * Erzeugt dynamische Overlay-Texturen für den Runenschrein.
- * Visualisiert das statische mathematische Layout (Sternenkonstellation) des Schreins.
- * Diese Textur ist unabhängig vom Inventar-Inhalt und wird einmalig pro Schrein generiert.
- * Die Berechnung erfolgt rein deterministisch aus der shrineId.
- */
 public class ClientRunestoneTextureManager {
-    private static final Map<UUID, ResourceLocation> TEXTURE_CACHE = new HashMap<>();
+
+    private record CacheKey(UUID id, int param) {}
+    private static final Map<CacheKey, ResourceLocation> TEXTURE_CACHE = new HashMap<>();
     
-    // Blanchitsu-Palette für das Sacred Sketching
-    private static final int COL_DARK    = (255 << 24) | (20 << 16) | (25 << 8) | 30;    // Schwarzbraun (Linien)
-    private static final int COL_YELLOW  = (255 << 24) | (149 << 16) | (229 << 8) | 228; // Kränkliches Gelb (Knoten)
-    private static final int COL_WHITE   = (255 << 24) | (224 << 16) | (245 << 8) | 245; // Off-White Highlights (Zentrum)
+    private static final int COL_DARK    = (255 << 24) | (20 << 16) | (25 << 8) | 30;    
+    private static final int COL_YELLOW  = (255 << 24) | (149 << 16) | (229 << 8) | 228; 
+    private static final int COL_WHITE   = (255 << 24) | (224 << 16) | (245 << 8) | 245; 
 
     /**
-     * Ruft die Textur für einen Schrein ab. Die Slot-Anzahl wird intern berechnet.
+     * Für den Renderer: Berechnet die Slots sauber via Single Source of Truth,
+     * chached sie dann aber anhand des maxLevels, da dieses von der BlockEntity kommt.
      */
-    public static ResourceLocation getOrCreate(UUID shrineId) {
-        return TEXTURE_CACHE.computeIfAbsent(shrineId, id -> generate(id));
+	public static ResourceLocation getOrCreate(UUID shrineId, int maxLevel) {
+			return TEXTURE_CACHE.computeIfAbsent(new CacheKey(shrineId, maxLevel), key -> {
+				int exactSlotCount;
+				
+				// Legacy Fix: Alte Schreine (Level 100) nutzen die alte Berechnung
+				if (key.param() == 100) {
+					exactSlotCount = calculateLegacySlotCount(key.id());
+				} else {
+					exactSlotCount = ShrineLayout.generateDeterministicLayout(key.id(), key.param()).size();
+				}
+				
+				return generate(key.id(), exactSlotCount);
+			});
+		}
+
+	/**
+	 * Rekonstruiert die exakte Slot-Anzahl der alten Schrein-Generation für Legacy-Texturen.
+	 */
+	private static int calculateLegacySlotCount(UUID id) {
+		long seed = (id.getMostSignificantBits() ^ id.getLeastSignificantBits());
+		java.util.Random rand = new java.util.Random(seed);
+		int count = 0;
+
+		// 1. Reguläre Runen-Slots (alte Logik)
+		for (int i = 0; i < 11; i++) {
+			float roll = rand.nextFloat();
+			if (i == 0) {
+				count++;
+			} else {
+				if (roll < 0.60f) {
+					count++;
+				}
+			}
+		}
+
+		// 2. Milestones (alte Logik)
+		count += rand.nextInt(8);
+
+		return Math.max(1, count);
+	}
+	
+    public static ResourceLocation getOrCreateExact(UUID shrineId, int exactSlotCount) {
+        if (exactSlotCount < 1) exactSlotCount = 8;
+        return TEXTURE_CACHE.computeIfAbsent(new CacheKey(shrineId, exactSlotCount), key -> generate(key.id(), key.param()));
     }
 
-    /**
-     * Repliziert die Logik aus ShrineInstance.generateRandomLayout(), 
-     * um die exakte Anzahl der Slots deterministisch zu bestimmen.
-     */
-    private static int calculateSlotCountFromId(UUID id) {
-        long seed = (id.getMostSignificantBits() ^ id.getLeastSignificantBits());
-        Random rand = new Random(seed);
-        int count = 0;
-
-        // 1. Reguläre Runen-Slots (basiert auf RUNE_UNLOCK_LEVELS, 11 mögliche Stufen)
-        for (int i = 0; i < 11; i++) {
-            float roll = rand.nextFloat();
-            if (i == 0) {
-                // Das erste Level (Lvl 1) ist immer ein Slot
-                count++;
-            } else {
-                // Für die restlichen 10 Level gibt es eine 60% Chance auf einen Slot (Minor/Major kombiniert)
-                if (roll < 0.60f) {
-                    count++;
-                }
-            }
-        }
-
-        // 2. Milestones (basiert auf POOL_MILESTONE, rand.nextInt(8) zusätzliche Slots)
-        count += rand.nextInt(8);
-
-        // Sicherheits-Fallback
-        return Math.max(1, count);
-    }
-
-    /**
-     * Generiert das unveränderliche Sternenlayout des Schreins.
-     */
-    public static ResourceLocation generate(UUID shrineId) {
+    public static ResourceLocation generate(UUID shrineId, int slotCount) {
         NativeImage img = new NativeImage(256, 256, true);
-        
-        // Hintergrund transparent (Overlay-Modus)
         for (int y = 0; y < 256; y++) {
             for (int x = 0; x < 256; x++) {
                 img.setPixelRGBA(x, y, 0); 
             }
         }
 
-        // 1. Slot-Anzahl deterministisch aus der ID berechnen
-        int slotCount = calculateSlotCountFromId(shrineId);
-
-        // 2. Layout-Mathematik beziehen (Phyllotaxis-Spirale)
         List<Vec2> positions = ShrineLayout.generateSpiralPositions(slotCount);
         List<int[]> connections = ShrineLayout.generateConnections(positions);
         
         float centerX = 128.0f;
         float centerY = 128.0f;
-        float scale = 0.85f; // Skalierung für die Blockoberfläche
 
-        // 3. Ley-Linien (Verbindungen) zeichnen
+        float scale = 0.85f; 
+        if (slotCount > 19) {
+            float baselineRadiusFactor = (float) Math.sqrt(19);
+            float currentRadiusFactor = (float) Math.sqrt(slotCount);
+            scale *= (baselineRadiusFactor / currentRadiusFactor);
+        }
+
         for (int[] conn : connections) {
             Vec2 p1 = positions.get(conn[0]);
             Vec2 p2 = positions.get(conn[1]);
@@ -96,20 +100,18 @@ public class ClientRunestoneTextureManager {
                            centerX + p2.x * scale, centerY + p2.y * scale, COL_DARK);
         }
 
-        // 4. Slots (Knotenpunkte/Sterne) zeichnen
         for (int i = 0; i < positions.size(); i++) {
             Vec2 pos = positions.get(i);
             int x = (int)(centerX + pos.x * scale);
             int y = (int)(centerY + pos.y * scale);
 
-            // Das Zentrum erhält ein markanteres Highlight
             int color = (i == 0) ? COL_WHITE : COL_YELLOW;
             int radius = (i == 0) ? 9 : 7;
             
             drawSketchCircle(img, x, y, radius, color);
         }
 
-        String name = "shrine_blueprint_" + shrineId.toString().substring(0, 8);
+        String name = "shrine_blueprint_" + shrineId.toString().substring(0, 8) + "_" + slotCount;
         return Minecraft.getInstance().getTextureManager().register(name, new DynamicTexture(img));
     }
 
@@ -143,6 +145,6 @@ public class ClientRunestoneTextureManager {
     }
 
     public static void markDirty(UUID id) {
-        TEXTURE_CACHE.remove(id);
+        TEXTURE_CACHE.entrySet().removeIf(entry -> entry.getKey().id().equals(id));
     }
 }

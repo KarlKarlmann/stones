@@ -25,13 +25,14 @@ import net.minecraft.core.particles.ParticleType;
 import net.minecraft.core.particles.ParticleOptions;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.Block; // HIER: Fehlender Import für Block hinzugefügt!
 import net.minecraft.tags.BlockTags;
 import net.minecraft.world.phys.HitResult;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.NumericTag;
 import net.minecraft.nbt.StringTag;
 import net.minecraft.nbt.Tag;
 import java.util.*;
-import net.minecraft.world.level.block.Block;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.level.ClipContext;
@@ -40,15 +41,19 @@ import net.stones.enchantment.behavior.RuneCondition;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.enchantment.Enchantment;
 import net.minecraft.world.item.enchantment.EnchantmentHelper;
+import net.stones.network.PacketSyncCombo;
+import net.stones.network.PacketSyncCooldown;
 
+/**
+ * Registriert alle Milestone Actions.
+ * Aktualisiert: Behebt den Kompilierfehler bzgl. der "effectively final" Lambda-Referenzen.
+ */
 public class MilestoneActionRegistry {
     private static final Logger LOGGER = LogManager.getLogger();
     private static final Map<String, RuneAction> ACTIONS = new HashMap<>();
 
     public static void register(RuneAction action) { ACTIONS.put(action.getId(), action); }
     public static RuneAction get(String id) { return ACTIONS.get(id); }
-    
-    // --- PARSING ENGINE (NUR NOCH $ SYNTAX) ---
     
     public static float resolveFloat(ActionContext ctx, JsonObject params, String key, float def) {
         if (!params.has(key)) return def;
@@ -130,13 +135,13 @@ public class MilestoneActionRegistry {
         Object raw = resolveObject(ctx, params, "pos");
         if (raw instanceof BlockPos bp) return Vec3.atCenterOf(bp);
         if (raw instanceof Vec3 v) return v;
-        return ctx.getPlayer().position().add(0, 1.0, 0); // Fallback
+        return ctx.getPlayer().position().add(0, 1.0, 0); 
     }
 
     public static BlockPos getTargetPos(ActionContext ctx, JsonObject params) {
         Object raw = resolveObject(ctx, params, "pos");
         if (raw instanceof BlockPos bp) return bp;
-        if (raw instanceof Vec3 v) return BlockPos.containing(v);
+        if (raw instanceof Vec3 v) return BlockPos.containing(v.x, v.y, v.z);
         
         BlockPos pos = ctx.getVariable("blockPos", BlockPos.class);
         if (pos == null) {
@@ -207,6 +212,43 @@ public class MilestoneActionRegistry {
 				});
 			}
 		});
+
+        // ==========================================
+        // NEU: STONES:GET_COMBO (EXPLIZITES HOLLEN)
+        // ==========================================
+        register(new RuneAction() {
+            @Override public String getId() { return "stones:get_combo"; }
+            @Override public void execute(ActionContext ctx, JsonObject params) {
+                String id = resolveString(ctx, params, "id", ctx.getRuneId());
+                String into = resolveString(ctx, params, "into", id);
+
+                Object targetObj = resolveObject(ctx, params, "target");
+                final net.minecraft.world.entity.LivingEntity targetEntity;
+                if (targetObj instanceof net.minecraft.world.entity.LivingEntity le) {
+                    targetEntity = le;
+                } else {
+                    targetEntity = ctx.getPlayer();
+                }
+
+                CompoundTag persist = targetEntity.getPersistentData();
+                long now = targetEntity.level().getGameTime();
+
+                long expire = persist.getLong("stones_combo_" + id + "_expire");
+                float count = 0.0f;
+                if (expire == -1L || (expire > 0L && now < expire)) {
+                    count = persist.getFloat("stones_combo_" + id + "_count");
+                }
+
+                long remaining = (expire == -1L) ? -1L : Math.max(0L, expire - now);
+
+                // Exponiere die Werte flach und sauber im Event-Context
+                ctx.setVariable(into, count);
+                ctx.setVariable(into + "_count", count);
+                ctx.setVariable(into + "_timeout", (float) remaining);
+                ctx.setVariable(into + "_max", (float) persist.getInt("stones_combo_" + id + "_max"));
+                ctx.setVariable(into + "_target", targetEntity);
+            }
+        });
 		
 		register(new RuneAction() {
 			@Override public String getId() { return "stones:update_combo"; }
@@ -215,20 +257,43 @@ public class MilestoneActionRegistry {
 			    if (player == null) return;
 			    
 				String id = resolveString(ctx, params, "id", ctx.getRuneId());
-				int count = resolveInt(ctx, params, "count", 0);
-				
-				if (count <= 0) {
-					net.minecraftforge.network.PacketDistributor.PacketTarget target = net.minecraftforge.network.PacketDistributor.PLAYER.with(() -> player);
-					net.stones.StonesMod.PACKET_HANDLER.send(target, new net.stones.network.PacketSyncCombo(id, 0, 1, "minecraft:textures/particle/glint.png", 0, 0, 0, 0, 0, 0, 0, 0));
+				float count = params.has("count") ? resolveFloat(ctx, params, "count", 1.0f) : resolveFloat(ctx, params, "value", 1.0f);
+
+                Object targetObj = resolveObject(ctx, params, "target");
+                final net.minecraft.world.entity.LivingEntity targetEntity;
+                if (targetObj instanceof net.minecraft.world.entity.LivingEntity le) {
+                    targetEntity = le;
+                } else {
+                    targetEntity = player;
+                }
+
+                CompoundTag persist = targetEntity.getPersistentData();
+                long now = player.level().getGameTime();
+
+                int max = resolveInt(ctx, params, "max", 5);
+                String texture = resolveString(ctx, params, "texture", "minecraft:textures/particle/glint.png");
+                float size = resolveFloat(ctx, params, "size", 0.4f);
+                float radius = resolveFloat(ctx, params, "radius", 1.2f);
+                float speed = resolveFloat(ctx, params, "speed", 0.1f);
+                int timeout = resolveInt(ctx, params, "timeout", 100);
+
+				if (count <= 0.0f) {
+                    persist.putFloat("stones_combo_" + id + "_count", 0.0f);
+                    persist.putLong("stones_combo_" + id + "_expire", 0L);
+                    persist.remove("stones_combo_" + id + "_max");
+                    persist.remove("stones_combo_" + id + "_texture");
+                    persist.remove("stones_combo_" + id + "_size");
+                    persist.remove("stones_combo_" + id + "_radius");
+                    persist.remove("stones_combo_" + id + "_speed");
+                    persist.remove("stones_combo_" + id + "_color");
+
+					net.minecraftforge.network.PacketDistributor.PacketTarget target = 
+                        net.minecraftforge.network.PacketDistributor.TRACKING_ENTITY_AND_SELF.with(() -> targetEntity);
+					net.stones.StonesMod.PACKET_HANDLER.send(target, new net.stones.network.PacketSyncCombo(
+                        id, targetEntity.getId(), 0, 1, "minecraft:textures/particle/glint.png", 0, 0, 0, 0, 0, 0, 0, 0
+                    ));
 					return;
 				}
-
-				int max = resolveInt(ctx, params, "max", 5);
-				String texture = resolveString(ctx, params, "texture", "minecraft:textures/particle/glint.png");
-				float size = resolveFloat(ctx, params, "size", 0.4f);
-				float radius = resolveFloat(ctx, params, "radius", 1.2f);
-				float speed = resolveFloat(ctx, params, "speed", 0.1f);
-				int timeout = resolveInt(ctx, params, "timeout", 100);
 
 				float r = 1f, g = 1f, b = 1f, a = 1f;
 				String hexStr = resolveString(ctx, params, "color", "");
@@ -244,12 +309,152 @@ public class MilestoneActionRegistry {
 					}
 				}
 
-				net.minecraftforge.network.PacketDistributor.PacketTarget target = net.minecraftforge.network.PacketDistributor.PLAYER.with(() -> player);
+                persist.putFloat("stones_combo_" + id + "_count", count);
+
+                long nextExpire;
+                int clientTimeout;
+                if (timeout == -1) {
+                    nextExpire = -1L;
+                    clientTimeout = 999999999;
+                } else {
+                    nextExpire = now + timeout;
+                    clientTimeout = timeout;
+                }
+                
+                persist.putLong("stones_combo_" + id + "_expire", nextExpire);
+                persist.putInt("stones_combo_" + id + "_max", max);
+                persist.putString("stones_combo_" + id + "_texture", texture);
+                persist.putFloat("stones_combo_" + id + "_size", size);
+                persist.putFloat("stones_combo_" + id + "_radius", radius);
+                persist.putFloat("stones_combo_" + id + "_speed", speed);
+                persist.putString("stones_combo_" + id + "_color", hexStr);
+
+				net.minecraftforge.network.PacketDistributor.PacketTarget target = 
+                    net.minecraftforge.network.PacketDistributor.TRACKING_ENTITY_AND_SELF.with(() -> targetEntity);
 				net.stones.StonesMod.PACKET_HANDLER.send(target, new net.stones.network.PacketSyncCombo(
-					id, count, max, texture, size, radius, speed, r, g, b, a, timeout
+					id, targetEntity.getId(), (int)count, max, texture, size, radius, speed, r, g, b, a, clientTimeout
 				));
 			}
 		});
+
+        // ==========================================
+        // DEDIZIERTES COMBO-PAKET FÜR MINECRAFT RUNEN
+        // ==========================================
+        register(new RuneAction() {
+            @Override public String getId() { return "stones:add_combo"; }
+            @Override public void execute(ActionContext ctx, JsonObject params) {
+                ServerPlayer player = ctx.getPlayer();
+                if (player == null) return;
+
+                String id = resolveString(ctx, params, "id", ctx.getRuneId());
+                float value = resolveFloat(ctx, params, "value", 1.0f);
+                float max = resolveFloat(ctx, params, "max", 5.0f);
+                int timeout = resolveInt(ctx, params, "timeout", 100);
+                float retained = resolveFloat(ctx, params, "retained", 0.0f);
+
+                Object targetObj = resolveObject(ctx, params, "target");
+                final net.minecraft.world.entity.LivingEntity targetEntity;
+                if (targetObj instanceof net.minecraft.world.entity.LivingEntity le) {
+                    targetEntity = le;
+                } else {
+                    targetEntity = player;
+                }
+
+                String texture = resolveString(ctx, params, "texture", "minecraft:textures/particle/glint.png");
+                float size = resolveFloat(ctx, params, "size", 0.4f);
+                float radius = resolveFloat(ctx, params, "radius", 1.2f);
+                float speed = resolveFloat(ctx, params, "speed", 0.1f);
+                
+                float r = 1f, g = 1f, b = 1f, a = 1f;
+                String hexStr = resolveString(ctx, params, "color", "");
+                if (!hexStr.isEmpty()) {
+                    String hex = hexStr.replace("#", "");
+                    if (hex.length() >= 6) {
+                        try {
+                            r = Integer.valueOf(hex.substring(0, 2), 16) / 255f;
+                            g = Integer.valueOf(hex.substring(2, 4), 16) / 255f;
+                            b = Integer.valueOf(hex.substring(4, 6), 16) / 255f;
+                            if (hex.length() == 8) a = Integer.valueOf(hex.substring(6, 8), 16) / 255f;
+                        } catch (Exception ignored) {}
+                    }
+                }
+
+                CompoundTag persist = targetEntity.getPersistentData();
+                long now = player.level().getGameTime();
+
+                long expireTick = persist.getLong("stones_combo_" + id + "_expire");
+                float currentCount = 0.0f;
+                if (expireTick == -1L || now < expireTick) {
+                    currentCount = persist.getFloat("stones_combo_" + id + "_count");
+                }
+
+                currentCount += value;
+
+                if (currentCount >= max) {
+                    if (params.has("on_max")) {
+                        executeActionList(ctx, params.getAsJsonArray("on_max"));
+                    }
+                    
+                    persist.putFloat("stones_combo_" + id + "_count", retained);
+                    
+                    if (retained > 0) {
+                        long nextExpire = (timeout == -1) ? -1L : (now + timeout);
+                        int clientTimeout = (timeout == -1) ? 999999999 : timeout;
+
+                        persist.putLong("stones_combo_" + id + "_expire", nextExpire);
+                        net.minecraftforge.network.PacketDistributor.PacketTarget target = 
+                            net.minecraftforge.network.PacketDistributor.TRACKING_ENTITY_AND_SELF.with(() -> targetEntity);
+                        net.stones.StonesMod.PACKET_HANDLER.send(target,
+                            new PacketSyncCombo(id, targetEntity.getId(), (int)retained, (int)max, texture, size, radius, speed, r, g, b, a, clientTimeout)
+                        );
+                    } else {
+                        persist.putLong("stones_combo_" + id + "_expire", 0L);
+                        persist.remove("stones_combo_" + id + "_max");
+                        persist.remove("stones_combo_" + id + "_texture");
+                        persist.remove("stones_combo_" + id + "_size");
+                        persist.remove("stones_combo_" + id + "_radius");
+                        persist.remove("stones_combo_" + id + "_speed");
+                        persist.remove("stones_combo_" + id + "_color");
+
+                        net.minecraftforge.network.PacketDistributor.PacketTarget target = 
+                            net.minecraftforge.network.PacketDistributor.TRACKING_ENTITY_AND_SELF.with(() -> targetEntity);
+                        net.stones.StonesMod.PACKET_HANDLER.send(target,
+                            new PacketSyncCombo(id, targetEntity.getId(), 0, (int)max, texture, size, radius, speed, r, g, b, a, 0)
+                        );
+                    }
+                } else {
+                    if (params.has("on_add")) {
+                        executeActionList(ctx, params.getAsJsonArray("on_add"));
+                    }
+
+                    persist.putFloat("stones_combo_" + id + "_count", currentCount);
+                    
+                    long nextExpire;
+                    int clientTimeout;
+                    if (timeout == -1) {
+                        nextExpire = -1L;
+                        clientTimeout = 999999999;
+                    } else {
+                        nextExpire = now + timeout;
+                        clientTimeout = timeout;
+                    }
+
+                    persist.putLong("stones_combo_" + id + "_expire", nextExpire);
+                    persist.putInt("stones_combo_" + id + "_max", (int)max);
+                    persist.putString("stones_combo_" + id + "_texture", texture);
+                    persist.putFloat("stones_combo_" + id + "_size", size);
+                    persist.putFloat("stones_combo_" + id + "_radius", radius);
+                    persist.putFloat("stones_combo_" + id + "_speed", speed);
+                    persist.putString("stones_combo_" + id + "_color", hexStr);
+
+                    net.minecraftforge.network.PacketDistributor.PacketTarget target = 
+                        net.minecraftforge.network.PacketDistributor.TRACKING_ENTITY_AND_SELF.with(() -> targetEntity);
+                    net.stones.StonesMod.PACKET_HANDLER.send(target,
+                        new PacketSyncCombo(id, targetEntity.getId(), (int)currentCount, (int)max, texture, size, radius, speed, r, g, b, a, clientTimeout)
+                    );
+                }
+            }
+        });
 
         register(new RuneAction() {
             @Override public String getId() { return "stones:get_persistent_var"; }
@@ -309,7 +514,6 @@ public class MilestoneActionRegistry {
             }
         });
 
-        // === REFLECTION ===
         register(new RuneAction() {
             @Override public String getId() { return "stones:invoke"; }
             @Override public void execute(ActionContext ctx, JsonObject params) {
@@ -424,7 +628,8 @@ public class MilestoneActionRegistry {
             @Override public void execute(ActionContext ctx, JsonObject params) {
                 float radius = resolveFloat(ctx, params, "radius", 3.0f);
                 boolean fire = params.has("fire") && params.get("fire").getAsBoolean();
-                ctx.getPlayer().level().explode(ctx.getPlayer(), ctx.getPlayer().getX(), ctx.getPlayer().getY(), ctx.getPlayer().getZ(), radius, fire, Level.ExplosionInteraction.NONE);
+                Vec3 pos = resolveVec3(ctx, params);
+                ctx.getPlayer().level().explode(ctx.getPlayer(), pos.x, pos.y, pos.z, radius, fire, Level.ExplosionInteraction.NONE);
             }
         });
 
@@ -449,9 +654,6 @@ public class MilestoneActionRegistry {
             }
         });
 
-        // ==========================================
-        // DIE NEUE COOLDOWN ACTION (Keine Potion-Effekte mehr!)
-        // ==========================================
         register(new RuneAction() {
             @Override public String getId() { return "stones:cooldown"; }
             @Override public void execute(ActionContext ctx, JsonObject params) {
@@ -463,17 +665,11 @@ public class MilestoneActionRegistry {
                     return;
                 }
 
-                // Server-seitig: Zeit in Ticks berechnen
                 long endTick = ctx.getPlayer().level().getGameTime() + (long)ticks;
-                
-                // Im NBT für die Conditions sichern
                 ctx.getPlayer().getPersistentData().putLong("cd_" + name, endTick);
 
-                // Client informieren (für die Actionbar)
                 net.minecraftforge.network.PacketDistributor.PacketTarget target = net.minecraftforge.network.PacketDistributor.PLAYER.with(() -> ctx.getPlayer());
-                net.stones.StonesMod.PACKET_HANDLER.send(target, new net.stones.network.PacketSyncCooldown(name, endTick));
-                
-                LOGGER.info("[Stones-Debug] Timestamp-Cooldown gesetzt für: {} (EndTick: {})", name, endTick);
+                net.stones.StonesMod.PACKET_HANDLER.send(target, new PacketSyncCooldown(name, endTick));
             }
         });
 
@@ -544,7 +740,6 @@ public class MilestoneActionRegistry {
             }
         });
         
-        // --- WELT-AKTIONEN ---
         register(new RuneAction() {
             @Override public String getId() { return "stones:set_block"; }
             @Override public void execute(ActionContext ctx, JsonObject params) {
@@ -617,8 +812,8 @@ public class MilestoneActionRegistry {
                 if (params.has("cases")) {
                     for (JsonElement e : params.getAsJsonArray("cases")) {
                         JsonObject caseObj = e.getAsJsonObject();
-                        if (caseObj.has("condition")) {
-                            JsonObject condObj = caseObj.getAsJsonObject("condition");
+                        if (caseObj.has("conditions")) {
+                            JsonObject condObj = caseObj.getAsJsonObject("conditions");
                             RuneCondition condition = ConditionRegistry.create(condObj.get("type").getAsString(), condObj);
                             if (condition != null && condition.test(ctx)) {
                                 executeActionList(ctx, caseObj.getAsJsonArray("actions"));

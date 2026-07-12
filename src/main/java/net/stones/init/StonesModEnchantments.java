@@ -126,7 +126,8 @@ public class StonesModEnchantments {
         "milestone_midas_touch",
         "major_muffling",
         "major_impact",
-        "major_holy_magic_power"
+        "major_holy_magic_power",
+        "milestone_aeoncore"
     };
 
     // Feste Slots für die Hauptmod Stones

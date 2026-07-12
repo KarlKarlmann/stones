@@ -17,7 +17,6 @@ import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
@@ -26,7 +25,6 @@ import net.stones.data.ShrineInstance;
 import net.stones.data.ShrineSavedData;
 import net.stones.gui.RunestoneMenu;
 import net.stones.init.StonesModBlockEntities;
-import net.stones.client.renderer.ClientRunestoneTextureManager;
 
 import javax.annotation.Nullable;
 import java.util.*;
@@ -40,6 +38,9 @@ public class RunestoneBlockEntity extends BlockEntity implements MenuProvider {
     // Client-seitiger Cache für die Item-Icons (wird für die Textur-Generierung genutzt)
     private final List<ItemStack> clientInventory = new ArrayList<>();
     private boolean textureDirty = true;
+    
+    // Nur maxLevel wird im NBT gehalten. Standard ist 100. Kein SlotCount-Quatsch mehr!
+    private int clientMaxLevel = 100;
 
     public RunestoneBlockEntity(BlockPos pos, BlockState state) {
         super(StonesModBlockEntities.RUNESTONE.get(), pos, state);
@@ -70,20 +71,14 @@ public class RunestoneBlockEntity extends BlockEntity implements MenuProvider {
                 if (found >= maxGuardians) break;
                 
                 boolean placed = false;
-                
-                // Wir scannen von leicht oben nach unten nach einem soliden Untergrund
                 for (int yOff = 3; yOff >= -4; yOff--) {
                     BlockPos candidate = pos.above(yOff);
-                    
                     if (level.getBlockState(candidate).isFaceSturdy(level, candidate, Direction.UP)) {
                         BlockPos foot = candidate.above();
                         BlockPos head = candidate.above(2);
-                        
-                        // Prüfen ob die 2 Blöcke darüber wirklich frei von Hitboxen/Kollisionen sind
                         if (level.getBlockState(foot).getCollisionShape(level, foot).isEmpty() &&
                             level.getBlockState(head).getCollisionShape(level, head).isEmpty()) {
                             
-                            // Leichtes Schweben knapp über dem Boden für den Creepy-Faktor (10cm - 50cm hoch)
                             double hoverOffset = 0.1 + level.random.nextDouble() * 0.4;
                             guardianSpots.add(new Vec3(foot.getX() + 0.5, foot.getY() + hoverOffset, foot.getZ() + 0.5));
                             found++;
@@ -93,7 +88,6 @@ public class RunestoneBlockEntity extends BlockEntity implements MenuProvider {
                     }
                 }
                 
-                // Fallback: Falls wirklich kein Boden da ist, aber zumindest direkt neben dem Stein Platz in der Luft ist
                 if (!placed) {
                     BlockPos foot = pos;
                     BlockPos head = pos.above();
@@ -110,12 +104,15 @@ public class RunestoneBlockEntity extends BlockEntity implements MenuProvider {
 
     public void setShrineId(UUID id) {
         this.shrineId = id;
+        if (level instanceof ServerLevel serverLevel && id != null) {
+            ShrineInstance shrine = ShrineSavedData.get(serverLevel).getShrine(id);
+            if (shrine != null) {
+                shrine.setLocation(GlobalPos.of(level.dimension(), worldPosition));
+                this.clientMaxLevel = shrine.getMaxLevel();
+            }
+        }
         setChanged();
         if (level != null) {
-            if (level instanceof ServerLevel serverLevel && id != null) {
-                ShrineInstance shrine = ShrineSavedData.get(serverLevel).getShrine(id);
-                if (shrine != null) shrine.setLocation(GlobalPos.of(level.dimension(), worldPosition));
-            }
             level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), 3);
         }
     }
@@ -126,29 +123,26 @@ public class RunestoneBlockEntity extends BlockEntity implements MenuProvider {
     
     public boolean isTextureDirty() { return textureDirty; }
     public void markTextureClean() { this.textureDirty = false; }
+    
+    public int getClientMaxLevel() { return this.clientMaxLevel; }
 
     @Override
     public Component getDisplayName() { 
         return Component.translatable("container.stones.runestone"); 
     }
 
-    // --- NEU: Hilfsmethode zum fehlerfreien Öffnen des Menüs ---
     public void openMenu(ServerPlayer player) {
         if (level instanceof ServerLevel serverLevel && shrineId != null) {
             ShrineInstance shrine = ShrineSavedData.get(serverLevel).getShrine(shrineId);
             if (shrine != null) {
                 NetworkHooks.openScreen(player, this, buffer -> {
-                    // WICHTIG: Die Reihenfolge MUSS dem RunestoneMenu Client-Konstruktor entsprechen!
-                    // 1. Inventargröße
                     buffer.writeInt(shrine.getInventory().getSlots());
-                    // 2. Layout Daten
                     buffer.writeInt(shrine.getLayout().size());
                     for (ShrineInstance.SlotConfig cfg : shrine.getLayout()) {
                         buffer.writeEnum(cfg.type);
                         buffer.writeInt(cfg.requiredLevel);
                         buffer.writeInt(cfg.inventoryIndex);
                     }
-                    // 3. Eindeutige Schrein-ID für den Bindungs-Check
                     buffer.writeUUID(this.shrineId);
                 });
             }
@@ -170,6 +164,13 @@ public class RunestoneBlockEntity extends BlockEntity implements MenuProvider {
         super.load(nbt);
         if (nbt.contains("shrineId")) this.shrineId = nbt.getUUID("shrineId");
         
+        // Liest ausschließlich maxLevel aus den NBTs. Fehlt es, wird 100 genommen
+        if (nbt.contains("maxLevel")) {
+            this.clientMaxLevel = nbt.getInt("maxLevel");
+        } else {
+            this.clientMaxLevel = 100;
+        }
+
         if (nbt.contains("owners", Tag.TAG_LIST)) {
             clientOwners.clear();
             ListTag list = nbt.getList("owners", Tag.TAG_COMPOUND);
@@ -182,7 +183,7 @@ public class RunestoneBlockEntity extends BlockEntity implements MenuProvider {
             for (int i = 0; i < list.size(); i++) {
                 clientInventory.add(ItemStack.of(list.getCompound(i)));
             }
-            this.textureDirty = true; // Neu zeichnen, wenn sich das Inventar ändert
+            this.textureDirty = true;
         }
         guardianSpots.clear();
     }
@@ -191,6 +192,7 @@ public class RunestoneBlockEntity extends BlockEntity implements MenuProvider {
     protected void saveAdditional(CompoundTag nbt) {
         super.saveAdditional(nbt);
         if (this.shrineId != null) nbt.putUUID("shrineId", this.shrineId);
+        nbt.putInt("maxLevel", this.clientMaxLevel);
     }
 
     @Override
@@ -198,10 +200,13 @@ public class RunestoneBlockEntity extends BlockEntity implements MenuProvider {
         CompoundTag tag = super.getUpdateTag();
         if (this.shrineId != null) {
             tag.putUUID("shrineId", this.shrineId);
+            tag.putInt("maxLevel", this.clientMaxLevel);
+            
             if (level instanceof ServerLevel serverLevel) {
                 ShrineInstance shrine = ShrineSavedData.get(serverLevel).getShrine(shrineId);
                 if (shrine != null) {
-                    // Owners sync
+                    tag.putInt("maxLevel", shrine.getMaxLevel());
+                    
                     ListTag ownerList = new ListTag();
                     for (UUID owner : shrine.getOwners()) {
                         CompoundTag t = new CompoundTag();
@@ -210,7 +215,6 @@ public class RunestoneBlockEntity extends BlockEntity implements MenuProvider {
                     }
                     tag.put("owners", ownerList);
 
-                    // Inventory sync für den Mirror-Effekt
                     ListTag invList = new ListTag();
                     for (int i = 0; i < shrine.getInventory().getSlots(); i++) {
                         ItemStack s = shrine.getInventory().getStackInSlot(i);
