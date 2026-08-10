@@ -34,7 +34,7 @@ public class RunestoneBlockEntity extends BlockEntity implements MenuProvider {
     private UUID shrineId;
     private final Set<UUID> clientOwners = new HashSet<>();
     private final List<Vec3> guardianSpots = new ArrayList<>();
-    
+	private long lastAttackWarningTick = 0;    
     // Client-seitiger Cache für die Item-Icons (wird für die Textur-Generierung genutzt)
     private final List<ItemStack> clientInventory = new ArrayList<>();
     private boolean textureDirty = true;
@@ -46,61 +46,76 @@ public class RunestoneBlockEntity extends BlockEntity implements MenuProvider {
         super(StonesModBlockEntities.RUNESTONE.get(), pos, state);
     }
 
-    public List<Vec3> getGuardianSpots() {
-        if (guardianSpots.isEmpty() && !clientOwners.isEmpty()) {
-            calculateSpots();
-        }
-        return guardianSpots;
-    }
+	public List<Vec3> getGuardianSpots() {
+		if (guardianSpots.isEmpty()) {
+			if (level instanceof ServerLevel serverLevel && shrineId != null) {
+				ShrineInstance shrine = ShrineSavedData.get(serverLevel).getShrine(shrineId);
+				if (shrine != null && !shrine.getOwners().isEmpty()) {
+					calculateSpotsForCount(shrine.getOwners().size());
+				}
+			} else if (!clientOwners.isEmpty()) {
+				calculateSpotsForCount(clientOwners.size());
+			}
+		}
+		return guardianSpots;
+	}
 
-    private void calculateSpots() {
-        guardianSpots.clear();
-        if (level == null) return;
-        BlockPos center = this.worldPosition;
-        int maxGuardians = clientOwners.size();
-        int found = 0;
-        for (int r = 2; r <= 5 && found < maxGuardians; r++) {
-            List<BlockPos> ring = new ArrayList<>();
-            for (int x = -r; x <= r; x++) {
-                for (int z = -r; z <= r; z++) {
-                    if (Math.abs(x) == r || Math.abs(z) == r) ring.add(center.offset(x, 0, z));
-                }
-            }
-            Collections.shuffle(ring);
-            for (BlockPos pos : ring) {
-                if (found >= maxGuardians) break;
-                
-                boolean placed = false;
-                for (int yOff = 3; yOff >= -4; yOff--) {
-                    BlockPos candidate = pos.above(yOff);
-                    if (level.getBlockState(candidate).isFaceSturdy(level, candidate, Direction.UP)) {
-                        BlockPos foot = candidate.above();
-                        BlockPos head = candidate.above(2);
-                        if (level.getBlockState(foot).getCollisionShape(level, foot).isEmpty() &&
-                            level.getBlockState(head).getCollisionShape(level, head).isEmpty()) {
-                            
-                            double hoverOffset = 0.1 + level.random.nextDouble() * 0.4;
-                            guardianSpots.add(new Vec3(foot.getX() + 0.5, foot.getY() + hoverOffset, foot.getZ() + 0.5));
-                            found++;
-                            placed = true;
-                            break;
-                        }
-                    }
-                }
-                
-                if (!placed) {
-                    BlockPos foot = pos;
-                    BlockPos head = pos.above();
-                    if (level.getBlockState(foot).getCollisionShape(level, foot).isEmpty() &&
-                        level.getBlockState(head).getCollisionShape(level, head).isEmpty()) {
-                        
-                        guardianSpots.add(new Vec3(foot.getX() + 0.5, foot.getY() + 0.2, foot.getZ() + 0.5));
-                        found++;
-                    }
-                }
-            }
-        }
-    }
+	private void calculateSpotsForCount(int maxGuardians) {
+		guardianSpots.clear();
+		if (level == null) return;
+		BlockPos center = this.worldPosition;
+		int found = 0;
+		for (int r = 2; r <= 5 && found < maxGuardians; r++) {
+			List<BlockPos> ring = new ArrayList<>();
+			for (int x = -r; x <= r; x++) {
+				for (int z = -r; z <= r; z++) {
+					if (Math.abs(x) == r || Math.abs(z) == r) ring.add(center.offset(x, 0, z));
+				}
+			}
+			Collections.shuffle(ring);
+			for (BlockPos pos : ring) {
+				if (found >= maxGuardians) break;
+				
+				boolean placed = false;
+				for (int yOff = 3; yOff >= -4; yOff--) {
+					BlockPos candidate = pos.above(yOff);
+					if (level.getBlockState(candidate).isFaceSturdy(level, candidate, Direction.UP)) {
+						BlockPos foot = candidate.above();
+						BlockPos head = candidate.above(2);
+						if (level.getBlockState(foot).getCollisionShape(level, foot).isEmpty() &&
+							level.getBlockState(head).getCollisionShape(level, head).isEmpty()) {
+							
+							double hoverOffset = 0.1 + level.random.nextDouble() * 0.4;
+							guardianSpots.add(new Vec3(foot.getX() + 0.5, foot.getY() + hoverOffset, foot.getZ() + 0.5));
+							found++;
+							placed = true;
+							break;
+						}
+					}
+				}
+				
+				if (!placed) {
+					BlockPos foot = pos;
+					BlockPos head = pos.above();
+					if (level.getBlockState(foot).getCollisionShape(level, foot).isEmpty() &&
+						level.getBlockState(head).getCollisionShape(level, head).isEmpty()) {
+						
+						guardianSpots.add(new Vec3(foot.getX() + 0.5, foot.getY() + 0.2, foot.getZ() + 0.5));
+						found++;
+					}
+				}
+			}
+		}
+	}
+
+	public long getLastAttackWarningTick() {
+		return this.lastAttackWarningTick;
+	}
+
+	public void setLastAttackWarningTick(long tick) {
+		this.lastAttackWarningTick = tick;
+		this.setChanged(); // Funktioniert hier sauber, da BlockEntity!
+	}
 
     public void setShrineId(UUID id) {
         this.shrineId = id;

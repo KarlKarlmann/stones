@@ -10,6 +10,7 @@ import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.registries.ForgeRegistries;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import net.stones.init.StonesModConfig; // Import der Konfigurationsklasse
 
 import javax.annotation.Nullable;
 import java.io.InputStream;
@@ -25,8 +26,10 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Die finale Reflection-Engine.
+ * Die finale, gehärtete Reflection-Engine.
  * Unterstützt Hierarchie-Lookup, Typ-Konvertierung und Aliase.
+ * Enthält ein integriertes Blacklist-Sicherheitssystem gegen RCE und schädliche Datapacks.
+ * Kombiniert eine hartcodierte Core-Sperre mit einer über die Serverkonfiguration editierbaren Blacklist.
  */
 public class ReflectionInvoker {
     private static final Logger LOGGER = LogManager.getLogger();
@@ -61,6 +64,47 @@ public class ReflectionInvoker {
         }
     }
 
+    /**
+     * Zentrales Sicherheits-Guard-System.
+     * Blockiert den Zugriff auf gefährliche Klassen, Pakete und System-APIs.
+     * Prüft sowohl die unumgängliche Kern-Blacklist als auch die Serverkonfiguration.
+     */
+    private static boolean isClassForbidden(String className) {
+        if (className == null) return false;
+        String lower = className.toLowerCase(java.util.Locale.ROOT).trim();
+        
+        // 1. Unumgänglicher, hartcodierter Kern-Schutz gegen RCE
+        if (lower.contains("java.lang.runtime") ||
+            lower.contains("java.lang.process") ||
+            lower.contains("java.lang.system") ||
+            lower.contains("java.io.") ||
+            lower.contains("java.nio.") ||
+            lower.contains("java.lang.reflect.") ||
+            lower.contains("java.net.") ||
+            lower.contains("sun.misc.unsafe")) {
+            return true;
+        }
+
+        // 2. Dynamischer Abgleich mit der konfigurierbaren Blacklist des Serverbesitzers
+        try {
+            List<? extends String> configBlacklist = StonesModConfig.ADDITIONAL_REFLECTION_BLACKLIST.get();
+            if (configBlacklist != null) {
+                for (String entry : configBlacklist) {
+                    if (entry != null && !entry.trim().isEmpty()) {
+                        String cleanEntry = entry.toLowerCase(java.util.Locale.ROOT).trim();
+                        if (lower.contains(cleanEntry)) {
+                            return true;
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            // Fängt Fälle ab, in denen die Forge-Konfiguration beim allerersten Registrieren noch nicht geladen ist
+        }
+
+        return false;
+    }
+
     public static Object execute(ServerPlayer player, Map<String, Object> vars, ReflectionCallParser.ParsedCall call, List<Object> resolvedValues) {
         Object current = resolveRoot(player, vars, call.root);
         if (current == null) return null;
@@ -75,6 +119,11 @@ public class ReflectionInvoker {
 
     private static Object invokeTypedMethod(Object target, ReflectionCallParser.ParsedCall call, List<Object> resolvedValues) {
         final Class<?> targetClass = target.getClass();
+        if (isClassForbidden(targetClass.getName())) {
+            LOGGER.warn("[Stones Security] Blockierter Reflection-Aufruf auf verbotener Zielklasse: {}", targetClass.getName());
+            return null;
+        }
+        
         final Class<?>[] paramTypes = getParamTypes(call.args, resolvedValues);
         String cacheKey = targetClass.getName() + "." + call.method + serializeTypes(paramTypes);
         
@@ -90,13 +139,16 @@ public class ReflectionInvoker {
     }
 
     private static @Nullable Method findMethodHierarchical(Class<?> clazz, String name, Class<?>[] types) {
+        if (clazz == null || isClassForbidden(clazz.getName())) return null;
         Class<?> current = clazz;
         while (current != null && current != Object.class) {
+            if (isClassForbidden(current.getName())) return null;
             ClassMapping cm = MAPPING_DATA.get(current.getName());
             if (cm != null && cm.methods.containsKey(name)) {
                 for (MemberData data : cm.methods.get(name)) {
                     try {
                         Class<?> originClass = Class.forName(data.origin);
+                        if (isClassForbidden(originClass.getName())) return null;
                         try {
                             Method m = originClass.getDeclaredMethod(data.srg, types);
                             m.setAccessible(true);
@@ -122,6 +174,11 @@ public class ReflectionInvoker {
     public static void setField(Object target, String fieldName, Object value) {
         try {
             Class<?> targetClass = target.getClass();
+            if (isClassForbidden(targetClass.getName())) {
+                LOGGER.warn("[Stones Security] Blockierter Feld-Schreibzugriff auf verbotener Klasse: {}", targetClass.getName());
+                return;
+            }
+            
             String cacheKey = targetClass.getName() + "." + fieldName;
             Field f = FIELD_CACHE.computeIfAbsent(cacheKey, k -> findFieldHierarchical(targetClass, fieldName));
             if (f != null) {
@@ -131,13 +188,16 @@ public class ReflectionInvoker {
     }
 
     private static @Nullable Field findFieldHierarchical(Class<?> clazz, String name) {
+        if (clazz == null || isClassForbidden(clazz.getName())) return null;
         Class<?> current = clazz;
         while (current != null && current != Object.class) {
+            if (isClassForbidden(current.getName())) return null;
             ClassMapping cm = MAPPING_DATA.get(current.getName());
             if (cm != null && cm.fields.containsKey(name)) {
                 MemberData data = cm.fields.get(name);
                 try {
                     Class<?> originClass = Class.forName(data.origin);
+                    if (isClassForbidden(originClass.getName())) return null;
                     try {
                         Field f = originClass.getDeclaredField(data.srg);
                         f.setAccessible(true);
@@ -171,8 +231,14 @@ public class ReflectionInvoker {
 
     @Nullable
     public static Object instantiate(String className, List<ReflectionCallParser.Argument> args, List<Object> resolvedValues) {
+        if (isClassForbidden(className)) {
+            LOGGER.warn("[Stones Security] Instanziierung einer verbotenen Klasse blockiert: {}", className);
+            return null;
+        }
         try {
             Class<?> clazz = Class.forName(className);
+            if (isClassForbidden(clazz.getName())) return null;
+            
             Class<?>[] paramTypes = getParamTypes(args, resolvedValues);
             for (Constructor<?> c : clazz.getDeclaredConstructors()) {
                 if (c.getParameterCount() == args.size() && isAssignable(paramTypes, c.getParameterTypes())) {
@@ -183,8 +249,6 @@ public class ReflectionInvoker {
         } catch (Exception ignored) {}
         return null;
     }
-
-
 
     private static boolean isNumeric(Class<?> n) {
         return Number.class.isAssignableFrom(n) || n == double.class || n == float.class || n == int.class || n == long.class;
@@ -208,6 +272,10 @@ public class ReflectionInvoker {
     }
 
     public static Class<?> resolveClass(String name) {
+        if (isClassForbidden(name)) {
+            LOGGER.warn("[Stones Security] Auflösung einer verbotenen Klasse blockiert: {}", name);
+            return Object.class;
+        }
         return switch (name.trim().toLowerCase()) {
             case "int" -> int.class;
             case "float" -> float.class;
@@ -217,7 +285,13 @@ public class ReflectionInvoker {
             case "rl", "resourcelocation" -> ResourceLocation.class;
             case "vec3" -> Vec3.class;
             default -> {
-                try { yield Class.forName(name.trim()); } 
+                try { 
+                    Class<?> resolved = Class.forName(name.trim()); 
+                    if (isClassForbidden(resolved.getName())) {
+                        yield Object.class;
+                    }
+                    yield resolved;
+                } 
                 catch (ClassNotFoundException e) { yield Object.class; }
             }
         };
@@ -228,7 +302,6 @@ public class ReflectionInvoker {
         for (int i = 0; i < source.length; i++) {
             if (target[i].isAssignableFrom(source[i])) continue;
             
-            // FIX: Strings aus JSON args als kompatibel für Primitivtypen markieren
             if (isNumeric(target[i]) && (isNumeric(source[i]) || source[i] == String.class)) continue;
             if (target[i].isPrimitive() && (Number.class.isAssignableFrom(source[i]) || source[i] == String.class)) continue;
             if ((target[i] == boolean.class || target[i] == Boolean.class) && (source[i] == Boolean.class || source[i] == String.class)) continue;
@@ -241,7 +314,6 @@ public class ReflectionInvoker {
     private static Object convertValue(Object value, Class<?> targetType) {
         if (value == null) return null;
         
-        // FIX: Strings aus JSON args automatisch in Primitivtypen parsen
         if (value instanceof String s) {
             if (targetType == boolean.class || targetType == Boolean.class) return Boolean.parseBoolean(s);
             if (targetType == double.class || targetType == Double.class) return Double.parseDouble(s);

@@ -3,6 +3,7 @@ package net.stones.network;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.chat.Component;
@@ -16,10 +17,14 @@ import net.minecraftforge.network.PacketDistributor;
 import net.minecraftforge.network.simple.SimpleChannel;
 import net.stones.StonesMod;
 import net.stones.client.gui.editor.StonesStudioScreen;
+import net.stones.util.TemplateHashHelper;
 import net.stones.init.StonesModConfig;
 import net.stones.util.ServerDatapackExporter;
 
 import java.io.File;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.List;
@@ -55,6 +60,16 @@ public class StudioNetwork {
         return name.replaceAll("[^a-zA-Z0-9_-]", "");
     }
 
+    /**
+     * Stellt sicher, dass Dateinamen eine gültige Endung (.json oder .bak) besitzen.
+     */
+    private static String resolveFileName(String rawName) {
+        if (rawName.endsWith(".json") || rawName.endsWith(".bak")) {
+            return rawName;
+        }
+        return rawName + ".json";
+    }
+
     // =========================================================================
     // Hilfsmethode: Scannt das aktive Datapack und gibt Packliste + Dateiliste zurück
     // =========================================================================
@@ -86,7 +101,7 @@ public class StudioNetwork {
     }
 
     // =========================================================================
-    // 1. C2S: REQUEST PACK LIST (Client fragt Server nach Datapacks und Dateien)
+    // 1. C2S: REQUEST PACK LIST
     // =========================================================================
     public static class C2SRequestPackList {
         public C2SRequestPackList() {}
@@ -100,8 +115,6 @@ public class StudioNetwork {
                 ServerPlayer player = ctx.getSender();
                 if (player == null) return;
 
-                // SICHERHEITS-TÜRSTEHER: Spieler ohne Admin-Rechte erhalten eine leere Liste.
-                // Wichtig: 4. Argument muss übergeben werden, sonst Kompilierfehler!
                 if (!player.hasPermissions(2)) {
                     CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
                             new S2CSyncPackList(new ArrayList<>(), "", false, new ArrayList<>()));
@@ -115,7 +128,7 @@ public class StudioNetwork {
     }
 
     // =========================================================================
-    // 2. S2C: SYNC PACK LIST (Server sendet Packs UND Dateien an Client-GUI)
+    // 2. S2C: SYNC PACK LIST
     // =========================================================================
     public static class S2CSyncPackList {
         private final List<String> packNames;
@@ -154,7 +167,6 @@ public class StudioNetwork {
         public static void handle(S2CSyncPackList msg, Supplier<NetworkEvent.Context> ctxGetter) {
             NetworkEvent.Context ctx = ctxGetter.get();
             ctx.enqueueWork(() -> {
-                // ARCHITEKTUR-RETTUNG: Verhindert NoClassDefFoundError auf dem Server durch DistExecutor.
                 net.minecraftforge.fml.DistExecutor.unsafeRunWhenOn(
                         net.minecraftforge.api.distmarker.Dist.CLIENT, () -> () ->
                                 ClientHandler.handlePackList(msg.packNames, msg.activePackName, msg.authorized, msg.activePackFiles)
@@ -165,21 +177,22 @@ public class StudioNetwork {
     }
 
     // =========================================================================
-    // Innerer Client-Helper — wird nur auf der Client-JVM geladen.
+    // Innerer Client-Helper
     // =========================================================================
     private static class ClientHandler {
         public static void handlePackList(List<String> packs, String active, boolean authorized, List<String> files) {
             StonesStudioScreen.receiveServerPackList(packs, active, authorized, files);
         }
-        public static void handleRuneLoad(String fileName, String jsonStr) {
+        // ANGEPASST: Empfängt nun auch die Konflikt-Parameter
+        public static void handleRuneLoad(String fileName, String jsonStr, boolean hasConflict, String jarTemplateStr, String newJarHash) {
             if (Minecraft.getInstance().screen instanceof StonesStudioScreen sss) {
-                sss.loadRuneFromJson(fileName, jsonStr);
+                sss.loadRuneFromJson(fileName, jsonStr, hasConflict, jarTemplateStr, newJarHash);
             }
         }
     }
 
     // =========================================================================
-    // 3. C2S: REQUEST RUNE FILE (Client fordert Inhalt einer JSON-Datei an)
+    // 3. C2S: REQUEST RUNE FILE
     // =========================================================================
     public static class C2SRequestRuneFile {
         private final String fileName;
@@ -198,7 +211,7 @@ public class StudioNetwork {
                 String activePack = StonesModConfig.ACTIVE_WORKSPACE_PACK.get();
                 if (activePack.isEmpty()) return;
 
-                String fileNameWithExt = msg.fileName.endsWith(".json") ? msg.fileName : msg.fileName + ".json";
+                String fileNameWithExt = resolveFileName(msg.fileName);
                 File file = new File(
                         FMLPaths.GAMEDIR.get().resolve("datapacks/" + activePack + "/data/stones_workspace/enchantments").toFile(),
                         fileNameWithExt);
@@ -206,9 +219,25 @@ public class StudioNetwork {
                 if (file.exists()) {
                     try {
                         String content = Files.readString(file.toPath());
-                        CHANNEL.send(PacketDistributor.PLAYER.with(() -> player), new S2CSyncRuneFile(msg.fileName, content));
+                        
+                        // NEU: Server verifiziert den Datei-Status gegen die Mod-JAR!
+                        TemplateHashHelper.CheckResult result = TemplateHashHelper.verifyServerFile(msg.fileName, content);
+                        
+                        // Bei Silent-Update direkt die reparierte Version auf der Serverfestplatte speichern
+                        if (result.status() == TemplateHashHelper.Status.SILENT_UPDATE) {
+                            content = result.processedJson().toString();
+                            Files.writeString(file.toPath(), content, StandardCharsets.UTF_8);
+                        }
+                        
+                        boolean hasConflict = (result.status() == TemplateHashHelper.Status.MODIFIED_CONFLICT);
+                        String jarTemplateStr = hasConflict ? result.jarJson().toString() : "";
+                        String newJarHash = result.newJarHash() != null ? result.newJarHash() : "";
+
+                        // Erweiterte Parameter mitsenden
+                        CHANNEL.send(PacketDistributor.PLAYER.with(() -> player), 
+                                new S2CSyncRuneFile(msg.fileName, content, hasConflict, jarTemplateStr, newJarHash));
                     } catch (Exception e) {
-                        player.sendSystemMessage(Component.literal("§c[Server] Fehler beim Lesen der Datei."));
+                        player.sendSystemMessage(Component.translatable("chat.stones.studio.server.file_read_error"));
                     }
                 }
             });
@@ -217,24 +246,39 @@ public class StudioNetwork {
     }
 
     // =========================================================================
-    // 4. S2C: SYNC RUNE FILE (Server sendet Dateiinhalt an GUI)
+    // 4. S2C: SYNC RUNE FILE
     // =========================================================================
     public static class S2CSyncRuneFile {
         private final String fileName;
         private final String jsonContent;
+        // NEU: Erweiterte Konflikt-Parameter
+        private final boolean hasConflict;
+        private final String jarTemplateStr;
+        private final String newJarHash;
 
-        public S2CSyncRuneFile(String fileName, String jsonContent) {
+        public S2CSyncRuneFile(String fileName, String jsonContent, boolean hasConflict, String jarTemplateStr, String newJarHash) {
             this.fileName = fileName;
             this.jsonContent = jsonContent;
+            this.hasConflict = hasConflict;
+            this.jarTemplateStr = jarTemplateStr;
+            this.newJarHash = newJarHash;
+        }
+
+        // Falls alte Pakete (ohne Konflikt) versendet werden
+        public S2CSyncRuneFile(String fileName, String jsonContent) {
+            this(fileName, jsonContent, false, "", "");
         }
 
         public static void encode(S2CSyncRuneFile msg, FriendlyByteBuf buf) {
             buf.writeUtf(msg.fileName);
             buf.writeUtf(msg.jsonContent, 1048576);
+            buf.writeBoolean(msg.hasConflict);
+            buf.writeUtf(msg.jarTemplateStr, 1048576);
+            buf.writeUtf(msg.newJarHash);
         }
 
         public static S2CSyncRuneFile decode(FriendlyByteBuf buf) {
-            return new S2CSyncRuneFile(buf.readUtf(), buf.readUtf(1048576));
+            return new S2CSyncRuneFile(buf.readUtf(), buf.readUtf(1048576), buf.readBoolean(), buf.readUtf(1048576), buf.readUtf());
         }
 
         public static void handle(S2CSyncRuneFile msg, Supplier<NetworkEvent.Context> ctxGetter) {
@@ -242,7 +286,7 @@ public class StudioNetwork {
             ctx.enqueueWork(() -> {
                 net.minecraftforge.fml.DistExecutor.unsafeRunWhenOn(
                         net.minecraftforge.api.distmarker.Dist.CLIENT, () -> () ->
-                                ClientHandler.handleRuneLoad(msg.fileName, msg.jsonContent)
+                                ClientHandler.handleRuneLoad(msg.fileName, msg.jsonContent, msg.hasConflict, msg.jarTemplateStr, msg.newJarHash)
                 );
             });
             ctx.setPacketHandled(true);
@@ -250,7 +294,7 @@ public class StudioNetwork {
     }
 
     // =========================================================================
-    // 5. C2S: SAVE RUNE FILE (Client speichert JSON-Datei auf dem Server)
+    // 5. C2S: SAVE RUNE FILE
     // =========================================================================
     public static class C2SSaveRuneFile {
         private final String fileName;
@@ -274,25 +318,32 @@ public class StudioNetwork {
             NetworkEvent.Context ctx = ctxGetter.get();
             ctx.enqueueWork(() -> {
                 ServerPlayer player = ctx.getSender();
+                // 1. Berechtigungsprüfung
                 if (player == null || !player.hasPermissions(2)) return;
 
                 String activePack = StonesModConfig.ACTIVE_WORKSPACE_PACK.get();
                 if (activePack.isEmpty()) return;
 
                 try {
-                    String fileNameWithExt = msg.fileName.endsWith(".json") ? msg.fileName : msg.fileName + ".json";
+                    // 2. Zielpfad ermitteln
+                    String fileNameWithExt = resolveFileName(msg.fileName);
                     File file = new File(
                             FMLPaths.GAMEDIR.get().resolve("datapacks/" + activePack + "/data/stones_workspace/enchantments").toFile(),
                             fileNameWithExt);
 
-                    // Pretty-Print für Lesbarkeit (keine Einzeiler!)
+                    // 3. String in Json umwandeln
                     JsonElement parsed = JsonParser.parseString(msg.jsonContent);
-                    Gson prettyGson = new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create();
-                    Files.writeString(file.toPath(), prettyGson.toJson(parsed), java.nio.charset.StandardCharsets.UTF_8);
 
-                    player.sendSystemMessage(Component.literal("§a[Server] '" + fileNameWithExt + "' gespeichert."));
+                    // 4. Hash-Generierung über den ausgelagerten Helper!
+                    TemplateHashHelper.ensureHashExists(parsed, msg.fileName);
+
+                    // 5. Formatiert als JSON abspeichern
+                    Gson prettyGson = new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create();
+                    Files.writeString(file.toPath(), prettyGson.toJson(parsed), StandardCharsets.UTF_8);
+
+                    player.sendSystemMessage(Component.translatable("chat.stones.studio.server.file_saved", fileNameWithExt));
                 } catch (Exception e) {
-                    player.sendSystemMessage(Component.literal("§c[Server] Fehler beim Speichern von '" + msg.fileName + "'."));
+                    player.sendSystemMessage(Component.translatable("chat.stones.studio.server.file_save_error", msg.fileName));
                     StonesMod.LOGGER.error("Speichern fehlgeschlagen: ", e);
                 }
             });
@@ -301,7 +352,7 @@ public class StudioNetwork {
     }
 
     // =========================================================================
-    // 6. C2S: PROJECT ACTION (Projekt erstellen, aktivieren, deaktivieren)
+    // 6. C2S: PROJECT ACTION
     // =========================================================================
     public static class C2SProjectAction {
         private final String actionType;
@@ -336,11 +387,11 @@ public class StudioNetwork {
                 } else if (msg.actionType.equals("ACTIVATE") && !sanitizedName.isEmpty()) {
                     StonesModConfig.ACTIVE_WORKSPACE_PACK.set(sanitizedName);
                     StonesModConfig.SPEC.save();
-                    player.sendSystemMessage(Component.literal("§e[Server] " + sanitizedName + " als aktives Projekt gesetzt. Drücke 'Anwenden' zum Laden!"));
+                    player.sendSystemMessage(Component.translatable("chat.stones.studio.server.project_activated", sanitizedName));
                 } else if (msg.actionType.equals("DEACTIVATE")) {
                     StonesModConfig.ACTIVE_WORKSPACE_PACK.set("");
                     StonesModConfig.SPEC.save();
-                    player.sendSystemMessage(Component.literal("§e[Server] Projekt deaktiviert. Drücke 'Anwenden' zum Entladen!"));
+                    player.sendSystemMessage(Component.translatable("chat.stones.studio.server.project_deactivated"));
                 }
 
                 CHANNEL.send(PacketDistributor.PLAYER.with(() -> player), buildSyncPacket());
@@ -350,7 +401,7 @@ public class StudioNetwork {
     }
 
     // =========================================================================
-    // 7. C2S: TRIGGER RELOAD (Führt ein sauberes /reload auf dem Server aus)
+    // 7. C2S: TRIGGER RELOAD
     // =========================================================================
     public static class C2STriggerReload {
         public C2STriggerReload() {}
@@ -364,12 +415,10 @@ public class StudioNetwork {
                 ServerPlayer player = ctx.getSender();
                 if (player == null || !player.hasPermissions(2)) return;
 
-                // Komplettes Datapack neu laden — der EnchantmentReloadListener übernimmt
-                // den Sync der Runen-Daten an alle Clients automatisch via PacketSyncEnchantments.
                 player.getServer().getCommands().performPrefixedCommand(
                         player.createCommandSourceStack(), "reload");
 
-                player.sendSystemMessage(Component.literal("§a[Server] Reload erfolgreich durchgeführt!"));
+                player.sendSystemMessage(Component.translatable("chat.stones.studio.server.reload_success"));
             });
             ctx.setPacketHandled(true);
         }

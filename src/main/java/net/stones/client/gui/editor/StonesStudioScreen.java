@@ -13,13 +13,18 @@ import net.minecraft.client.gui.components.events.GuiEventListener;
 import net.minecraft.client.gui.narration.NarratableEntry;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.FormattedCharSequence;
 import net.minecraft.world.level.storage.LevelResource;
 import net.stones.network.StudioNetwork;
 
 import java.io.File;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+
 import net.stones.client.gui.editor.TreeNode;
 import net.stones.client.gui.editor.StudioSerializer;
 import net.stones.client.gui.editor.section.StudioProjectDialog;
@@ -33,11 +38,13 @@ import net.stones.client.gui.editor.widget.StudioSuggestTextField;
 import net.stones.client.gui.editor.modal.StatEditModal;
 import net.stones.client.gui.editor.modal.ActionEditModal;
 import net.stones.client.gui.editor.modal.AbstractStudioModal;
+import net.stones.client.gui.editor.modal.TemplateUpdateModal;
 
 /**
  * ARCHITEKTUR: STONES STUDIO ORCHESTRATOR
  * Das primäre Rendering- und Input-Handling-Fenster für das Stones Studio.
- * * BEHOBEN: Verhindert unendliche Client-Freezes bei Server-Verbindungsverlust oder Paketfehlern.
+ *
+ * AKTUALISIERT: Reine Client-GUI. Hash-Logik und Dateiprüfung auf den Server ausgelagert.
  */
 public class StonesStudioScreen extends Screen {
 
@@ -50,7 +57,7 @@ public class StonesStudioScreen extends Screen {
 
     // --- Globaler Scroll-Offset für den gesamten rechten Workspace-Screen ---
     private double mainScrollY = 0;
-    
+
     // --- Deferred Tooltip Render Queue ---
     private List<FormattedCharSequence> deferredTooltip = null;
     private int deferredTooltipX = 0;
@@ -68,11 +75,11 @@ public class StonesStudioScreen extends Screen {
     public static boolean isAuthorized = true;
     public static String currentFileName = "";
     public static JsonObject currentRuneJson = new JsonObject();
-    
+
     public static final List<TreeNode> activeTree = new ArrayList<>();
     public static final List<JsonObject> activeStats = new ArrayList<>();
 
-    private boolean hasLocalWorldPacks = false; 
+    private boolean hasLocalWorldPacks = false;
 
     // --- Sub-Komponenten & Sektionen ---
     private final StudioMenuBar menuBar = new StudioMenuBar(this);
@@ -87,10 +94,10 @@ public class StonesStudioScreen extends Screen {
     private AbstractStudioModal activeModal = null;
     private StatEditModal activeStatModal = null;
 
-    // Statischer Verweis auf die aktive Instanz des Screens, um das Onboarding abzusichern
+    // Statischer Verweis auf die aktive Instanz des Screens
     public static StonesStudioScreen currentInstance = null;
 
-    // FEHLERBEHEBUNG: Zeitstempel zur Messung eines Verbindungs-Timeouts auf den Server
+    // Zeitstempel zur Messung eines Verbindungs-Timeouts auf den Server
     public static long waitStartTime = 0;
 
     public record PackInfo(String name, boolean isZip) {}
@@ -98,13 +105,15 @@ public class StonesStudioScreen extends Screen {
     public StonesStudioScreen() {
         super(Component.translatable("gui.stones.studio.title"));
         isWaitingForServer = true;
-        waitStartTime = System.currentTimeMillis(); // Initialen Startzeitpunkt setzen
+        waitStartTime = System.currentTimeMillis();
         discoveredPacks.clear();
         StudioNetwork.CHANNEL.sendToServer(new StudioNetwork.C2SRequestPackList());
         checkLocalWorldPacks();
     }
 
-    public Font getFont() { return this.font; }
+    public Font getFont() { 
+        return this.font; 
+    }
 
     public boolean isLeftPanelOpen() {
         return this.leftPanelOpen;
@@ -136,11 +145,11 @@ public class StonesStudioScreen extends Screen {
                 break;
             }
         }
-        
+
         activePackFiles.clear();
         activePackFiles.addAll(files);
         isWaitingForServer = false;
-        waitStartTime = 0; // Warte-Timer zurücksetzen
+        waitStartTime = 0;
 
         currentFileName = "";
         currentRuneJson = new JsonObject();
@@ -210,16 +219,18 @@ public class StonesStudioScreen extends Screen {
         action.run();
     }
 
-    public void loadRuneFromJson(String fileName, String jsonStr) {
+    public void loadRuneFromJson(String fileName, String jsonStr, boolean hasConflict, String jarTemplateStr, String newJarHash) {
         currentFileName = fileName;
         isWaitingForServer = false;
-        waitStartTime = 0; // Warte-Timer zurücksetzen
+        waitStartTime = 0;
         logicTree.resetScroll();
         statsSection.resetScroll();
-        mainScrollY = 0; 
-        
+        mainScrollY = 0;
+
         try {
-            currentRuneJson = JsonParser.parseString(jsonStr).getAsJsonObject();
+            JsonObject loadedJson = JsonParser.parseString(jsonStr).getAsJsonObject();
+
+            currentRuneJson = loadedJson;
             this.propertiesSection.loadFrom(currentRuneJson);
 
             activeStats.clear();
@@ -236,8 +247,15 @@ public class StonesStudioScreen extends Screen {
 
             this.lastSavedJsonString = serializeActiveTree().toString();
 
+            // Nur wenn der Server explizit einen Konflikt meldet, Modal anzeigen
+            if (hasConflict && jarTemplateStr != null && !jarTemplateStr.isEmpty()) {
+                JsonObject jarTemplate = JsonParser.parseString(jarTemplateStr).getAsJsonObject();
+                this.activeModal = new TemplateUpdateModal(this, fileName, loadedJson, jarTemplate, newJarHash, () -> {
+                    // Continuation callback
+                });
+            }
+
         } catch (Exception e) {
-        // Text: "§cFehler beim Parsen der Datei: "
             Minecraft.getInstance().player.sendSystemMessage(net.minecraft.network.chat.Component.translatable("gui.stones.studio.stonesstudio.text_01" + fileName));
         }
 
@@ -246,19 +264,20 @@ public class StonesStudioScreen extends Screen {
 
     public JsonObject serializeActiveTree() {
         StudioContextMenu.prepareTreeForSaving(activeTree);
-        
+
+        // Zieht sich eine Kopie des aktuellen JSONs (inklusive dem existierenden Hash vom Server!)
         JsonObject root = currentRuneJson.deepCopy();
         propertiesSection.saveTo(root);
-        
+
         JsonArray statsArray = new JsonArray();
         for (JsonObject s : activeStats) {
             statsArray.add(s.deepCopy());
         }
         root.add("stats", statsArray);
-        
+
         JsonArray behaviorsArray = StudioSerializer.serializeBehaviors(activeTree);
         root.add("behaviors", behaviorsArray);
-        
+
         currentRuneJson = root;
         return root;
     }
@@ -266,7 +285,7 @@ public class StonesStudioScreen extends Screen {
     @Override
     protected void init() {
         super.init();
-        currentInstance = this; // Instanz beim Öffnen registrieren
+        currentInstance = this;
 
         int currentLeftWidth = leftPanelOpen ? LEFT_PANEL_WIDTH : 0;
         int headerX = currentLeftWidth + 20;
@@ -274,7 +293,6 @@ public class StonesStudioScreen extends Screen {
 
         this.propertiesSection.init(headerX, yStart);
 
-        // Text: "☰"
         addRenderableWidget(Button.builder(net.minecraft.network.chat.Component.translatable("gui.stones.studio.stonesstudio.text_02"), btn -> toggleLeftPanel())
                 .bounds(5, StudioMenuBar.HEIGHT + 5, 20, 20).build());
 
@@ -285,7 +303,7 @@ public class StonesStudioScreen extends Screen {
     @Override
     public void removed() {
         super.removed();
-        currentInstance = null; // Instanz beim Schließen freigeben
+        currentInstance = null;
     }
 
     private void toggleLeftPanel() {
@@ -321,39 +339,30 @@ public class StonesStudioScreen extends Screen {
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         renderBackground(graphics);
 
-        // FEHLERBEHEBUNG: Automatisches Timeout-Sicherheitsnetz
         if (isWaitingForServer) {
             if (waitStartTime == 0) {
                 waitStartTime = System.currentTimeMillis();
             }
-            // Wenn der Server nach 5 Sekunden nicht geantwortet hat, brechen wir den Lock ab
             if (System.currentTimeMillis() - waitStartTime > 5000) {
                 isWaitingForServer = false;
                 waitStartTime = 0;
                 if (Minecraft.getInstance().player != null) {
                     Minecraft.getInstance().player.displayClientMessage(
-        // Text: "§c[Stones Studio] Zeitüberschreitung beim Laden der Server-Daten!"
                         net.minecraft.network.chat.Component.translatable("gui.stones.studio.stonesstudio.text_03"), false
                     );
                 }
             }
-            
-            // Ladebildschirm mit Hinweis auf manuellen ESC-Abbruch rendern
-        // Text: "Lade Server-Daten..."
+
             graphics.drawCenteredString(font, net.minecraft.network.chat.Component.translatable("gui.stones.studio.stonesstudio.text_04").getString(), width / 2, height / 2 - 10, 0xFFFFAA00);
-        // Text: "§7[Drücke ESC zum Abbrechen]"
             graphics.drawCenteredString(font, net.minecraft.network.chat.Component.translatable("gui.stones.studio.stonesstudio.text_05").getString(), width / 2, height / 2 + 10, 0xFF888888);
             return;
         } else {
-            waitStartTime = 0; // Timer auf Null, wenn wir nicht mehr warten
+            waitStartTime = 0;
         }
 
         if (!isAuthorized) {
-        // Text: "§cZugriff verweigert!"
             graphics.drawCenteredString(this.font, net.minecraft.network.chat.Component.translatable("gui.stones.studio.stonesstudio.text_06").getString(), this.width / 2, this.height / 2 - 15, 0xFFFF5555);
-        // Text: "Du benötigst Operator-Rechte (OP Level 2) auf dem Server."
             graphics.drawCenteredString(this.font, net.minecraft.network.chat.Component.translatable("gui.stones.studio.stonesstudio.text_07").getString(), this.width / 2, this.height / 2 + 5, 0xFFAAAAAA);
-        // Text: "§7[Drücke ESC zum Schließen]"
             graphics.drawCenteredString(this.font, net.minecraft.network.chat.Component.translatable("gui.stones.studio.stonesstudio.text_08").getString(), this.width / 2, this.height / 2 + 25, 0xFF888888);
             return;
         }
@@ -373,10 +382,8 @@ public class StonesStudioScreen extends Screen {
         int editorX = currentLeftWidth + 20;
 
         if (currentFileName.isEmpty()) {
-        // Text: "Wähle links eine Datei aus, um sie zu bearbeiten."
             graphics.drawCenteredString(font, net.minecraft.network.chat.Component.translatable("gui.stones.studio.stonesstudio.text_09").getString(), editorX + (width - editorX)/2, height / 2, 0xFF888888);
         } else {
-        // Text: "Rune Profile: "
             graphics.drawString(font, net.minecraft.network.chat.Component.translatable("gui.stones.studio.stonesstudio.text_10").getString() + currentFileName, editorX, StudioMenuBar.HEIGHT + 10, 0xFFE4E595);
             graphics.fill(editorX, StudioMenuBar.HEIGHT + 22, width - 20, StudioMenuBar.HEIGHT + 23, 0xFF333333); 
 
@@ -388,7 +395,7 @@ public class StonesStudioScreen extends Screen {
 
             propertiesSection.render(graphics, editorX, bgMouseX, bgScrolledMouseY);
             statsSection.render(graphics, editorX, bgMouseX, bgScrolledMouseY);
-            
+
             int treeStartY = getTreeStartY();
             logicTree.render(graphics, editorX, treeStartY, bgMouseX, bgScrolledMouseY);
 
@@ -402,7 +409,6 @@ public class StonesStudioScreen extends Screen {
             int warnY = this.height - 25;
             graphics.fill(warnX, warnY, warnX + warnWidth, warnY + 20, 0xBB220000); 
             graphics.renderOutline(warnX, warnY, warnWidth, 20, 0xFFFFAA00); 
-        // Text: "⚠️ Lokales Welten-Datapack erkannt! (Wird von Minecraft geladen, hier nicht bearbeitbar)"
             graphics.drawCenteredString(this.font, net.minecraft.network.chat.Component.translatable("gui.stones.studio.stonesstudio.text_11").getString(), this.width / 2, warnY + 6, 0xFFFFAA00);
         }
 
@@ -416,7 +422,7 @@ public class StonesStudioScreen extends Screen {
         if (activeModal != null) activeModal.render(graphics, mouseX, mouseY, partialTick);
         if (activeStatModal != null) activeStatModal.render(graphics, mouseX, mouseY, partialTick);
         if (projectDialog.isOpen()) projectDialog.render(graphics, mouseX, mouseY, partialTick);
-        
+
         if (propertiesSection.isEditingIcon && propertiesSection.getIconModal() != null) {
             propertiesSection.getIconModal().render(graphics, mouseX, mouseY, partialTick);
         }
@@ -437,7 +443,7 @@ public class StonesStudioScreen extends Screen {
         if (projectDialog.isOpen()) return projectDialog.mouseClicked(mouseX, mouseY, button);
         if (activeModal != null) return activeModal.mouseClicked(mouseX, mouseY, button);
         if (activeStatModal != null) return activeStatModal.mouseClicked(mouseX, mouseY, button);
-        
+
         if (propertiesSection.isEditingIcon && propertiesSection.getIconModal() != null) {
             if (propertiesSection.getIconModal().mouseClicked(mouseX, mouseY, button)) return true;
             return true; 
@@ -509,7 +515,7 @@ public class StonesStudioScreen extends Screen {
         }
 
         if (!isBackgroundActive()) return false;
-        
+
         int currentLeftWidth = leftPanelOpen ? LEFT_PANEL_WIDTH : 0;
         if (leftPanelOpen && mouseX < currentLeftWidth) {
             sidePanel.handleScroll(delta);
@@ -520,7 +526,7 @@ public class StonesStudioScreen extends Screen {
             double totalContentHeight = getTreeStartY() + getLogicTreeHeight();
             double visibleHeight = height - (StudioMenuBar.HEIGHT + 35);
             double maxScroll = Math.max(0, totalContentHeight - visibleHeight);
-            
+
             mainScrollY = Math.max(0, Math.min(maxScroll, mainScrollY - (delta * 18)));
             updateHeaderVisibility();
         }
@@ -540,8 +546,6 @@ public class StonesStudioScreen extends Screen {
 
     @Override
     public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
-        // FEHLERBEHEBUNG: Der manuelle ESC-Notausstieg (Bypass)
-        // Fängt die Escape-Taste (256) ab, unabhängig davon, ob wir warten oder unautorisiert sind.
         if (keyCode == 256) { // ESC Key
             this.onClose();
             return true;
@@ -557,7 +561,7 @@ public class StonesStudioScreen extends Screen {
         }
         return super.keyPressed(keyCode, scanCode, modifiers);
     }
-    
+
     @Override
     public boolean isPauseScreen() { return true; }
 
@@ -570,7 +574,7 @@ public class StonesStudioScreen extends Screen {
     public void openEditModal(AbstractStudioModal modal) {
         this.activeModal = modal;
     }
-    
+
     public void openNewProjectDialog() { this.projectDialog.open(); }
     public void closeStatModal() { this.activeStatModal = null; }
 }
@@ -583,7 +587,6 @@ class UnsavedChangesModal extends AbstractStudioModal {
     private final Runnable confirmAction;
 
     public UnsavedChangesModal(StonesStudioScreen screen, Runnable confirmAction) {
-        // Text: "⚠️ Ungespeicherte Änderungen"
         super(screen, net.minecraft.network.chat.Component.translatable("gui.stones.studio.stonesstudio.text_12"), 320, 110);
         this.confirmAction = confirmAction;
         this.init();
@@ -591,13 +594,11 @@ class UnsavedChangesModal extends AbstractStudioModal {
 
     @Override
     protected void initFields(int startX, int startY) {
-        // Text: "Verwerfen & Fortfahren"
         addModalWidget(Button.builder(net.minecraft.network.chat.Component.translatable("gui.stones.studio.stonesstudio.text_13"), b -> {
             screen.closeModal();
             confirmAction.run();
         }).bounds(startX + 25, startY + 70, 150, 20).build());
 
-        // Text: "Abbrechen"
         addModalWidget(Button.builder(net.minecraft.network.chat.Component.translatable("gui.stones.studio.stonesstudio.text_14"), b -> {
             screen.closeModal();
         }).bounds(startX + 185, startY + 70, 110, 20).build());
@@ -605,11 +606,8 @@ class UnsavedChangesModal extends AbstractStudioModal {
 
     @Override
     protected void renderContent(GuiGraphics graphics, int mouseX, int mouseY, float partialTick, int startX, int startY) {
-        // Text: "Du hast ungespeicherte Änderungen!"
         graphics.drawString(font, net.minecraft.network.chat.Component.translatable("gui.stones.studio.stonesstudio.text_15").getString(), startX + 15, startY + 32, 0xFFFF5555);
-        // Text: "Wenn du jetzt fortfährst, gehen diese"
         graphics.drawString(font, net.minecraft.network.chat.Component.translatable("gui.stones.studio.stonesstudio.text_16").getString(), startX + 15, startY + 44, 0xFFBBBBBB);
-        // Text: "Änderungen unwiderruflich verloren."
         graphics.drawString(font, net.minecraft.network.chat.Component.translatable("gui.stones.studio.stonesstudio.text_17").getString(), startX + 15, startY + 56, 0xFFBBBBBB);
     }
 

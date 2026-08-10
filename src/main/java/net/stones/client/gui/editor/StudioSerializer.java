@@ -4,39 +4,60 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import net.minecraft.network.chat.Component;
+
 import java.util.ArrayList;
 import java.util.List;
-import net.stones.client.gui.editor.TreeNode;
 
 /**
  * Isolierte Serialisierungs- und Parsing-Schicht für das Stones Studio.
- * Konvertiert Datenstrukturen verlustfrei zwischen JSON und den visuelle TreeNodes.
- * Behandelt komplexe Rekursionen für stones:delay und stones:case unabhängig vom Client-Fenster.
- * * BEHOBEN: Liest und speichert nun die Bedingungen innerhalb von Cases korrekt aus der Kategorie-Ebene.
+ * Konvertiert Datenstrukturen verlustfrei zwischen JSON und den visuellen TreeNodes.
  */
 public class StudioSerializer {
 
     public static String getReadableText(JsonObject json, TreeNode.Type type) {
-        if (json == null || !json.has("type")) return "Leerer Knoten";
+        if (json == null || !json.has("type")) {
+            return Component.translatable("gui.stones.studio.serializer.empty_node").getString();
+        }
         String t = json.get("type").getAsString();
-        
+
         if (type == TreeNode.Type.ACTION) {
-            return switch(t) {
-                case "stones:invoke" -> "Reflection: " + (json.has("call") ? json.get("call").getAsString() : "");
-                case "stones:math" -> "Mathe: " + (json.has("operation") ? json.get("operation").getAsString() : "") + " " + (json.has("value") ? json.get("value").getAsString() : "");
-                case "stones:apply_effect" -> "Buff: " + (json.has("effect") ? json.get("effect").getAsString() : "");
-                case "stones:modify_damage" -> "Schaden: +" + (json.has("add") ? json.get("add").getAsString() : "0");
-                case "stones:spawn_particles" -> "Partikel: " + (json.has("particle") ? json.get("particle").getAsString() : "");
-                case "stones:play_sound" -> "Sound: " + (json.has("sound") ? json.get("sound").getAsString() : "");
-                case "stones:cooldown" -> "Cooldown: " + (json.has("ticks") ? json.get("ticks").getAsString() : "") + " Ticks";
-                default -> "Aktion: " + t;
+            return switch (t) {
+                case "stones:invoke" -> Component.translatable("gui.stones.studio.serializer.action.invoke",
+                        json.has("call") ? json.get("call").getAsString() : "").getString();
+                case "stones:math" -> Component.translatable("gui.stones.studio.serializer.action.math",
+                        json.has("operation") ? json.get("operation").getAsString() : "",
+                        json.has("value") ? json.get("value").getAsString() : "").getString();
+                case "stones:apply_effect" -> Component.translatable("gui.stones.studio.serializer.action.apply_effect",
+                        json.has("effect") ? json.get("effect").getAsString() : "").getString();
+                case "stones:modify_damage" -> Component.translatable("gui.stones.studio.serializer.action.modify_damage",
+                        json.has("add") ? json.get("add").getAsString() : "0").getString();
+                case "stones:spawn_particles" -> Component.translatable("gui.stones.studio.serializer.action.spawn_particles",
+                        json.has("particle") ? json.get("particle").getAsString() : "").getString();
+                case "stones:play_sound" -> Component.translatable("gui.stones.studio.serializer.action.play_sound",
+                        json.has("sound") ? json.get("sound").getAsString() : "").getString();
+                case "stones:cooldown" -> Component.translatable("gui.stones.studio.serializer.action.cooldown",
+                        json.has("ticks") ? json.get("ticks").getAsString() : "").getString();
+                default -> {
+                    String actionKey = "gui.stones.studio.actionselection.action." + t.replace("stones:", "") + ".name";
+                    String name = Component.translatable(actionKey).getString();
+                    yield name.equals(actionKey) 
+                            ? Component.translatable("gui.stones.studio.serializer.action.prefix", t).getString() 
+                            : name;
+                }
             };
         } else {
-            return switch(t) {
-                case "stones:has_air" -> "Spieler hat genug Luft";
-                case "stones:variable_compare" -> "Variablenvergleich";
-                case "stones:chance" -> "Wahrscheinlichkeit";
-                default -> "Bedingung: " + t;
+            return switch (t) {
+                case "stones:has_air" -> Component.translatable("gui.stones.studio.serializer.condition.has_air").getString();
+                case "stones:variable_compare" -> Component.translatable("gui.stones.studio.serializer.condition.variable_compare").getString();
+                case "stones:chance" -> Component.translatable("gui.stones.studio.serializer.condition.chance").getString();
+                default -> {
+                    String condKey = "gui.stones.studio.actionselection.condition." + t.replace("stones:", "") + ".name";
+                    String name = Component.translatable(condKey).getString();
+                    yield name.equals(condKey) 
+                            ? Component.translatable("gui.stones.studio.serializer.condition.prefix", t).getString() 
+                            : name;
+                }
             };
         }
     }
@@ -45,16 +66,13 @@ public class StudioSerializer {
         for (JsonElement bEl : behaviors) {
             JsonObject bObj = bEl.getAsJsonObject();
             String trigger = bObj.has("trigger") ? bObj.get("trigger").getAsString() : "UNKNOWN";
-            
-        // Text: "Ereignis: "
-            TreeNode evtNode = new TreeNode("⚡", net.minecraft.network.chat.Component.translatable("gui.stones.studio.studioserializer.text_01").getString() + trigger, TreeNode.Type.EVENT, null);
+
+            TreeNode evtNode = new TreeNode("⚡", Component.translatable("gui.stones.studio.studioserializer.text_01").getString() + trigger, TreeNode.Type.EVENT, null);
             evtNode.rawId = trigger;
-            
-        // Text: "Bedingungen (Alle müssen erfüllt sein)"
-            TreeNode condGroup = new TreeNode("🛡️", net.minecraft.network.chat.Component.translatable("gui.stones.studio.studioserializer.text_02").getString(), TreeNode.Type.CATEGORY, evtNode);
+
+            TreeNode condGroup = new TreeNode("🛡️", Component.translatable("gui.stones.studio.studioserializer.text_02").getString(), TreeNode.Type.CATEGORY, evtNode);
             condGroup.rawId = "CONDITIONS";
-            
-            // Beachtet beim Laden die einheitliche "conditions"-Syntax (mit Fallback auf Singular zur Kompatibilität)
+
             String condKey = bObj.has("conditions") ? "conditions" : (bObj.has("condition") ? "condition" : "conditions");
             if (bObj.has(condKey)) {
                 JsonElement condElement = bObj.get(condKey);
@@ -73,9 +91,8 @@ public class StudioSerializer {
                 }
             }
             evtNode.addChild(condGroup);
-            
-        // Text: "Aktionen (Nacheinander ausführen)"
-            TreeNode actGroup = new TreeNode("🎬", net.minecraft.network.chat.Component.translatable("gui.stones.studio.studioserializer.text_03").getString(), TreeNode.Type.CATEGORY, evtNode);
+
+            TreeNode actGroup = new TreeNode("🎬", Component.translatable("gui.stones.studio.studioserializer.text_03").getString(), TreeNode.Type.CATEGORY, evtNode);
             actGroup.rawId = "ACTIONS";
             if (bObj.has("actions")) {
                 for (JsonElement aEl : bObj.getAsJsonArray("actions")) {
@@ -86,7 +103,7 @@ public class StudioSerializer {
                 }
             }
             evtNode.addChild(actGroup);
-            
+
             activeTree.add(evtNode);
         }
         postProcessTree(activeTree);
@@ -98,10 +115,10 @@ public class StudioSerializer {
             if (evtNode.type == TreeNode.Type.EVENT) {
                 JsonObject bObj = new JsonObject();
                 bObj.addProperty("trigger", evtNode.rawId);
-                
+
                 JsonArray condArray = new JsonArray();
                 JsonArray actArray = new JsonArray();
-                
+
                 for (TreeNode catNode : evtNode.children) {
                     if (catNode.rawId.equals("CONDITIONS")) {
                         for (TreeNode cNode : catNode.children) condArray.add(cNode.jsonData.deepCopy());
@@ -109,7 +126,7 @@ public class StudioSerializer {
                         for (TreeNode aNode : catNode.children) actArray.add(aNode.jsonData.deepCopy());
                     }
                 }
-                if (condArray.size() > 0) bObj.add("conditions", condArray); // Nativ im Plural "conditions" speichern!
+                if (condArray.size() > 0) bObj.add("conditions", condArray);
                 if (actArray.size() > 0) bObj.add("actions", actArray);
                 behaviorsArray.add(bObj);
             }
@@ -132,39 +149,35 @@ public class StudioSerializer {
                             node.jsonData.add("actions", nestedActions);
                         }
                     }
-                }
-                else if (actType.equals("stones:case")) {
+                } else if (actType.equals("stones:case")) {
                     JsonArray casesArray = new JsonArray();
                     JsonArray defaultArray = new JsonArray();
-                    
+
                     for (TreeNode child : node.children) {
                         if (child.type == TreeNode.Type.CATEGORY && child.rawId.equals("DEFAULT")) {
                             prepareTreeForSaving(child.children);
                             for (TreeNode defaultAct : child.children) {
                                 defaultArray.add(defaultAct.jsonData.deepCopy());
                             }
-                        }
-                        else if (child.type == TreeNode.Type.CATEGORY && child.rawId.equals("CASES")) {
+                        } else if (child.type == TreeNode.Type.CATEGORY && child.rawId.equals("CASES")) {
                             for (TreeNode caseNode : child.children) {
                                 JsonObject caseObj = new JsonObject();
                                 JsonObject caseCond = new JsonObject();
                                 JsonArray caseActs = new JsonArray();
-                                
+
                                 prepareTreeForSaving(caseNode.children);
                                 for (TreeNode caseChild : caseNode.children) {
-                                    // BEHOBEN: Holt den echten Condition-Knoten aus der CONDITIONS-Kategorie des Falls
                                     if (caseChild.type == TreeNode.Type.CATEGORY && (caseChild.rawId.equals("CONDITIONS") || caseChild.rawId.equals("CONDITION"))) {
                                         if (!caseChild.children.isEmpty()) {
                                             caseCond = caseChild.children.get(0).jsonData.deepCopy();
                                         }
-                                    }
-                                    else if (caseChild.type == TreeNode.Type.CATEGORY && caseChild.rawId.equals("ACTIONS")) {
+                                    } else if (caseChild.type == TreeNode.Type.CATEGORY && caseChild.rawId.equals("ACTIONS")) {
                                         for (TreeNode caseAct : caseChild.children) {
                                             caseActs.add(caseAct.jsonData.deepCopy());
                                         }
                                     }
                                 }
-                                caseObj.add("conditions", caseCond); // Im Case-Fall ebenfalls einheitlich im Plural "conditions" sichern!
+                                caseObj.add("conditions", caseCond);
                                 caseObj.add("actions", caseActs);
                                 casesArray.add(caseObj);
                             }
@@ -192,11 +205,10 @@ public class StudioSerializer {
         if (node.type == TreeNode.Type.ACTION && node.jsonData != null && node.jsonData.has("type")) {
             String actType = node.jsonData.get("type").getAsString();
             if (actType.equals("stones:delay") && node.children.isEmpty()) {
-        // Text: "Aktionen (Verzögert)"
-                TreeNode delayedActionsGroup = new TreeNode("🎬", net.minecraft.network.chat.Component.translatable("gui.stones.studio.studioserializer.text_04").getString(), TreeNode.Type.CATEGORY, node);
+                TreeNode delayedActionsGroup = new TreeNode("🎬", Component.translatable("gui.stones.studio.studioserializer.text_04").getString(), TreeNode.Type.CATEGORY, node);
                 delayedActionsGroup.rawId = "ACTIONS";
                 node.addChild(delayedActionsGroup);
-                
+
                 if (node.jsonData.has("actions")) {
                     JsonArray arr = node.jsonData.getAsJsonArray("actions");
                     for (JsonElement e : arr) {
@@ -207,15 +219,12 @@ public class StudioSerializer {
                         postProcessNode(childNode);
                     }
                 }
-            }
-            else if (actType.equals("stones:case") && node.children.isEmpty()) {
-        // Text: "Fälle (Cases) (If)"
-                TreeNode casesGroup = new TreeNode("📁", net.minecraft.network.chat.Component.translatable("gui.stones.studio.studioserializer.text_05").getString(), TreeNode.Type.CATEGORY, node);
+            } else if (actType.equals("stones:case") && node.children.isEmpty()) {
+                TreeNode casesGroup = new TreeNode("📁", Component.translatable("gui.stones.studio.studioserializer.text_05").getString(), TreeNode.Type.CATEGORY, node);
                 casesGroup.rawId = "CASES";
                 node.addChild(casesGroup);
 
-        // Text: "Standard-Aktionen (Default) (Else)"
-                TreeNode defaultGroup = new TreeNode("🎬", net.minecraft.network.chat.Component.translatable("gui.stones.studio.studioserializer.text_06").getString(), TreeNode.Type.CATEGORY, node);
+                TreeNode defaultGroup = new TreeNode("🎬", Component.translatable("gui.stones.studio.studioserializer.text_06").getString(), TreeNode.Type.CATEGORY, node);
                 defaultGroup.rawId = "DEFAULT";
                 node.addChild(defaultGroup);
 
@@ -224,18 +233,14 @@ public class StudioSerializer {
                     int index = 1;
                     for (JsonElement e : arr) {
                         JsonObject caseObj = e.getAsJsonObject();
-        // Text: "Fall "
-                        TreeNode caseNode = new TreeNode("🔍", net.minecraft.network.chat.Component.translatable("gui.stones.studio.studioserializer.text_07").getString() + (index++), TreeNode.Type.CATEGORY, casesGroup);
+                        TreeNode caseNode = new TreeNode("🔍", Component.translatable("gui.stones.studio.studioserializer.text_07").getString() + (index++), TreeNode.Type.CATEGORY, casesGroup);
                         caseNode.rawId = "CASE";
                         casesGroup.addChild(caseNode);
 
-                        // Hier wird die Kategorie im Baum erzeugt
-        // Text: "Bedingung"
-                        TreeNode caseCond = new TreeNode("🛡️", net.minecraft.network.chat.Component.translatable("gui.stones.studio.studioserializer.text_08").getString(), TreeNode.Type.CATEGORY, caseNode);
-                        caseCond.rawId = "CONDITIONS"; // Einheitliche CONDITIONS
+                        TreeNode caseCond = new TreeNode("🛡️", Component.translatable("gui.stones.studio.studioserializer.text_08").getString(), TreeNode.Type.CATEGORY, caseNode);
+                        caseCond.rawId = "CONDITIONS";
                         caseNode.addChild(caseCond);
 
-                        // Einheitliche "conditions" Abfrage beim Einlesen der Fälle
                         String caseCondKey = caseObj.has("conditions") ? "conditions" : (caseObj.has("condition") ? "condition" : "conditions");
                         if (caseObj.has(caseCondKey)) {
                             JsonObject cObj = caseObj.getAsJsonObject(caseCondKey);
@@ -244,8 +249,7 @@ public class StudioSerializer {
                             caseCond.addChild(cNode);
                         }
 
-        // Text: "Aktionen (Fall)"
-                        TreeNode caseActions = new TreeNode("🎬", net.minecraft.network.chat.Component.translatable("gui.stones.studio.studioserializer.text_09").getString(), TreeNode.Type.CATEGORY, caseNode);
+                        TreeNode caseActions = new TreeNode("🎬", Component.translatable("gui.stones.studio.studioserializer.text_09").getString(), TreeNode.Type.CATEGORY, caseNode);
                         caseActions.rawId = "ACTIONS";
                         caseNode.addChild(caseActions);
 
@@ -278,17 +282,17 @@ public class StudioSerializer {
             postProcessNode(child);
         }
     }
-    
+
     public static JsonArray serializeTreeState(List<TreeNode> tree) {
         JsonArray behaviorsArray = new JsonArray();
         for (TreeNode evtNode : tree) {
             if (evtNode.type == TreeNode.Type.EVENT) {
                 JsonObject bObj = new JsonObject();
                 bObj.addProperty("trigger", evtNode.rawId);
-                
+
                 JsonArray condArray = new JsonArray();
                 JsonArray actArray = new JsonArray();
-                
+
                 for (TreeNode catNode : evtNode.children) {
                     if (catNode.rawId.equals("CONDITIONS")) {
                         for (TreeNode cNode : catNode.children) condArray.add(cNode.jsonData.deepCopy());
@@ -310,16 +314,13 @@ public class StudioSerializer {
         for (JsonElement bEl : behaviorsArray) {
             JsonObject bObj = bEl.getAsJsonObject();
             String trigger = bObj.has("trigger") ? bObj.get("trigger").getAsString() : "UNKNOWN";
-            
-        // Text: "Ereignis: "
-            TreeNode evtNode = new TreeNode("⚡", net.minecraft.network.chat.Component.translatable("gui.stones.studio.studioserializer.text_10").getString() + trigger, TreeNode.Type.EVENT, null);
+
+            TreeNode evtNode = new TreeNode("⚡", Component.translatable("gui.stones.studio.studioserializer.text_10").getString() + trigger, TreeNode.Type.EVENT, null);
             evtNode.rawId = trigger;
-            
-        // Text: "Bedingungen (Alle müssen erfüllt sein)"
-            TreeNode condGroup = new TreeNode("🛡️", net.minecraft.network.chat.Component.translatable("gui.stones.studio.studioserializer.text_11").getString(), TreeNode.Type.CATEGORY, evtNode);
+
+            TreeNode condGroup = new TreeNode("🛡️", Component.translatable("gui.stones.studio.studioserializer.text_11").getString(), TreeNode.Type.CATEGORY, evtNode);
             condGroup.rawId = "CONDITIONS";
-            
-            // Beachtet beim Wiederherstellen die einheitliche "conditions"-Syntax
+
             String condKey = bObj.has("conditions") ? "conditions" : (bObj.has("condition") ? "condition" : "conditions");
             if (bObj.has(condKey)) {
                 JsonElement condElement = bObj.get(condKey);
@@ -338,9 +339,8 @@ public class StudioSerializer {
                 }
             }
             evtNode.addChild(condGroup);
-            
-        // Text: "Aktionen (Nacheinander ausführen)"
-            TreeNode actGroup = new TreeNode("🎬", net.minecraft.network.chat.Component.translatable("gui.stones.studio.studioserializer.text_12").getString(), TreeNode.Type.CATEGORY, evtNode);
+
+            TreeNode actGroup = new TreeNode("🎬", Component.translatable("gui.stones.studio.studioserializer.text_12").getString(), TreeNode.Type.CATEGORY, evtNode);
             actGroup.rawId = "ACTIONS";
             if (bObj.has("actions")) {
                 for (JsonElement aEl : bObj.getAsJsonArray("actions")) {
@@ -351,7 +351,7 @@ public class StudioSerializer {
                 }
             }
             evtNode.addChild(actGroup);
-            
+
             targetTree.add(evtNode);
         }
         postProcessTree(targetTree);

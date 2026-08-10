@@ -4,6 +4,7 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
@@ -18,6 +19,9 @@ import net.stones.enchantment.behavior.RuneCondition;
 
 import java.io.File;
 import java.io.FileWriter;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.Map;
 
@@ -51,7 +55,7 @@ public class ServerDatapackExporter {
             pack.addProperty("description", "Stones Studio Workspace: " + packName);
             meta.add("pack", pack);
 
-            Files.writeString(metaFile.toPath(), GSON.toJson(meta), java.nio.charset.StandardCharsets.UTF_8);
+            Files.writeString(metaFile.toPath(), GSON.toJson(meta), StandardCharsets.UTF_8);
 
             // 2. data/stones_workspace/enchantments Ordner anlegen
             File enchantmentsDir = new File(packDir, "data/stones_workspace/enchantments");
@@ -75,39 +79,38 @@ public class ServerDatapackExporter {
      * Schreibt alle registrierten RuneEnchantments in das angegebene Verzeichnis.
      * Server-safe Hilfsmethode, die auch beim initialen Setup des Standard-Packs verwendet werden kann.
      */
-	public static int exportAllRunesToDir(File enchantmentsDir) {
-		int exportCount = 0;
-		if (!enchantmentsDir.exists()) {
-			enchantmentsDir.mkdirs();
-		}
+    public static int exportAllRunesToDir(File enchantmentsDir) {
+        int exportCount = 0;
+        if (!enchantmentsDir.exists()) {
+            enchantmentsDir.mkdirs();
+        }
 
-		for (Enchantment enchantment : ForgeRegistries.ENCHANTMENTS.getValues()) {
-			if (enchantment instanceof RuneEnchantment rune) {
-				ResourceLocation registryId = ForgeRegistries.ENCHANTMENTS.getKey(rune);
-				
-				if (registryId != null) {
-					
-					// EXAKT WIE GEWÜNSCHT: 
-					// Prüft, ob ein Enchantment mit "stones:<enchantmentname>" existiert.
-					ResourceLocation expectedStonesId = new ResourceLocation(StonesMod.MODID, registryId.getPath());
-					if (!ForgeRegistries.ENCHANTMENTS.containsKey(expectedStonesId)) {
-						continue; // Existiert nicht -> JSON wird nicht geschrieben.
-					}
+        for (Enchantment enchantment : ForgeRegistries.ENCHANTMENTS.getValues()) {
+            if (enchantment instanceof RuneEnchantment rune) {
+                ResourceLocation registryId = ForgeRegistries.ENCHANTMENTS.getKey(rune);
+                
+                if (registryId != null) {
+                    
+                    // Prüft, ob ein Enchantment mit "stones:<enchantmentname>" existiert.
+                    ResourceLocation expectedStonesId = new ResourceLocation(StonesMod.MODID, registryId.getPath());
+                    if (!ForgeRegistries.ENCHANTMENTS.containsKey(expectedStonesId)) {
+                        continue; // Existiert nicht -> JSON wird nicht geschrieben.
+                    }
 
-					JsonObject serialized = serializeRune(rune);
-					File runeFile = new File(enchantmentsDir, registryId.getPath() + ".json");
-					
-					try (FileWriter writer = new FileWriter(runeFile, java.nio.charset.StandardCharsets.UTF_8)) {
-						GSON.toJson(serialized, writer);
-						exportCount++;
-					} catch (Exception e) {
-						StonesMod.LOGGER.error("[Stones] Fehler beim Schreiben der Rune " + registryId + " ins Datapack: ", e);
-					}
-				}
-			}
-		}
-		return exportCount;
-	}
+                    JsonObject serialized = serializeRune(rune);
+                    File runeFile = new File(enchantmentsDir, registryId.getPath() + ".json");
+                    
+                    try (FileWriter writer = new FileWriter(runeFile, StandardCharsets.UTF_8)) {
+                        GSON.toJson(serialized, writer);
+                        exportCount++;
+                    } catch (Exception e) {
+                        StonesMod.LOGGER.error("[Stones] Fehler beim Schreiben der Rune " + registryId + " ins Datapack: ", e);
+                    }
+                }
+            }
+        }
+        return exportCount;
+    }
 
     /**
      * Sichert Parameter-Rückgaben vor NullPointerExceptions bei unvollständig initialisierten Runen.
@@ -135,10 +138,10 @@ public class ServerDatapackExporter {
     }
 
     /**
-     * Serialisiert ein Java-basiertes RuneEnchantment dynamically in das exakte
-     * JSON-Format. Absolut server-safe (keine Client-Klassen-Referenzen!).
+     * Serialisiert ein Java-basiertes RuneEnchantment dynamisch in das exakte
+     * JSON-Format inklusive Hash-Einstempelung.
      */
-    public static JsonObject serializeRune(RuneEnchantment rune) {
+public static JsonObject serializeRune(RuneEnchantment rune) {
         JsonObject json = new JsonObject();
         
         // 1. Zwingende Registry-Signatur zur Identifikation im ReloadListener (Multiplayer & Cross-Mod Brücken)
@@ -217,14 +220,14 @@ public class ServerDatapackExporter {
             json.add("stats", statsArray);
         }
 
-        // 4. Behaviors (Der eigentliche WC3-Event/Triggertree!)
+        // 4. Behaviors (Der eigentliche Event/Triggertree)
         if (!rune.getBehaviors().isEmpty()) {
             JsonArray behaviorsArray = new JsonArray();
             for (RuneBehavior behavior : rune.getBehaviors()) {
                 JsonObject bObj = new JsonObject();
                 bObj.addProperty("trigger", behavior.trigger.id);
                 
-                // Conditions (mit intelligentem Param-Fallback-Parser)
+                // Conditions
                 if (!behavior.conditions.isEmpty()) {
                     JsonArray condArray = new JsonArray();
                     for (RuneCondition cond : behavior.conditions) {
@@ -244,7 +247,7 @@ public class ServerDatapackExporter {
                     bObj.add("conditions", condArray);
                 }
 
-                // Actions (mit intelligentem Param-Fallback-Parser)
+                // Actions
                 if (!behavior.actions.isEmpty()) {
                     JsonArray actArray = new JsonArray();
                     for (RuneBehavior.ConfiguredRuneAction act : behavior.actions) {
@@ -268,6 +271,11 @@ public class ServerDatapackExporter {
                 behaviorsArray.add(bObj);
             }
             json.add("behaviors", behaviorsArray);
+        }
+
+        // 5. NEU: Template-Hash stempeln (Nutzt jetzt unseren ausgelagerten Helper!)
+        if (trueId != null) {
+            TemplateHashHelper.ensureHashExists(json, trueId.getPath() + ".json");
         }
 
         return json;

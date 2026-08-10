@@ -108,28 +108,34 @@ public class MilestoneActionRegistry {
         return null;
     }
 
-    public static Object resolve(ActionContext ctx, String name) {
-        if (name.equalsIgnoreCase("player")) return ctx.getPlayer();
-        if (name.equalsIgnoreCase("level")) return ctx.getPlayer().level();
-        
-        String work = name.startsWith("$") ? name.substring(1) : name;
-        
-        if (!work.contains(".")) {
-            Object val = ctx.getVariable(work);
-            if (val == null) LOGGER.debug("[Stones] Variable '{}' wurde nicht im Kontext gefunden.", work);
-            return val;
-        }
-        
-        String[] parts = work.split("\\.");
-        Object current = ctx.getVariable(parts[0]);
+	public static Object resolve(ActionContext ctx, String name) {
+		String work = name.startsWith("$") ? name.substring(1) : name;
 
-        for (int i = 1; i < parts.length; i++) {
-            if (current == null) return null;
-            Object next = ReflectionInvoker.resolveMember(current, parts[i]);
-            current = next;
-        }
-        return current;
-    }
+		if (!work.contains(".")) {
+			if (work.equalsIgnoreCase("player")) return ctx.getPlayer();
+			if (work.equalsIgnoreCase("level")) return ctx.getPlayer().level();
+			Object val = ctx.getVariable(work);
+			if (val == null) LOGGER.debug("[Stones] Variable '{}' wurde nicht im Kontext gefunden.", work);
+			return val;
+		}
+
+		String[] parts = work.split("\\.");
+		Object current;
+		if (parts[0].equalsIgnoreCase("player")) {
+			current = ctx.getPlayer();
+		} else if (parts[0].equalsIgnoreCase("level")) {
+			current = ctx.getPlayer().level();
+		} else {
+			current = ctx.getVariable(parts[0]);
+		}
+
+		for (int i = 1; i < parts.length; i++) {
+			if (current == null) return null;
+			Object next = ReflectionInvoker.resolveMember(current, parts[i]);
+			current = next;
+		}
+		return current;
+	}
 
     public static Vec3 resolveVec3(ActionContext ctx, JsonObject params) {
         Object raw = resolveObject(ctx, params, "pos");
@@ -886,8 +892,16 @@ public class MilestoneActionRegistry {
 		register(new RuneAction() {
 			@Override public String getId() { return "stones:command"; }
 			@Override public void execute(ActionContext ctx, JsonObject params) {
-				String cmd = resolveString(ctx, params, "command", "");
+				String cmd = params.has("command") ? params.get("command").getAsString() : "";
 				if (!cmd.isEmpty() && ctx.getPlayer().getServer() != null) {
+					
+					// Löst alle $variablen mitten im Befehls-Text auf
+					for (Map.Entry<String, Object> entry : ctx.getVariables().entrySet()) {
+						if (entry.getValue() != null) {
+							cmd = cmd.replace("$" + entry.getKey(), entry.getValue().toString());
+						}
+					}
+
 					ctx.getPlayer().getServer().getCommands().performPrefixedCommand(
 						ctx.getPlayer().createCommandSourceStack().withPermission(4).withSuppressedOutput(), cmd
 					);

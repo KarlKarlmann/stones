@@ -49,6 +49,9 @@ public class StonesModConfig {
     public static final ForgeConfigSpec.IntValue TRADER_COST_RESOURCE_BASE;
     public static final ForgeConfigSpec.IntValue TRADER_COST_RESOURCE_DIVISOR;
 
+    // --- Security ---
+    public static final ForgeConfigSpec.ConfigValue<List<? extends String>> ADDITIONAL_REFLECTION_BLACKLIST;
+
     static {
         BUILDER.push("Workspace");
 		ACTIVE_WORKSPACE_PACK = BUILDER
@@ -77,7 +80,7 @@ public class StonesModConfig {
                 .comment("Duration in milliseconds for milestone toasts.")
                 .defineInRange("milestoneToastDuration", 4000, 500, 10000);
 
-        // FEHLERBEHEBUNG & ERWEITERUNG: Pause-Menü-Knopf voll anpassbar machen
+        // Pause-Menü-Knopf voll anpassbar machen
         SHOW_PAUSE_BUTTON = BUILDER
                 .comment("Soll der 'Stones Studio' Knopf im Minecraft Pause-Menü angezeigt werden?")
                 .define("showPauseButton", true);
@@ -147,6 +150,19 @@ public class StonesModConfig {
         TRADER_COST_RESOURCE_DIVISOR = BUILDER.comment("Divisor for resource stack size to cost without explicit pricing (e.g. 8 means +1 level per 8 items).").defineInRange("costResourceDivisor", 8, 1, 1000);
         BUILDER.pop();
 
+        BUILDER.pop();
+
+        // Server-Sicherheitseinstellungen für Reflection
+        BUILDER.push("Security");
+        ADDITIONAL_REFLECTION_BLACKLIST = BUILDER
+                .comment("Zusätzliche Klassen- oder Paketnamen, die im ReflectionInvoker blockiert werden sollen.",
+                         "Dies dient als anpassbares, sichtbares Sicherheitsnetz für Serverbesitzer.",
+                         "Beispiel: net.minecraft.server.MinecraftServer blockiert unbefugte Server-Stopps per Altar.")
+                .defineListAllowEmpty(List.of("additionalReflectionBlacklist"), () -> List.of(
+                        "net.minecraft.server.MinecraftServer",
+                        "net.minecraft.server.dedicated.DedicatedServer",
+                        "com.mojang.authlib"
+                ), obj -> obj instanceof String);
         BUILDER.pop();
         
         SPEC = BUILDER.build();
