@@ -38,6 +38,8 @@ public class StudioSerializer {
                         json.has("sound") ? json.get("sound").getAsString() : "").getString();
                 case "stones:cooldown" -> Component.translatable("gui.stones.studio.serializer.action.cooldown",
                         json.has("ticks") ? json.get("ticks").getAsString() : "").getString();
+				case "stones:read_nbt" -> Component.translatable("gui.stones.studio.serializer.action.read_nbt", 
+						json.has("path") ? json.get("path").getAsString() : "").getString();
                 default -> {
                     String actionKey = "gui.stones.studio.actionselection.action." + t.replace("stones:", "") + ".name";
                     String name = Component.translatable(actionKey).getString();

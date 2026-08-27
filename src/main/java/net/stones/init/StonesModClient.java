@@ -20,8 +20,7 @@ import net.stones.client.renderer.EchoTraderRenderer;
 import net.stones.client.renderer.RunestoneRenderer;
 import net.stones.client.renderer.ClientDynamicLabelHandler;
 import net.stones.enchantment.AmplifyEnchantment;
-import net.stones.block.entity.ResonanceBoxBlockEntity;
-import net.stones.client.renderer.ResonanceBoxRenderer;
+
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -32,7 +31,6 @@ import java.util.stream.Stream;
 public class StonesModClient {
 
     // --- ZENTRALE LISTE ALLER GEFUNDENEN DEKO-MODELLE ---
-    // Diese Variable hat in deinem Code gefehlt, weshalb der Renderer abgestürzt ist.
     public static final List<ResourceLocation> SHRINE_ARTIFACTS = new ArrayList<>();
 
     @SubscribeEvent
@@ -103,44 +101,37 @@ public class StonesModClient {
         }
     }
 
-private static void registerAmplifyProperty(net.minecraft.world.item.Item item) {
-		ItemProperties.register(item, new ResourceLocation(StonesMod.MODID, "amplify"), (stack, level, entity, seed) -> {
-			try {
-				// 1. Basis-Checks
-				if (stack == null || stack.isEmpty()) {
-					return 0.0f;
-				}
+    private static void registerAmplifyProperty(net.minecraft.world.item.Item item) {
+        ItemProperties.register(item, new ResourceLocation(StonesMod.MODID, "amplify"), (stack, level, entity, seed) -> {
+            try {
+                if (stack == null || stack.isEmpty()) {
+                    return 0.0f;
+                }
 
-				net.minecraft.world.item.enchantment.Enchantment amplify = net.minecraftforge.registries.ForgeRegistries.ENCHANTMENTS.getValue(new ResourceLocation(StonesMod.MODID, "amplify"));
-				if (amplify == null) {
-					return 0.0f;
-				}
+                net.minecraft.world.item.enchantment.Enchantment amplify = net.minecraftforge.registries.ForgeRegistries.ENCHANTMENTS.getValue(new ResourceLocation(StonesMod.MODID, "amplify"));
+                if (amplify == null) {
+                    return 0.0f;
+                }
 
-				// 2. Hier wird es gefährlich: Wenn eine Fremd-Mod bei null level/entity 
-				// innerhalb von getItemEnchantmentLevel abstürzt, fangen wir das jetzt ab!
-				int ampLvl = EnchantmentHelper.getItemEnchantmentLevel(amplify, stack);
-				
-				if (ampLvl <= 0) {
-					return 0.0f; 
-				}
-				
-				return net.minecraft.util.Mth.clamp(ampLvl / 100.0f, 0.0f, 1.0f);
+                int ampLvl = EnchantmentHelper.getItemEnchantmentLevel(amplify, stack);
+                
+                if (ampLvl <= 0) {
+                    return 0.0f; 
+                }
+                
+                return net.minecraft.util.Mth.clamp(ampLvl / 100.0f, 0.0f, 1.0f);
 
-			} catch (Exception e) {
-				return 0.0f; 
-			}
-		});
-	}
+            } catch (Exception e) {
+                return 0.0f; 
+            }
+        });
+    }
 
     @SubscribeEvent
     public static void registerRenderers(EntityRenderersEvent.RegisterRenderers event) {
         event.registerBlockEntityRenderer(
             (BlockEntityType<RunestoneBlockEntity>) StonesModBlockEntities.RUNESTONE.get(), 
             RunestoneRenderer::new
-        );
-        event.registerBlockEntityRenderer(
-            (BlockEntityType<ResonanceBoxBlockEntity>) StonesModBlockEntities.RESONANCE_BOX.get(),
-            ResonanceBoxRenderer::new
         );
         event.registerEntityRenderer(
             StonesModEntities.ECHO_TRADER.get(), 

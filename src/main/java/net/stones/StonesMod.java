@@ -97,14 +97,11 @@ public class StonesMod {
 		addNetworkMessage(PacketBindShrine.class, PacketBindShrine::toBytes, PacketBindShrine::new, PacketBindShrine::handle);
 		addNetworkMessage(PacketOpenShrine.class, PacketOpenShrine::toBytes, PacketOpenShrine::new, PacketOpenShrine::handle);
 		addNetworkMessage(PacketPerformAction.class, PacketPerformAction::encode, PacketPerformAction::new, PacketPerformAction::handle);	
-		addNetworkMessage(PacketClaimReward.class, PacketClaimReward::toBytes, PacketClaimReward::new, PacketClaimReward::handle);
 		addNetworkMessage(PacketBuyEcho.class, PacketBuyEcho::toBytes, PacketBuyEcho::new, PacketBuyEcho::handle);
-		addNetworkMessage(PacketUpdateEpitaph.class, PacketUpdateEpitaph::toBytes, PacketUpdateEpitaph::new, PacketUpdateEpitaph::handle);
 
 		// --- S2C ---
 		addNetworkMessage(PacketSyncPlayerShrine.class, PacketSyncPlayerShrine::toBytes, PacketSyncPlayerShrine::new, PacketSyncPlayerShrine::handle);
 		addNetworkMessage(PacketSyncShrineMirror.class, PacketSyncShrineMirror::encode, PacketSyncShrineMirror::new, PacketSyncShrineMirror::handle);
-		addNetworkMessage(PacketOpenLeaderboard.class, PacketOpenLeaderboard::toBytes, PacketOpenLeaderboard::new, PacketOpenLeaderboard::handle);
 		addNetworkMessage(PacketSyncLevelUpInfo.class, PacketSyncLevelUpInfo::encode, PacketSyncLevelUpInfo::new, PacketSyncLevelUpInfo::handle);			
 		addNetworkMessage(PacketSyncCombo.class, PacketSyncCombo::encode, PacketSyncCombo::new, PacketSyncCombo::handle);
         addNetworkMessage(PacketSyncCooldown.class, PacketSyncCooldown::encode, PacketSyncCooldown::new, PacketSyncCooldown::handle);
@@ -150,5 +147,4 @@ public class StonesMod {
 			workQueue.removeAll(actions);
 		}
 	}
-
 }

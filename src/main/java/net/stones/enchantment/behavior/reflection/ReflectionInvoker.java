@@ -117,26 +117,26 @@ public class ReflectionInvoker {
         } catch (Exception e) { return null; }
     }
 
-    private static Object invokeTypedMethod(Object target, ReflectionCallParser.ParsedCall call, List<Object> resolvedValues) {
-        final Class<?> targetClass = target.getClass();
-        if (isClassForbidden(targetClass.getName())) {
-            LOGGER.warn("[Stones Security] Blockierter Reflection-Aufruf auf verbotener Zielklasse: {}", targetClass.getName());
-            return null;
-        }
-        
-        final Class<?>[] paramTypes = getParamTypes(call.args, resolvedValues);
-        String cacheKey = targetClass.getName() + "." + call.method + serializeTypes(paramTypes);
-        
-        Method method = METHOD_CACHE.computeIfAbsent(cacheKey, k -> findMethodHierarchical(targetClass, call.method, paramTypes));
+	private static Object invokeTypedMethod(Object target, ReflectionCallParser.ParsedCall call, List<Object> resolvedValues) {
+		final Class<?> targetClass = (target instanceof Class<?> c) ? c : target.getClass();
+		if (isClassForbidden(targetClass.getName())) {
+			LOGGER.warn("[Stones Security] Blockierter Reflection-Aufruf auf verbotener Zielklasse: {}", targetClass.getName());
+			return null;
+		}
 
-        if (method != null) {
-            try {
-                Object[] matched = match(resolvedValues, method.getParameterTypes());
-                if (matched != null) return method.invoke(target, matched);
-            } catch (Exception ignored) {}
-        }
-        return null;
-    }
+		final Class<?>[] paramTypes = getParamTypes(call.args, resolvedValues);
+		String cacheKey = targetClass.getName() + "." + call.method + serializeTypes(paramTypes);
+
+		Method method = METHOD_CACHE.computeIfAbsent(cacheKey, k -> findMethodHierarchical(targetClass, call.method, paramTypes));
+
+		if (method != null) {
+			try {
+				Object[] matched = match(resolvedValues, method.getParameterTypes());
+				if (matched != null) return method.invoke(target, matched);
+			} catch (Exception ignored) {}
+		}
+		return null;
+	}
 
     private static @Nullable Method findMethodHierarchical(Class<?> clazz, String name, Class<?>[] types) {
         if (clazz == null || isClassForbidden(clazz.getName())) return null;
@@ -219,15 +219,16 @@ public class ReflectionInvoker {
         return null;
     }
 
-    public static Object resolveMember(Object target, String name) {
-        try {
-            Field f = findFieldHierarchical(target.getClass(), name);
-            if (f != null) return f.get(target);
-            throw new NoSuchFieldException(name);
-        } catch (Exception e) {
-            return invokeTypedMethod(target, new ReflectionCallParser.ParsedCall("root", List.of(), name, List.of(), false), List.of());
-        }
-    }
+	public static Object resolveMember(Object target, String name) {
+		Class<?> lookupClass = (target instanceof Class<?> c) ? c : target.getClass();
+		try {
+			Field f = findFieldHierarchical(lookupClass, name);
+			if (f != null) return f.get(target);
+			throw new NoSuchFieldException(name);
+		} catch (Exception e) {
+			return invokeTypedMethod(target, new ReflectionCallParser.ParsedCall("root", List.of(), name, List.of(), false), List.of());
+		}
+	}
 
     @Nullable
     public static Object instantiate(String className, List<ReflectionCallParser.Argument> args, List<Object> resolvedValues) {

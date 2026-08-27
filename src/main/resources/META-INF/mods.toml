@@ -10,6 +10,20 @@ displayURL="https://www.n3g.de"
 credits="NOT created using the mod maker MCreator — but kindly mentioned because the initial setup was generated with it."
 logoFile="stones.png"
 authors="KarlKarlmann"
+description='''
+A player XP progression mod featuring rune sockets, item-based bonuses, and configurable attribute modifications.
+'''
+
+# --- Optional ---
+issueTrackerURL="https://github.com/KarlKarlmann/stones/issues"
+
+# --- Basis-Abhängigkeiten ---
+[[dependencies.stones]]
+    modId="forge"
+    mandatory=true
+    versionRange="[47,)"
+    ordering="NONE"
+    side="BOTH"
 
 [[dependencies.stones]]
     modId="minecraft"
@@ -18,9 +32,25 @@ authors="KarlKarlmann"
     ordering="AFTER"
     side="BOTH"
 
+# --- Eigene Pflicht-Mods ---
 [[dependencies.stones]]
     modId="actionbar"
     mandatory=true
     versionRange="[1.0.1,)"
     ordering="AFTER"
     side="CLIENT"
+
+[[dependencies.stones]]
+    modId="reward_box"
+    mandatory=true
+    versionRange="[1.0,)"
+    ordering="AFTER"
+    side="BOTH"
+
+# --- Eigene Optionale Mods ---
+[[dependencies.stones]]
+    modId="leaderboard"
+    mandatory=false
+    versionRange="[1.0,)"
+    ordering="AFTER"
+    side="BOTH"

@@ -8,6 +8,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.util.Mth;
 import net.minecraft.world.InteractionHand;
@@ -24,6 +25,7 @@ import net.minecraft.world.entity.ai.goal.*;
 import net.minecraft.world.entity.npc.WanderingTrader;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.damagesource.DamageSource;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.enchantment.Enchantment;
@@ -92,13 +94,19 @@ public class EchoTraderEntity extends WanderingTrader {
         currentStock.clear();
         List<ItemStack> pool = new ArrayList<>();
 
-        // --- RESONANZ BOXEN (aus Config) ---
+        // --- REWARD BOXEN (aus 'reward_box' Mod) ---
         int boxCount = StonesModConfig.TRADER_BOX_COUNT.get();
-        for (int i = 0; i < boxCount; i++) {
-            int tier = 1 + this.random.nextInt(10);
-            ItemStack box = new ItemStack(StonesModItems.RESONANCE_BOX.get());
-            box.getOrCreateTag().putInt("ResonanceLootTier", tier);
-            pool.add(box);
+        Item rewardChestItem = ForgeRegistries.ITEMS.getValue(new ResourceLocation("reward_box", "reward_chest"));
+        
+        if (rewardChestItem != null && rewardChestItem != Items.AIR) {
+            for (int i = 0; i < boxCount; i++) {
+                int tier = 1 + this.random.nextInt(10);
+                ItemStack box = new ItemStack(rewardChestItem);
+                CompoundTag tag = box.getOrCreateTag();
+                tag.putString("BoxId", "stones:resonance_box");
+                tag.putInt("RewardTier", tier);
+                pool.add(box);
+            }
         }
 
         // --- EINZEL-RUNEN ---
@@ -107,7 +115,6 @@ public class EchoTraderEntity extends WanderingTrader {
         if (random.nextBoolean()) pool.add(generateSpecialRune(StoneItem.Type.MILESTONE));
 
         // --- CLUSTER JEWELS ---
-        // Extrem seltene Chancen für die mächtigen Endgame-Biester
         if (random.nextFloat() < 0.02f) {
             pool.add(new ItemStack(StonesModItems.CLUSTER_JEWEL_MINOR.get()));
         }
@@ -124,7 +131,7 @@ public class EchoTraderEntity extends WanderingTrader {
             try {
                 String[] parts = entry.split(";");
                 if (parts.length >= 4) {
-                    net.minecraft.world.item.Item item = ForgeRegistries.ITEMS.getValue(new net.minecraft.resources.ResourceLocation(parts[0]));
+                    Item item = ForgeRegistries.ITEMS.getValue(new ResourceLocation(parts[0]));
                     if (item != null && item != Items.AIR) {
                         int min = Integer.parseInt(parts[1]);
                         int max = Integer.parseInt(parts[2]);
@@ -134,7 +141,6 @@ public class EchoTraderEntity extends WanderingTrader {
                         int cost = Integer.parseInt(parts[3]);
                         
                         ItemStack resourceStack = new ItemStack(item, amount);
-                        // Wir speichern den errechneten Preis direkt im NBT des Stacks!
                         resourceStack.getOrCreateTag().putInt("EchoCustomCost", cost);
                         pool.add(resourceStack);
                     }
@@ -173,7 +179,7 @@ public class EchoTraderEntity extends WanderingTrader {
         }
 
         if (random.nextFloat() < 0.25f) {
-            Enchantment amplify = ForgeRegistries.ENCHANTMENTS.getValue(new net.minecraft.resources.ResourceLocation("stones", "amplify"));
+            Enchantment amplify = ForgeRegistries.ENCHANTMENTS.getValue(new ResourceLocation("stones", "amplify"));
             if (amplify != null) {
                 enchants.put(amplify, 20 + random.nextInt(71));
             }
@@ -218,7 +224,6 @@ public class EchoTraderEntity extends WanderingTrader {
             this.despawnDelay--;
             this.entityData.set(DESPAWN_TICKS, this.despawnDelay);
             
-            // Trader löschen wenn Zeit abgelaufen
             if (this.despawnDelay <= 0) {
                 this.discard();
             }
@@ -265,26 +270,22 @@ public class EchoTraderEntity extends WanderingTrader {
     @Override protected void updateTrades() {} 
     @Override public boolean removeWhenFarAway(double dist) { return false; }
     
-    // --- VOID ESCAPE MECHANISMUS ---
     @Override
     public boolean hurt(DamageSource source, float amount) {
         if (this.level().isClientSide) return false;
 
-        // Finde heraus, ob ein Spieler schuld ist (direkt oder durch Pfeile/Magie)
         Player attacker = null;
         if (source.getEntity() instanceof Player p) attacker = p;
         else if (source.getDirectEntity() instanceof Player p2) attacker = p2;
 
         if (attacker != null) {
-            // Strafe für den Angreifer: 3 Minuten Dunkelheit (3600 Ticks)
             attacker.addEffect(new net.minecraft.world.effect.MobEffectInstance(net.minecraft.world.effect.MobEffects.DARKNESS, 3600, 0));
             attacker.displayClientMessage(Component.translatable("chat.stones.echo_trader.curse").withStyle(net.minecraft.ChatFormatting.DARK_GRAY, net.minecraft.ChatFormatting.ITALIC), true);
-            if (attacker instanceof net.minecraft.server.level.ServerPlayer serverPlayer) {
+            if (attacker instanceof ServerPlayer serverPlayer) {
                 net.stones.advancement.StonesAdvancementHelper.grantAdvancement(serverPlayer, "trader/foolish_pride");
             }
         }
 
-        // Void Escape (für jeglichen Schaden, sodass er unsterblich und ätherisch wirkt)
         this.level().playSound(null, this.getX(), this.getY(), this.getZ(), net.minecraft.sounds.SoundEvents.SOUL_ESCAPE, net.minecraft.sounds.SoundSource.NEUTRAL, 1.0f, 0.5f);
         
         if (this.level() instanceof net.minecraft.server.level.ServerLevel serverLevel) {
@@ -298,8 +299,8 @@ public class EchoTraderEntity extends WanderingTrader {
             );
         }
 
-        this.discard(); // Despawn
-        return false; // Physischen Schaden/Tod annullieren
+        this.discard();
+        return false;
     }
     
     @Override

@@ -1,8 +1,11 @@
 package net.stones.item;
 
 import net.minecraft.ChatFormatting;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
+import net.minecraft.util.RandomSource;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.ai.attributes.AttributeModifier;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Item;
@@ -34,6 +37,7 @@ import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.event.entity.player.ItemTooltipEvent;
+import net.minecraftforge.registries.ForgeRegistries;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -54,6 +58,41 @@ public class StoneItem extends Item {
 
     public Type getType() { 
         return type; 
+    }
+
+    @Override
+    public void inventoryTick(ItemStack stack, Level level, Entity entity, int slot, boolean selected) {
+        if (!level.isClientSide && stack.hasTag() && stack.getTag().getBoolean("UnboundRune")) {
+            CompoundTag tag = stack.getTag();
+            int tier = tag.contains("RuneTier") ? tag.getInt("RuneTier") : 1;
+
+            // Flags entfernen, damit das Verzaubern nur EINMAL stattfindet
+            tag.remove("UnboundRune");
+            tag.remove("RuneTier");
+            if (tag.isEmpty()) {
+                stack.setTag(null);
+            }
+
+            // Verzauberung ausrollen
+            applyRuneEnchantment(stack, this.type, tier, level.getRandom());
+        }
+        super.inventoryTick(stack, level, entity, slot, selected);
+    }
+
+    private void applyRuneEnchantment(ItemStack stack, Type stoneType, int tier, RandomSource random) {
+        List<Enchantment> validEnchants = ForgeRegistries.ENCHANTMENTS.getValues().stream()
+                .filter(e -> e instanceof RuneEnchantment r && r.type.name().equals(stoneType.name()) && r.isAwake())
+                .toList();
+
+        if (!validEnchants.isEmpty()) {
+            Enchantment selected = validEnchants.get(random.nextInt(validEnchants.size()));
+
+            int minLvl = Math.max(1, tier - 2);
+            int maxLvl = tier + 3;
+            int level = minLvl + random.nextInt(maxLvl - minLvl + 1);
+
+            stack.enchant(selected, level);
+        }
     }
 
     @Override
@@ -104,11 +143,11 @@ public class StoneItem extends Item {
         return false;
     }
 
-	private void openRuneInfoScreen(ItemStack stack) {
-		net.minecraftforge.fml.DistExecutor.unsafeRunWhenOn(net.minecraftforge.api.distmarker.Dist.CLIENT, 
-			() -> () -> net.stones.client.StonesClientProxy.openRuneInfoScreen(stack)
-		);
-	}
+    private void openRuneInfoScreen(ItemStack stack) {
+        net.minecraftforge.fml.DistExecutor.unsafeRunWhenOn(net.minecraftforge.api.distmarker.Dist.CLIENT, 
+            () -> () -> net.stones.client.StonesClientProxy.openRuneInfoScreen(stack)
+        );
+    }
 
     @Override
     public int getMaxStackSize(ItemStack stack) {
@@ -184,11 +223,25 @@ public class StoneItem extends Item {
 
     public static void addFullRuneTooltip(ItemStack stack, List<Component> tooltip, int socketLevel) {
         if (stack.isEmpty()) return;
+		if (stack.hasTag() && stack.getTag().getBoolean("UnboundRune")) {
+				int tier = stack.getTag().contains("RuneTier") ? stack.getTag().getInt("RuneTier") : 1;
 
+				tooltip.add(Component.translatable("tooltip.stones.unbound_title")
+						.withStyle(ChatFormatting.LIGHT_PURPLE, ChatFormatting.BOLD));
+
+				// Das OBFUSCATED lässt diesen Text permanent in zufälligen Glyphen flackern!
+				tooltip.add(Component.literal("  ➤ ").withStyle(ChatFormatting.DARK_GRAY)
+						.append(Component.literal("UNKNOWN RUNE POWER").withStyle(ChatFormatting.OBFUSCATED, ChatFormatting.AQUA))
+						.append(Component.literal(" (Tier " + tier + ")").withStyle(ChatFormatting.DARK_PURPLE)));
+
+				tooltip.add(Component.empty());
+				tooltip.add(Component.translatable("tooltip.stones.unbound_hint")
+						.withStyle(ChatFormatting.GRAY, ChatFormatting.ITALIC));
+				return; // Wichtig: Bricht hier ab, da noch keine echten Verzauberungen da sind
+		}
         Map<Enchantment, Integer> enchants = EnchantmentHelper.getEnchantments(stack);
         int reqLevel = RuneCalculator.getRequiredLevel(stack);
         
-        // Prüft, ob irgendein Fluch auf dem Item liegt
         boolean hasCurse = enchants.keySet().stream().anyMatch(Enchantment::isCurse);
 
         tooltip.add(Component.translatable("tooltip.stones.required_level", reqLevel).withStyle(hasCurse ? ChatFormatting.GREEN : ChatFormatting.BLUE));
@@ -282,7 +335,6 @@ public class StoneItem extends Item {
         else if (level >= 30) rarityColor = ChatFormatting.GOLD;
         else if (level >= 15) rarityColor = ChatFormatting.BLUE;
 
-        // Prefix ✦ hinzugefügt, damit es nicht vom Vanilla-Stripper unten entfernt wird
         tooltip.add(Component.literal("✦ Amplify ").append(Component.translatable("enchantment.level." + level))
                 .withStyle(rarityColor, ChatFormatting.BOLD));
 
@@ -380,23 +432,23 @@ public class StoneItem extends Item {
         return line;
     }
 
-	private static boolean isClientShiftDown() {
-		try {
-			Boolean isDown = DistExecutor.unsafeCallWhenOn(Dist.CLIENT, () -> net.stones.client.util.ClientTooltipHelper::isShiftDown);
-			return isDown != null && isDown;
-		} catch (Exception e) {
-			return false;
-		}
-	}
+    private static boolean isClientShiftDown() {
+        try {
+            Boolean isDown = DistExecutor.unsafeCallWhenOn(Dist.CLIENT, () -> net.stones.client.util.ClientTooltipHelper::isShiftDown);
+            return isDown != null && isDown;
+        } catch (Exception e) {
+            return false;
+        }
+    }
 
-	private static int getClientPlayerLevel() {
-		try {
-			Integer level = DistExecutor.unsafeCallWhenOn(Dist.CLIENT, () -> net.stones.client.util.ClientTooltipHelper::getLevel);
-			return level == null ? 0 : level;
-		} catch (Exception e) {
-			return 0;
-		}
-	}
+    private static int getClientPlayerLevel() {
+        try {
+            Integer level = DistExecutor.unsafeCallWhenOn(Dist.CLIENT, () -> net.stones.client.util.ClientTooltipHelper::getLevel);
+            return level == null ? 0 : level;
+        } catch (Exception e) {
+            return 0;
+        }
+    }
 
     // ==========================================
     // TOOLTIP CLEANER (Entfernt Vanilla Enchantments vom Item)
@@ -410,13 +462,11 @@ public class StoneItem extends Item {
                 Map<Enchantment, Integer> enchants = EnchantmentHelper.getEnchantments(stack);
                 if (enchants.isEmpty()) return;
                 
-                // Wir entfernen die langweiligen Vanilla-Enchantment-Zeilen, da wir sie unten schöner selbst rendern.
                 event.getToolTip().removeIf(component -> {
                     String text = component.getString();
-                    // Die Vanilla-Enchantments haben keine Formatierungen wie " • " oder " ➤ " im reinen Text!
                     for (Map.Entry<Enchantment, Integer> entry : enchants.entrySet()) {
                         if (text.equals(entry.getKey().getFullname(entry.getValue()).getString())) {
-                            return true; // Exakt diese Vanilla-Zeile aus dem Tooltip werfen
+                            return true;
                         }
                     }
                     return false;

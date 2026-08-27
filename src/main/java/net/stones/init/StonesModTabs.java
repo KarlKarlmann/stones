@@ -23,8 +23,6 @@ public class StonesModTabs {
                     .displayItems((parameters, output) -> {
                         // Blöcke
                         output.accept(StonesModItems.RUNESTONE.get());
-                        output.accept(StonesModItems.RESONANCE_BOX.get());
-                        
                         // Runen
                         output.accept(StonesModItems.RUNE_MINOR.get());
                         output.accept(StonesModItems.RUNE_MAJOR.get());

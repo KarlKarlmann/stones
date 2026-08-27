@@ -13,6 +13,7 @@ import net.stones.client.gui.editor.modal.AbstractStudioModal;
 /**
  * Formular-Editor für einzelne Rune-Stats.
  * Übergibt Screen-Referenz für sauberes Tooltip-Handling.
+ * Aktualisiert: Unterstützt nun 'min' und 'max' Hardcaps!
  */
 public class StatEditModal extends AbstractStudioModal {
 
@@ -25,6 +26,10 @@ public class StatEditModal extends AbstractStudioModal {
     private StudioTextField fldStatPerLevel;
     private StudioTextField fldStatSuffix;
     
+    // NEU: Min & Max Felder
+    private StudioTextField fldStatMin;
+    private StudioTextField fldStatMax;
+    
     private Button btnScale;
     private String scalingState = "RUNE_LEVEL";
 
@@ -32,7 +37,8 @@ public class StatEditModal extends AbstractStudioModal {
     private Button btnCancel;
 
     public StatEditModal(StonesStudioScreen screen, JsonObject stat, boolean isNew) {
-        super(screen, Component.literal(isNew ? "✦ Stat Hinzufügen" : "✦ Stat Eigenschaften ändern"), 320, 180);
+        // Höhe von 180 auf 220 erhöht, um Platz für Min & Max zu schaffen
+        super(screen, Component.literal(isNew ? "✦ Stat Hinzufügen" : "✦ Stat Eigenschaften ändern"), 320, 220);
         this.targetStat = stat;
         this.isNew = isNew;
         this.init();
@@ -65,16 +71,33 @@ public class StatEditModal extends AbstractStudioModal {
         // Text: "Die Maßeinheit oder das Suffix des Werts (z. B. %, Sek, Ticks)."
             net.minecraft.network.chat.Component.translatable("gui.stones.studio.statedit.text_10")));
 
+        // NEU: Min Input
+        // Text: "Min Limit:"
+        this.fldStatMin = addModalWidget(new StudioTextField(screen, font, x + 110, y + 115, 190, 14, net.minecraft.network.chat.Component.translatable("gui.stones.studio.statedit.text_26"),
+        // Text: "Das absolute Minimum, auf das dieser Stat fallen kann."
+            net.minecraft.network.chat.Component.translatable("gui.stones.studio.statedit.text_27")));
+
+        // NEU: Max Input
+        // Text: "Max Limit:"
+        this.fldStatMax = addModalWidget(new StudioTextField(screen, font, x + 110, y + 133, 190, 14, net.minecraft.network.chat.Component.translatable("gui.stones.studio.statedit.text_28"),
+        // Text: "Das absolute Maximum, auf das dieser Stat steigen kann."
+            net.minecraft.network.chat.Component.translatable("gui.stones.studio.statedit.text_29")));
+
         this.fldStatId.setValue(targetStat.has("id") ? targetStat.get("id").getAsString() : "");
         this.fldStatLabel.setValue(targetStat.has("label") ? targetStat.get("label").getAsString() : "DICT:stat.stones.");
         this.fldStatBase.setValue(targetStat.has("base") ? targetStat.get("base").getAsString() : "0.0");
         this.fldStatPerLevel.setValue(targetStat.has("per_level") ? targetStat.get("per_level").getAsString() : "0.0");
         this.fldStatSuffix.setValue(targetStat.has("suffix") ? targetStat.get("suffix").getAsString() : "");
         
+        // NEU: Min & Max Werte laden
+        this.fldStatMin.setValue(targetStat.has("min") ? targetStat.get("min").getAsString() : "");
+        this.fldStatMax.setValue(targetStat.has("max") ? targetStat.get("max").getAsString() : "");
+        
         if (targetStat.has("scaling")) {
             this.scalingState = targetStat.get("scaling").getAsString();
         }
 
+        // Skalierungs-Button nach unten verschoben (Y: 151)
         this.btnScale = addModalWidget(Button.builder(Component.literal(scalingState), btn -> {
             scalingState = switch (scalingState) {
                 case "RUNE_LEVEL" -> "SOCKET_LEVEL";
@@ -82,11 +105,12 @@ public class StatEditModal extends AbstractStudioModal {
                 default -> "RUNE_LEVEL";
             };
             btn.setMessage(Component.literal(scalingState));
-        }).bounds(x + 110, y + 115, 190, 14)
+        }).bounds(x + 110, y + 151, 190, 14)
         // Text: "Bestimmt, nach welchem Level der Stat skaliert."
           .tooltip(Tooltip.create(net.minecraft.network.chat.Component.translatable("gui.stones.studio.statedit.text_11")))
           .build());
 
+        // Buttons nach unten verschoben (Y: 185)
         // Text: "Übernehmen"
         this.btnConfirm = addModalWidget(Button.builder(net.minecraft.network.chat.Component.translatable("gui.stones.studio.statedit.text_12"), btn -> {
             targetStat.addProperty("id", fldStatId.getValue().trim());
@@ -97,16 +121,31 @@ public class StatEditModal extends AbstractStudioModal {
             targetStat.addProperty("scaling", scalingState);
             targetStat.addProperty("suffix", fldStatSuffix.getValue().trim());
 
+            // NEU: Min & Max speichern oder sicher entfernen
+            String minVal = fldStatMin.getValue().trim();
+            if (!minVal.isEmpty()) {
+                try { targetStat.addProperty("min", Double.parseDouble(minVal)); } catch (Exception ignored) {}
+            } else {
+                targetStat.remove("min");
+            }
+
+            String maxVal = fldStatMax.getValue().trim();
+            if (!maxVal.isEmpty()) {
+                try { targetStat.addProperty("max", Double.parseDouble(maxVal)); } catch (Exception ignored) {}
+            } else {
+                targetStat.remove("max");
+            }
+
             if (isNew) {
                 StonesStudioScreen.activeStats.add(targetStat);
             }
             screen.closeStatModal();
-        }).bounds(x + 50, y + 145, 100, 16).build());
+        }).bounds(x + 50, y + 185, 100, 16).build());
 
         // Text: "Abbrechen"
         this.btnCancel = addModalWidget(Button.builder(net.minecraft.network.chat.Component.translatable("gui.stones.studio.statedit.text_13"), btn -> {
             onCancel();
-        }).bounds(x + 170, y + 145, 100, 16).build());
+        }).bounds(x + 170, y + 185, 100, 16).build());
 
         this.fldStatId.setFocused(true);
         setFocused(fldStatId);
@@ -138,9 +177,21 @@ public class StatEditModal extends AbstractStudioModal {
         StudioUIHelper.drawLabelWithTooltip(screen, graphics, font, net.minecraft.network.chat.Component.translatable("gui.stones.studio.statedit.text_22"), x + 15, y + 100, mouseX, mouseY, 
         // Text: "Die Maßeinheit oder das Suffix des Parameters (z. B. %, Sek, Ticks)."
             net.minecraft.network.chat.Component.translatable("gui.stones.studio.statedit.text_23"));
+            
+        // NEU: Min Label
+        // Text: "Min Limit:"
+        StudioUIHelper.drawLabelWithTooltip(screen, graphics, font, net.minecraft.network.chat.Component.translatable("gui.stones.studio.statedit.text_26"), x + 15, y + 118, mouseX, mouseY, 
+        // Text: "Das absolute Minimum, auf das dieser Stat fallen kann."
+            net.minecraft.network.chat.Component.translatable("gui.stones.studio.statedit.text_27"));
+            
+        // NEU: Max Label
+        // Text: "Max Limit:"
+        StudioUIHelper.drawLabelWithTooltip(screen, graphics, font, net.minecraft.network.chat.Component.translatable("gui.stones.studio.statedit.text_28"), x + 15, y + 136, mouseX, mouseY, 
+        // Text: "Das absolute Maximum, auf das dieser Stat steigen kann."
+            net.minecraft.network.chat.Component.translatable("gui.stones.studio.statedit.text_29"));
         
         // Text: "Skalierung:"
-        StudioUIHelper.drawLabelWithTooltip(screen, graphics, font, net.minecraft.network.chat.Component.translatable("gui.stones.studio.statedit.text_24"), x + 15, y + 118, mouseX, mouseY, 
+        StudioUIHelper.drawLabelWithTooltip(screen, graphics, font, net.minecraft.network.chat.Component.translatable("gui.stones.studio.statedit.text_24"), x + 15, y + 154, mouseX, mouseY, 
         // Text: "Bestimmt, ob der Wert mit dem Runenlevel, Sockel-Level oder Spieler-Level berechnet wird."
             net.minecraft.network.chat.Component.translatable("gui.stones.studio.statedit.text_25"));
     }

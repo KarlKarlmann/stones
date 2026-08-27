@@ -489,7 +489,57 @@ public class MilestoneActionRegistry {
                 else if (val != null) ctx.getPlayer().getPersistentData().putString("stones_" + name, val.toString());
             }
         });
+		
+		register(new RuneAction() {
+            @Override public String getId() { return "stones:read_nbt"; }
+            @Override public void execute(ActionContext ctx, JsonObject params) {
+                String pathStr = resolveString(ctx, params, "path", "");
+                String saveTo = resolveString(ctx, params, "save_to", "");
+                
+                if (pathStr.isEmpty() || saveTo.isEmpty()) return;
 
+                // 1. Ziel-Entität auflösen (mit Fallback auf den Spieler)
+                Object targetObj = resolveObject(ctx, params, "target");
+                net.minecraft.world.entity.Entity targetEntity;
+                if (targetObj instanceof net.minecraft.world.entity.Entity e) {
+                    targetEntity = e;
+                } else {
+                    targetEntity = ctx.getPlayer(); 
+                }
+
+                if (targetEntity != null) {
+                    try {
+                        // 2. Den NBT-Pfad parsen (mit dem Vanilla Brigadier Parser)
+                        com.mojang.brigadier.StringReader reader = new com.mojang.brigadier.StringReader(pathStr);
+                        net.minecraft.commands.arguments.NbtPathArgument.NbtPath nbtPath = 
+                                net.minecraft.commands.arguments.NbtPathArgument.nbtPath().parse(reader);
+
+                        // 3. NBT der Entität abrufen (sammelt auch Capabilities wie ForgeCaps ein)
+                        net.minecraft.nbt.CompoundTag entityNbt = new net.minecraft.nbt.CompoundTag();
+                        targetEntity.saveWithoutId(entityNbt);
+
+                        // 4. Pfad auswerten
+                        java.util.List<net.minecraft.nbt.Tag> matchingTags = nbtPath.get(entityNbt);
+                        
+                        if (!matchingTags.isEmpty()) {
+                            net.minecraft.nbt.Tag resultTag = matchingTags.get(0);
+                            
+                            // Numerische Tags als Float speichern (für Kompatibilität mit stones:math)
+                            if (resultTag instanceof net.minecraft.nbt.NumericTag numericTag) {
+                                ctx.setVariable(saveTo, numericTag.getAsFloat());
+                            } else {
+                                // Alles andere (Strings, Arrays, Compound-Inhalte) als String speichern
+                                ctx.setVariable(saveTo, resultTag.getAsString());
+                            }
+                        }
+                    } catch (com.mojang.brigadier.exceptions.CommandSyntaxException e) {
+                        LOGGER.debug("[Stones Engine] Ungültiger NBT-Pfad in stones:read_nbt: {}", pathStr);
+                    } catch (Exception ignored) {
+                        // Pfad existiert auf dieser Entität nicht -> Leise ignorieren
+                    }
+                }
+            }
+        });
 		register(new RuneAction() {
 				@Override public String getId() { return "stones:get_attribute"; }
 				@Override public void execute(ActionContext ctx, JsonObject params) {

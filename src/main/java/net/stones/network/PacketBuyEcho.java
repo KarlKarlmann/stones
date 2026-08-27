@@ -5,6 +5,7 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.enchantment.EnchantmentHelper;
 import net.minecraftforge.registries.ForgeRegistries;
@@ -46,7 +47,7 @@ public class PacketBuyEcho {
                 if (stockItem.hasTag() && stockItem.getTag().getBoolean("EchoSacrifice")) {
                     applySacrifice(player, stockItem.getTag().getInt("SacrificeType"));
                     trader.consumeResonance();
-					net.stones.advancement.StonesAdvancementHelper.grantAdvancement(player, "trader/blood_toll");
+                    net.stones.advancement.StonesAdvancementHelper.grantAdvancement(player, "trader/blood_toll");
                 } 
                 // --- FALL B: NORMALER KAUF ---
                 else {
@@ -90,14 +91,21 @@ public class PacketBuyEcho {
 
     public static int getXpCost(ItemStack stack) {
         // --- 0. Custom Config-based Cost ---
-        // Wenn das Item vom Echo Trader ein NBT-Preisschild erhalten hat, nutzen wir dieses!
         if (stack.hasTag() && stack.getTag().contains("EchoCustomCost")) {
             return stack.getTag().getInt("EchoCustomCost");
         }
 
-        // --- 1. Resonanz Boxen ---
-        if (stack.getItem() == StonesModItems.RESONANCE_BOX.get()) {
-            int tier = stack.getOrCreateTag().getInt("ResonanceLootTier");
+        // --- 1. Resonanz Boxen (Reward Chests) ---
+        Item rewardChestItem = ForgeRegistries.ITEMS.getValue(new ResourceLocation("reward_box", "reward_chest"));
+        if (rewardChestItem != null && stack.getItem() == rewardChestItem) {
+            int tier = 1;
+            if (stack.hasTag()) {
+                if (stack.getTag().contains("RewardTier")) {
+                    tier = stack.getTag().getInt("RewardTier");
+                } else if (stack.getTag().contains("ResonanceLootTier")) {
+                    tier = stack.getTag().getInt("ResonanceLootTier");
+                }
+            }
             if (tier <= 0) tier = 1;
             return net.stones.init.StonesModConfig.TRADER_COST_BOX_BASE.get() + (tier * net.stones.init.StonesModConfig.TRADER_COST_BOX_PER_TIER.get());
         }

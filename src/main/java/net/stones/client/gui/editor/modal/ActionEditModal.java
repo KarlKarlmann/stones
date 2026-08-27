@@ -558,6 +558,26 @@ public class ActionEditModal extends AbstractStudioModal {
                 layout.addText(net.minecraft.network.chat.Component.translatable("gui.stones.studio.actionedit.text_133").getString());
                 layout.addInput("command", 300, "say Hallo Welt!", false);
             }
+			case "stones:case" -> {
+                actionTitle = Component.translatable("gui.stones.studio.actionedit.title.case").getString();
+                layout.addText(Component.translatable("gui.stones.studio.actionedit.text_case_1").getString());
+                layout.nextLine();
+                layout.addText(Component.translatable("gui.stones.studio.actionedit.text_case_2").getString());
+                layout.nextLine();
+                layout.addText(Component.translatable("gui.stones.studio.actionedit.text_case_3").getString());
+            }
+			case "stones:read_nbt" -> {
+				actionTitle = Component.translatable("gui.stones.studio.actionedit.title.read_nbt").getString();
+				layout.addText(Component.translatable("gui.stones.studio.actionedit.text_read_nbt_1").getString());
+				layout.addInput("target", 80, "$player", false);
+				layout.nextLine();
+				layout.addText(Component.translatable("gui.stones.studio.actionedit.text_read_nbt_2").getString());
+				layout.addInput("path", 200, "ForgeCaps.\"stones:shrine_link\".pos.X", false);
+				layout.nextLine();
+				layout.addText(Component.translatable("gui.stones.studio.actionedit.text_read_nbt_3").getString());
+				layout.addVariableByNameInput("save_to", 80, "nbt_val"); 
+				layout.addText(Component.translatable("gui.stones.studio.actionedit.text_read_nbt_4").getString());
+			}
             case "stones:remove_random_enchantment" -> {
                 actionTitle = Component.translatable("gui.stones.studio.actionedit.title.remove_random_enchantment").getString();
                 // Text: "Entferne ein zufälliges Enchantment der getragenen Waffe"

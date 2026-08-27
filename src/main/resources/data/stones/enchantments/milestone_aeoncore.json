@@ -3,7 +3,7 @@
   "name": "DICT:milestone.stones.aeon_core.name",
   "description": "DICT:milestone.stones.aeon_core.description",
   "required_level": 1,
-  "icon": "stones:textures/gui/skills/aeoncore.png",
+  "icon": "stones:textures/gui/skills/shrineteleport.png",
   "stats": [
     {
       "id": "aeon_cooldown",

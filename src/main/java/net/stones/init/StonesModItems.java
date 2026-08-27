@@ -14,9 +14,6 @@ public class StonesModItems {
 	public static final DeferredRegister<Item> REGISTRY = DeferredRegister.create(ForgeRegistries.ITEMS, StonesMod.MODID);
 	
     public static final RegistryObject<Item> RUNESTONE = block(StonesModBlocks.RUNESTONE);
-	
-    public static final RegistryObject<Item> RESONANCE_BOX = REGISTRY.register("resonance_box", 
-        () -> new ResonanceBoxBlockItem(StonesModBlocks.RESONANCE_BOX.get(), new Item.Properties().rarity(Rarity.EPIC)));
         
     public static final RegistryObject<Item> RUNE_MINOR = REGISTRY.register("rune_minor", 
         () -> new StoneItem(StoneItem.Type.MINOR));

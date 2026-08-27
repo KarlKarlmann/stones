@@ -75,6 +75,7 @@ public class ActionSelectionModal extends ActionEditModal {
         addType("stones:set_block", "🧱", json("type", "stones:set_block", "block", "minecraft:air"));
         addType("stones:find_blocks", "🔎", json("type", "stones:find_blocks", "radius", 5.0, "save_to", "found_blocks"));
         addType("stones:marker", "📍", json("type", "stones:marker", "mode", "point", "size", 1.0, "duration", 100));
+		addType("stones:read_nbt", "📦", json("type", "stones:read_nbt", "target", "$player", "path", "ForgeCaps.\"stones:shrine_link\".pos.X", "save_to", "shrine_x"));
 
         // EFFECTS & SOUNDS
         addType("stones:apply_effect", "🧪", json("type", "stones:apply_effect", "effect", "minecraft:speed", "duration", 100, "amplifier", 0));

@@ -12,6 +12,7 @@ import net.stones.client.gui.editor.StonesStudioScreen;
  * Zeichnet das einklappbare Panel, bei dem jeder Stat-Eintrag in einem eigenen,
  * formatierten Kasten (Card) über genau 3 Zeilen dargestellt wird.
  * Ordnet die Buttons vertikal an, um Text-Überlagerungen komplett zu verhindern.
+ * Aktualisiert: Zeigt nun auch 'min' und 'max' Limits an, falls konfiguriert!
  */
 public class RuneStatsSection {
 
@@ -68,6 +69,10 @@ public class RuneStatsSection {
                 String suffix = stat.has("suffix") ? stat.get("suffix").getAsString() : "";
                 String scaling = stat.has("scaling") ? stat.get("scaling").getAsString() : "RUNE_LEVEL";
                 
+                // NEU: Lese optionale min/max Werte aus
+                String minLimit = stat.has("min") ? " | Min: " + stat.get("min").getAsString() : "";
+                String maxLimit = stat.has("max") ? " | Max: " + stat.get("max").getAsString() : "";
+                
                 // Formatiertes Kasten-Rendering für jede geladene Stat (Eigene Card)
                 int cardY = rowY;
                 graphics.fill(editorX + 4, cardY, editorX + areaWidth - 4, cardY + CARD_HEIGHT, 0xFF141416);
@@ -85,9 +90,10 @@ public class RuneStatsSection {
         // Text: "§7"
                 graphics.drawString(font, net.minecraft.network.chat.Component.translatable("gui.stones.studio.runestatssection.text_03").getString() + valuesText, editorX + 10, cardY + 17, 0xFFAAAAAA);
 
-                // Zeile 3: Skalierungs-Typ (In modernem Aqua-Blau)
+                // Zeile 3: Skalierungs-Typ (In modernem Aqua-Blau) + Min/Max Limits
+                String scalingAndLimits = scaling + minLimit + maxLimit;
         // Text: "Skalierung: §b"
-                graphics.drawString(font, net.minecraft.network.chat.Component.translatable("gui.stones.studio.runestatssection.text_04").getString() + scaling, editorX + 10, cardY + 29, 0xFFAAAAAA);
+                graphics.drawString(font, net.minecraft.network.chat.Component.translatable("gui.stones.studio.runestatssection.text_04").getString() + scalingAndLimits, editorX + 10, cardY + 29, 0xFFAAAAAA);
 
                 // =========================================================================
                 // BUTTON-LAYOUT: Vertikal gestapelt auf der rechten Seite
