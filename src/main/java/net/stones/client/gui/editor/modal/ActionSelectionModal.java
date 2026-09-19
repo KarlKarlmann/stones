@@ -11,11 +11,12 @@ import net.stones.client.gui.editor.TreeNode;
 import net.stones.client.gui.editor.StonesStudioScreen;
 import net.stones.client.gui.editor.section.StudioContextMenu;
 import net.stones.client.gui.editor.StudioSerializer;
+
 public class ActionSelectionModal extends ActionEditModal {
 
     private final TreeNode parentCategory;
     private final boolean isAction;
-    
+
     private final List<TypeEntry> availableTypes = new ArrayList<>();
     private int selectedIndex = 0;
     private int scrollOffset = 0;
@@ -49,6 +50,7 @@ public class ActionSelectionModal extends ActionEditModal {
         addType("stones:add_combo", "⚔️", json("type", "stones:add_combo", "id", "my_combo", "value", 1.0, "max", 5.0, "timeout", 100));
         addType("stones:update_combo", "📊", json("type", "stones:update_combo", "id", "$runeId", "count", 1, "max", 5));
         addType("stones:get_combo", "🔍", json("type", "stones:get_combo", "id", "my_combo", "into", "combo_val"));
+        addType("stones:spawn_projectile", "🚀", json("type", "stones:spawn_projectile", "origin", "$player.eye_pos", "direction", "$player.look_angle", "speed", 1.8, "gravity", 0.0, "lifetime", 80, "hitbox_size", 0.25, "visuals", json("render_mode", "BILLBOARD", "texture", "minecraft:textures/particle/glint.png")));
 
         // VARIABLEN & NBT
         addType("stones:set_variable", "📝", json("type", "stones:set_variable", "name", "my_var", "value", "1.0"));
@@ -73,9 +75,9 @@ public class ActionSelectionModal extends ActionEditModal {
         addType("stones:explode", "💣", json("type", "stones:explode", "radius", 3.0, "fire", "false"));
         addType("stones:add_velocity", "🚀", json("type", "stones:add_velocity", "x", 0.0, "y", 1.0, "z", 0.0, "scale", 1.0));
         addType("stones:set_block", "🧱", json("type", "stones:set_block", "block", "minecraft:air"));
-        addType("stones:find_blocks", "🔎", json("type", "stones:find_blocks", "radius", 5.0, "save_to", "found_blocks"));
-        addType("stones:marker", "📍", json("type", "stones:marker", "mode", "point", "size", 1.0, "duration", 100));
-		addType("stones:read_nbt", "📦", json("type", "stones:read_nbt", "target", "$player", "path", "ForgeCaps.\"stones:shrine_link\".pos.X", "save_to", "shrine_x"));
+		addType("stones:find_blocks", "🔎", json("type", "stones:find_blocks", "radius", 5.0, "save_to", "found_blocks"));
+        addType("stones:find_entities", "👥", json("type", "stones:find_entities", "mode", "radius", "radius", 5.0, "living_only", true, "exclude_self", true, "line_of_sight", false, "save_to", "found_entities"));        addType("stones:marker", "📍", json("type", "stones:marker", "mode", "point", "size", 1.0, "duration", 100));
+        addType("stones:read_nbt", "📦", json("type", "stones:read_nbt", "target", "$player", "path", "ForgeCaps.\"stones:shrine_link\".pos.X", "save_to", "shrine_x"));
 
         // EFFECTS & SOUNDS
         addType("stones:apply_effect", "🧪", json("type", "stones:apply_effect", "effect", "minecraft:speed", "duration", 100, "amplifier", 0));
@@ -190,7 +192,7 @@ public class ActionSelectionModal extends ActionEditModal {
 
         if (selectedIndex >= 0 && selectedIndex < availableTypes.size()) {
             TypeEntry selected = availableTypes.get(selectedIndex);
-            
+
             Component header = Component.literal(selected.icon + " ").append(selected.displayName);
             graphics.drawString(screen.getFont(), header, detailsX, detailsY, 0xFFFFFFFF);
             graphics.fill(detailsX, detailsY + 12, detailsX + detailsW, detailsY + 13, 0xFF2D2D31);
@@ -267,18 +269,15 @@ public class ActionSelectionModal extends ActionEditModal {
 
             TypeEntry selected = availableTypes.get(selectedIndex);
             JsonObject config = selected.defaultJson.deepCopy();
-            
+
             TreeNode.Type nodeType = isAction ? TreeNode.Type.ACTION : TreeNode.Type.CONDITION;
-            String icon = isAction ? "!" : "✦";
-            if (selected.id.equals("stones:delay")) icon = "⏳";
-            else if (selected.id.equals("stones:case")) icon = "📁";
-            else if (selected.id.equals("stones:add_combo")) icon = "⚔️";
+            String icon = selected.icon != null && !selected.icon.isEmpty() ? selected.icon : (isAction ? "!" : "✦");
 
             TreeNode newNode = new TreeNode(icon, StudioSerializer.getReadableText(config, nodeType), nodeType, parentCategory);
             newNode.jsonData = config;
-            
+
             parentCategory.addChild(newNode);
-            
+
             StudioContextMenu.postProcessTree();
             screen.closeModal();
         }

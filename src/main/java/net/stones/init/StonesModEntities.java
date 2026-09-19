@@ -11,6 +11,7 @@ import net.minecraftforge.registries.ForgeRegistries;
 import net.minecraftforge.registries.RegistryObject;
 import net.stones.StonesMod;
 import net.stones.entity.EchoTraderEntity;
+import net.stones.entity.StonesProjectileEntity;
 
 @Mod.EventBusSubscriber(modid = StonesMod.MODID, bus = Mod.EventBusSubscriber.Bus.MOD)
 public class StonesModEntities {
@@ -21,6 +22,14 @@ public class StonesModEntities {
                     .sized(0.6f, 1.95f)
                     .clientTrackingRange(10)
                     .build(new ResourceLocation(StonesMod.MODID, "echo_trader").toString()));
+					
+	public static final RegistryObject<EntityType<StonesProjectileEntity>> STONES_PROJECTILE = REGISTRY.register("stones_projectile",
+        () -> EntityType.Builder.<StonesProjectileEntity>of(StonesProjectileEntity::new, MobCategory.MISC)
+            .sized(0.25F, 0.25F)
+            .clientTrackingRange(64)
+            .updateInterval(1)
+            .setShouldReceiveVelocityUpdates(true)
+            .build("stones_projectile"));
 
     @SubscribeEvent
     public static void onAttributeCreation(EntityAttributeCreationEvent event) {

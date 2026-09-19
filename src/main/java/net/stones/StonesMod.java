@@ -98,6 +98,7 @@ public class StonesMod {
 		addNetworkMessage(PacketOpenShrine.class, PacketOpenShrine::toBytes, PacketOpenShrine::new, PacketOpenShrine::handle);
 		addNetworkMessage(PacketPerformAction.class, PacketPerformAction::encode, PacketPerformAction::new, PacketPerformAction::handle);	
 		addNetworkMessage(PacketBuyEcho.class, PacketBuyEcho::toBytes, PacketBuyEcho::new, PacketBuyEcho::handle);
+		addNetworkMessage(C2SRequestTexturePacket.class, C2SRequestTexturePacket::toBytes, C2SRequestTexturePacket::new, C2SRequestTexturePacket::handle);
 
 		// --- S2C ---
 		addNetworkMessage(PacketSyncPlayerShrine.class, PacketSyncPlayerShrine::toBytes, PacketSyncPlayerShrine::new, PacketSyncPlayerShrine::handle);
@@ -106,6 +107,7 @@ public class StonesMod {
 		addNetworkMessage(PacketSyncCombo.class, PacketSyncCombo::encode, PacketSyncCombo::new, PacketSyncCombo::handle);
         addNetworkMessage(PacketSyncCooldown.class, PacketSyncCooldown::encode, PacketSyncCooldown::new, PacketSyncCooldown::handle);
         addNetworkMessage(PacketSyncEnchantments.class, PacketSyncEnchantments::toBytes, PacketSyncEnchantments::new, PacketSyncEnchantments::handle);
+		addNetworkMessage(S2CSendTexturePacket.class, S2CSendTexturePacket::toBytes, S2CSendTexturePacket::new, S2CSendTexturePacket::handle);
 
 		event.enqueueWork(() -> {
 			try {

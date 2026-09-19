@@ -38,8 +38,8 @@ public class StudioSerializer {
                         json.has("sound") ? json.get("sound").getAsString() : "").getString();
                 case "stones:cooldown" -> Component.translatable("gui.stones.studio.serializer.action.cooldown",
                         json.has("ticks") ? json.get("ticks").getAsString() : "").getString();
-				case "stones:read_nbt" -> Component.translatable("gui.stones.studio.serializer.action.read_nbt", 
-						json.has("path") ? json.get("path").getAsString() : "").getString();
+                case "stones:read_nbt" -> Component.translatable("gui.stones.studio.serializer.action.read_nbt", 
+                        json.has("path") ? json.get("path").getAsString() : "").getString();
                 default -> {
                     String actionKey = "gui.stones.studio.actionselection.action." + t.replace("stones:", "") + ".name";
                     String name = Component.translatable(actionKey).getString();
@@ -151,7 +151,18 @@ public class StudioSerializer {
                             node.jsonData.add("actions", nestedActions);
                         }
                     }
-                } else if (actType.equals("stones:case")) {
+				} else if (actType.equals("stones:for_each")) {
+					for (TreeNode child : node.children) {
+						if (child.type == TreeNode.Type.CATEGORY && child.rawId.equals("ACTIONS")) {
+							JsonArray nestedActions = new JsonArray();
+							prepareTreeForSaving(child.children);
+							for (TreeNode nestedAct : child.children) {
+								nestedActions.add(nestedAct.jsonData.deepCopy());
+							}
+							node.jsonData.add("actions", nestedActions);
+						}
+					}
+				} else if (actType.equals("stones:case")) {
                     JsonArray casesArray = new JsonArray();
                     JsonArray defaultArray = new JsonArray();
 
@@ -191,6 +202,23 @@ public class StudioSerializer {
                     } else {
                         node.jsonData.remove("default");
                     }
+                } else if (actType.equals("stones:spawn_projectile")) {
+                    for (TreeNode child : node.children) {
+                        if (child.type == TreeNode.Type.CATEGORY) {
+                            JsonArray nestedActions = new JsonArray();
+                            prepareTreeForSaving(child.children);
+                            for (TreeNode nestedAct : child.children) {
+                                nestedActions.add(nestedAct.jsonData.deepCopy());
+                            }
+                            if ("ON_TICK".equals(child.rawId)) {
+                                node.jsonData.add("on_tick", nestedActions);
+                            } else if ("ON_HIT_ENTITY".equals(child.rawId)) {
+                                node.jsonData.add("on_hit_entity", nestedActions);
+                            } else if ("ON_HIT_BLOCK".equals(child.rawId)) {
+                                node.jsonData.add("on_hit_block", nestedActions);
+                            }
+                        }
+                    }
                 }
             }
             prepareTreeForSaving(node.children);
@@ -221,7 +249,22 @@ public class StudioSerializer {
                         postProcessNode(childNode);
                     }
                 }
-            } else if (actType.equals("stones:case") && node.children.isEmpty()) {
+            } else if (actType.equals("stones:for_each") && node.children.isEmpty()) {
+				TreeNode loopActionsGroup = new TreeNode("🎬", Component.translatable("gui.stones.studio.studioserializer.text_04").getString(), TreeNode.Type.CATEGORY, node);
+				loopActionsGroup.rawId = "ACTIONS";
+				node.addChild(loopActionsGroup);
+
+				if (node.jsonData.has("actions")) {
+					JsonArray arr = node.jsonData.getAsJsonArray("actions");
+					for (JsonElement e : arr) {
+						JsonObject aObj = e.getAsJsonObject();
+						TreeNode childNode = new TreeNode("!", getReadableText(aObj, TreeNode.Type.ACTION), TreeNode.Type.ACTION, loopActionsGroup);
+						childNode.jsonData = aObj;
+						loopActionsGroup.addChild(childNode);
+						postProcessNode(childNode);
+					}
+				}
+			} else if (actType.equals("stones:case") && node.children.isEmpty()) {
                 TreeNode casesGroup = new TreeNode("📁", Component.translatable("gui.stones.studio.studioserializer.text_05").getString(), TreeNode.Type.CATEGORY, node);
                 casesGroup.rawId = "CASES";
                 node.addChild(casesGroup);
@@ -278,7 +321,55 @@ public class StudioSerializer {
                         postProcessNode(childNode);
                     }
                 }
-            }
+			} else if (actType.equals("stones:spawn_projectile") && node.children.isEmpty()) {
+				// 1. Flug-Aktionen (on_tick)
+				TreeNode tickGroup = new TreeNode("🔄", Component.translatable("gui.stones.studio.studioserializer.projectile.on_tick").getString(), TreeNode.Type.CATEGORY, node);
+				tickGroup.rawId = "ON_TICK";
+				node.addChild(tickGroup);
+
+				if (node.jsonData.has("on_tick")) {
+					JsonArray arr = node.jsonData.getAsJsonArray("on_tick");
+					for (JsonElement e : arr) {
+						JsonObject aObj = e.getAsJsonObject();
+						TreeNode childNode = new TreeNode("!", getReadableText(aObj, TreeNode.Type.ACTION), TreeNode.Type.ACTION, tickGroup);
+						childNode.jsonData = aObj;
+						tickGroup.addChild(childNode);
+						postProcessNode(childNode);
+					}
+				}
+
+				// 2. Entity-Treffer (on_hit_entity)
+				TreeNode entityGroup = new TreeNode("🎯", Component.translatable("gui.stones.studio.studioserializer.projectile.on_hit_entity").getString(), TreeNode.Type.CATEGORY, node);
+				entityGroup.rawId = "ON_HIT_ENTITY";
+				node.addChild(entityGroup);
+
+				if (node.jsonData.has("on_hit_entity")) {
+					JsonArray arr = node.jsonData.getAsJsonArray("on_hit_entity");
+					for (JsonElement e : arr) {
+						JsonObject aObj = e.getAsJsonObject();
+						TreeNode childNode = new TreeNode("!", getReadableText(aObj, TreeNode.Type.ACTION), TreeNode.Type.ACTION, entityGroup);
+						childNode.jsonData = aObj;
+						entityGroup.addChild(childNode);
+						postProcessNode(childNode);
+					}
+				}
+
+				// 3. Block-Treffer (on_hit_block)
+				TreeNode blockGroup = new TreeNode("🧱", Component.translatable("gui.stones.studio.studioserializer.projectile.on_hit_block").getString(), TreeNode.Type.CATEGORY, node);
+				blockGroup.rawId = "ON_HIT_BLOCK";
+				node.addChild(blockGroup);
+
+				if (node.jsonData.has("on_hit_block")) {
+					JsonArray arr = node.jsonData.getAsJsonArray("on_hit_block");
+					for (JsonElement e : arr) {
+						JsonObject aObj = e.getAsJsonObject();
+						TreeNode childNode = new TreeNode("!", getReadableText(aObj, TreeNode.Type.ACTION), TreeNode.Type.ACTION, blockGroup);
+						childNode.jsonData = aObj;
+						blockGroup.addChild(childNode);
+						postProcessNode(childNode);
+					}
+				}
+			}
         }
         for (TreeNode child : new ArrayList<>(node.children)) {
             postProcessNode(child);

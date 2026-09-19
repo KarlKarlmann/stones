@@ -43,7 +43,8 @@ import net.minecraft.world.item.enchantment.Enchantment;
 import net.minecraft.world.item.enchantment.EnchantmentHelper;
 import net.stones.network.PacketSyncCombo;
 import net.stones.network.PacketSyncCooldown;
-
+import net.stones.entity.StonesProjectileEntity;
+import net.minecraft.world.entity.LivingEntity;
 /**
  * Registriert alle Milestone Actions.
  * Aktualisiert: Behebt den Kompilierfehler bzgl. der "effectively final" Lambda-Referenzen.
@@ -70,6 +71,18 @@ public class MilestoneActionRegistry {
         return el.getAsFloat();
     }
 
+	public static LivingEntity resolveLivingEntity(ActionContext ctx, JsonObject params, String key) {
+		// 1. Altes JSON ohne den Parameter -> Automatisch Fallback auf Spieler
+		if (!params.has(key)) return ctx.getPlayer();
+
+		// 2. Neues JSON -> Versuche die Variable ($target, $player etc.) aufzulösen
+		Object raw = resolveObject(ctx, params, key);
+		if (raw instanceof LivingEntity le) return le;
+
+		// 3. Fallback, falls die Variable unvollständig/null war
+		return ctx.getPlayer();
+	}
+	
     public static int resolveInt(ActionContext ctx, JsonObject params, String key, int def) {
         if (!params.has(key)) return def;
         JsonElement el = params.get(key);
@@ -143,7 +156,23 @@ public class MilestoneActionRegistry {
         if (raw instanceof Vec3 v) return v;
         return ctx.getPlayer().position().add(0, 1.0, 0); 
     }
-
+	
+	public static String processTextureForNetwork(String rawTexture) {
+		if (rawTexture == null || rawTexture.isBlank()) {
+			return "minecraft:textures/particle/glint.png";
+		}
+		
+		// Sobald es Base64 ist, wird es im Server registriert und auf eine ID gekürzt!
+		if (rawTexture.startsWith("data:image/") || rawTexture.length() > 100) {
+			String textureId = "dynamic:" + Math.abs(rawTexture.hashCode());
+			net.stones.data.ServerTextureRegistry.register(textureId, rawTexture);
+			return textureId; // Nur die ID verlässt diese Methode!
+		}
+		
+		// Normale Pfade (z.B. "stones:textures/...") bleiben unangetastet
+		return rawTexture;
+	}
+	
     public static BlockPos getTargetPos(ActionContext ctx, JsonObject params) {
         Object raw = resolveObject(ctx, params, "pos");
         if (raw instanceof BlockPos bp) return bp;
@@ -218,10 +247,132 @@ public class MilestoneActionRegistry {
 				});
 			}
 		});
+		// === PEW PEW ===
+		register(new RuneAction() {
+			@Override public String getId() { return "stones:spawn_projectile"; }
+			@Override public void execute(ActionContext ctx, JsonObject params) {
+				ServerPlayer player = ctx.getPlayer();
+				if (player == null || !(player.level() instanceof ServerLevel sl)) return;
 
-        // ==========================================
-        // NEU: STONES:GET_COMBO (EXPLIZITES HOLLEN)
-        // ==========================================
+				Vec3 origin = resolveVec3(ctx, params);
+				
+				Object dirObj = resolveObject(ctx, params, "direction");
+				Vec3 direction = (dirObj instanceof Vec3 v) ? v : player.getLookAngle();
+
+				float speed = resolveFloat(ctx, params, "speed", 1.8f);
+				float gravity = resolveFloat(ctx, params, "gravity", 0.0f);
+				int lifetime = resolveInt(ctx, params, "lifetime", 80);
+
+				// Dynamische Hitbox auslesen (z.B. "hitbox_size": 1.5 oder "hitbox_size": [1.5, 1.5])
+				float hitboxWidth = 0.25f;
+				float hitboxHeight = 0.25f;
+				if (params.has("hitbox_size")) {
+					JsonElement hbEl = params.get("hitbox_size");
+					if (hbEl.isJsonArray()) {
+						JsonArray arr = hbEl.getAsJsonArray();
+						if (arr.size() >= 2) {
+							hitboxWidth = arr.get(0).getAsFloat();
+							hitboxHeight = arr.get(1).getAsFloat();
+						}
+					} else {
+						hitboxWidth = hbEl.getAsFloat();
+						hitboxHeight = hbEl.getAsFloat();
+					}
+				}
+
+				String renderMode = "BILLBOARD";
+				String textureData = "";
+				if (params.has("visuals")) {
+					JsonObject visuals = params.getAsJsonObject("visuals");
+					renderMode = resolveString(ctx, visuals, "render_mode", "BILLBOARD");
+					// HIER ÄNDERN:
+					textureData = processTextureForNetwork(resolveString(ctx, visuals, "texture", ""));
+				} else if (params.has("texture")) {
+					// HIER ÄNDERN:
+					textureData = processTextureForNetwork(resolveString(ctx, params, "texture", ""));
+				}
+
+				JsonArray onHitEntity = params.has("on_hit_entity") ? params.getAsJsonArray("on_hit_entity") : null;
+				JsonArray onHitBlock = params.has("on_hit_block") ? params.getAsJsonArray("on_hit_block") : null;
+				JsonArray onTick = params.has("on_tick") ? params.getAsJsonArray("on_tick") : null;
+
+				StonesProjectileEntity projectile = new StonesProjectileEntity(sl, origin.x, origin.y, origin.z);
+				projectile.setOwner(player);
+				projectile.setup(direction, speed, gravity, lifetime, hitboxWidth, hitboxHeight, renderMode, textureData, onHitEntity, onHitBlock, onTick);
+
+				sl.addFreshEntity(projectile);
+			}
+		});
+		register(new RuneAction() {
+			@Override public String getId() { return "stones:find_entities"; }
+			@Override public void execute(ActionContext ctx, JsonObject params) {
+				ServerPlayer player = ctx.getPlayer();
+				if (player == null || !(player.level() instanceof ServerLevel sl)) return;
+
+				List<net.minecraft.world.entity.Entity> results = new ArrayList<>();
+				String mode = resolveString(ctx, params, "mode", "radius");
+				boolean excludeSelf = !params.has("exclude_self") || params.get("exclude_self").getAsBoolean();
+				boolean livingOnly = !params.has("living_only") || params.get("living_only").getAsBoolean();
+
+				// ==========================================
+				// 1. MODUS: RAYCAST (Fadenkreuz-Erfassung)
+				// ==========================================
+				if (mode.equalsIgnoreCase("raycast")) {
+					double dist = resolveFloat(ctx, params, "distance", 5.0f);
+					Vec3 eyePos = player.getEyePosition();
+					Vec3 look = player.getLookAngle();
+					Vec3 reach = eyePos.add(look.scale(dist));
+					net.minecraft.world.phys.AABB searchBox = player.getBoundingBox().expandTowards(look.scale(dist)).inflate(1.0);
+
+					net.minecraft.world.phys.EntityHitResult hit = net.minecraft.world.entity.projectile.ProjectileUtil.getEntityHitResult(
+						sl, player, eyePos, reach, searchBox,
+						e -> (!excludeSelf || !e.equals(player)) && (!livingOnly || e instanceof net.minecraft.world.entity.LivingEntity)
+					);
+
+					if (hit != null && hit.getEntity() != null) {
+						results.add(hit.getEntity());
+					}
+
+				// ==========================================
+				// 2. MODUS: RADIUS / AABB (Flächensuche)
+				// ==========================================
+				} else {
+					Vec3 center = resolveVec3(ctx, params); // Unterstützt $hitPos, $blockPos etc.
+					float radius = resolveFloat(ctx, params, "radius", 5.0f);
+					float rx = resolveFloat(ctx, params, "rx", radius);
+					float ry = resolveFloat(ctx, params, "ry", radius);
+					float rz = resolveFloat(ctx, params, "rz", radius);
+
+					net.minecraft.world.phys.AABB area = new net.minecraft.world.phys.AABB(
+						center.x - rx, center.y - ry, center.z - rz,
+						center.x + rx, center.y + ry, center.z + rz
+					);
+
+					Class<? extends net.minecraft.world.entity.Entity> entityClass = livingOnly 
+						? net.minecraft.world.entity.LivingEntity.class 
+						: net.minecraft.world.entity.Entity.class;
+
+					for (net.minecraft.world.entity.Entity entity : sl.getEntitiesOfClass(entityClass, area)) {
+						if (excludeSelf && entity.equals(player)) continue;
+
+						// Optionaler Sichtlinien-Check
+						if (params.has("line_of_sight") && params.get("line_of_sight").getAsBoolean()) {
+							HitResult hit = sl.clip(new ClipContext(center, entity.getEyePosition(), ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, player));
+							if (hit.getType() != HitResult.Type.MISS) continue;
+						}
+
+						results.add(entity);
+					}
+				}
+
+				// 3. Ergebnis in Context-Variablen schreiben
+				if (params.has("save_to")) {
+					String varName = resolveString(ctx, params, "save_to", "found_entities");
+					ctx.setVariable(varName, results);
+					ctx.setVariable(varName + "_count", (float) results.size());
+				}
+			}
+		});		
         register(new RuneAction() {
             @Override public String getId() { return "stones:get_combo"; }
             @Override public void execute(ActionContext ctx, JsonObject params) {
@@ -277,7 +428,7 @@ public class MilestoneActionRegistry {
                 long now = player.level().getGameTime();
 
                 int max = resolveInt(ctx, params, "max", 5);
-                String texture = resolveString(ctx, params, "texture", "minecraft:textures/particle/glint.png");
+                String texture = processTextureForNetwork(resolveString(ctx, params, "texture", "minecraft:textures/particle/glint.png"));
                 float size = resolveFloat(ctx, params, "size", 0.4f);
                 float radius = resolveFloat(ctx, params, "radius", 1.2f);
                 float speed = resolveFloat(ctx, params, "speed", 0.1f);
@@ -366,7 +517,7 @@ public class MilestoneActionRegistry {
                     targetEntity = player;
                 }
 
-                String texture = resolveString(ctx, params, "texture", "minecraft:textures/particle/glint.png");
+                String texture = processTextureForNetwork(resolveString(ctx, params, "texture", "minecraft:textures/particle/glint.png"));
                 float size = resolveFloat(ctx, params, "size", 0.4f);
                 float radius = resolveFloat(ctx, params, "radius", 1.2f);
                 float speed = resolveFloat(ctx, params, "speed", 0.1f);
@@ -557,18 +708,20 @@ public class MilestoneActionRegistry {
 				}
 			});	
 			
-        register(new RuneAction() {
-            @Override public String getId() { return "stones:add_velocity"; }
-            @Override public void execute(ActionContext ctx, JsonObject params) {
-                ServerPlayer player = ctx.getPlayer();
-                if (player == null) return;
-                Object vecObj = resolveObject(ctx, params, "vec");
-                Vec3 impulse = (vecObj instanceof Vec3 v) ? v : new Vec3(resolveFloat(ctx, params, "x", 0), resolveFloat(ctx, params, "y", 0), resolveFloat(ctx, params, "z", 0));
-                player.setDeltaMovement(player.getDeltaMovement().add(impulse.scale(resolveFloat(ctx, params, "scale", 1.0f))));
-                player.hurtMarked = true;
-                player.connection.send(new ClientboundSetEntityMotionPacket(player));
-            }
-        });
+		register(new RuneAction() {
+			@Override public String getId() { return "stones:add_velocity"; }
+			@Override public void execute(ActionContext ctx, JsonObject params) {
+				var target = resolveLivingEntity(ctx, params, "target");
+				if (target == null) return;
+				Object vecObj = resolveObject(ctx, params, "vec");
+				Vec3 impulse = (vecObj instanceof Vec3 v) ? v : new Vec3(resolveFloat(ctx, params, "x", 0), resolveFloat(ctx, params, "y", 0), resolveFloat(ctx, params, "z", 0));
+				target.setDeltaMovement(target.getDeltaMovement().add(impulse.scale(resolveFloat(ctx, params, "scale", 1.0f))));
+				target.hurtMarked = true;
+				if (target instanceof ServerPlayer sp) {
+					sp.connection.send(new ClientboundSetEntityMotionPacket(sp));
+				}
+			}
+		});
 
         register(new RuneAction() {
             @Override public String getId() { return "stones:invoke"; }
@@ -657,27 +810,29 @@ public class MilestoneActionRegistry {
             }
         });
 
-        register(new RuneAction() {
-            @Override public String getId() { return "stones:heal"; }
-            @Override public void execute(ActionContext ctx, JsonObject params) {
-                ServerPlayer p = ctx.getPlayer();
-                if (params.has("amount")) p.heal(resolveFloat(ctx, params, "amount", 0f));
-                else if (params.has("percent_of_max_health")) p.heal(p.getMaxHealth() * resolveFloat(ctx, params, "percent_of_max_health", 0f));
-                else if (params.has("percent_of_damage")) p.heal(ctx.getFloat("damage", 0) * resolveFloat(ctx, params, "percent_of_damage", 0f));
-            }
-        });
+		register(new RuneAction() {
+			@Override public String getId() { return "stones:heal"; }
+			@Override public void execute(ActionContext ctx, JsonObject params) {
+				var target = resolveLivingEntity(ctx, params, "target");
+				if (target == null) return;
+				if (params.has("amount")) target.heal(resolveFloat(ctx, params, "amount", 0f));
+				else if (params.has("percent_of_max_health")) target.heal(target.getMaxHealth() * resolveFloat(ctx, params, "percent_of_max_health", 0f));
+				else if (params.has("percent_of_damage")) target.heal(ctx.getFloat("damage", 0) * resolveFloat(ctx, params, "percent_of_damage", 0f));
+			}
+		});
 
-        register(new RuneAction() {
-            @Override public String getId() { return "stones:apply_effect"; }
-            @Override public void execute(ActionContext ctx, JsonObject params) {
-                MobEffect e = ForgeRegistries.MOB_EFFECTS.getValue(new ResourceLocation(resolveString(ctx, params, "effect", "")));
-                if (e != null) {
-                    int duration = resolveInt(ctx, params, "duration", 100);
-                    int amplifier = resolveInt(ctx, params, "amplifier", 0);
-                    ctx.getPlayer().addEffect(new MobEffectInstance(e, duration, amplifier));
-                }
-            }
-        });
+		register(new RuneAction() {
+			@Override public String getId() { return "stones:apply_effect"; }
+			@Override public void execute(ActionContext ctx, JsonObject params) {
+				var target = resolveLivingEntity(ctx, params, "target");
+				MobEffect e = ForgeRegistries.MOB_EFFECTS.getValue(new ResourceLocation(resolveString(ctx, params, "effect", "")));
+				if (e != null && target != null) {
+					int duration = resolveInt(ctx, params, "duration", 100);
+					int amplifier = resolveInt(ctx, params, "amplifier", 0);
+					target.addEffect(new MobEffectInstance(e, duration, amplifier));
+				}
+			}
+		});
 
         register(new RuneAction() {
             @Override public String getId() { return "stones:explode"; }
@@ -704,6 +859,7 @@ public class MilestoneActionRegistry {
                     case "subtract" -> cur - val;
                     case "multiply" -> cur * val;
                     case "divide" -> (val != 0) ? cur / val : cur;
+					case "modulo" -> val != 0 ? cur % val : 0;
                     default -> cur;
                 };
                 ctx.setVariable(var, res);
@@ -882,63 +1038,79 @@ public class MilestoneActionRegistry {
             }
         });
 		
-        register(new RuneAction() {
-            @Override public String getId() { return "stones:find_blocks"; }
-            @Override public void execute(ActionContext ctx, JsonObject params) {
-                ServerPlayer player = ctx.getPlayer();
-                if (!(player.level() instanceof ServerLevel sl)) return;
+		register(new RuneAction() {
+			@Override public String getId() { return "stones:find_blocks"; }
+			@Override public void execute(ActionContext ctx, JsonObject params) {
+				ServerPlayer player = ctx.getPlayer();
+				if (!(player.level() instanceof ServerLevel sl)) return;
 
-                List<BlockPos> results = new ArrayList<>();
-                String mode = resolveString(ctx, params, "mode", "radius");
-                
-                if (mode.equals("raycast")) {
-                    double dist = resolveFloat(ctx, params, "distance", 5.0f);
-                    HitResult hit = player.pick(dist, 0.0F, false);
-                    if (hit.getType() == HitResult.Type.BLOCK) {
-                        results.add(((BlockHitResult) hit).getBlockPos().immutable());
-                    }
-                } else {
-                    int rx = resolveInt(ctx, params, "rx", resolveInt(ctx, params, "radius", 5));
-                    int ry = resolveInt(ctx, params, "ry", resolveInt(ctx, params, "radius", 5));
-                    int rz = resolveInt(ctx, params, "rz", resolveInt(ctx, params, "radius", 5));
-                    
-                    BlockPos center = player.blockPosition();
-                    boolean los = params.has("line_of_sight") && params.get("line_of_sight").getAsBoolean();
-                    Vec3 eyePos = player.getEyePosition();
+				List<BlockPos> results = new ArrayList<>();
+				String mode = resolveString(ctx, params, "mode", "radius");
+				
+				if (mode.equals("raycast")) {
+					double dist = resolveFloat(ctx, params, "distance", 5.0f);
+					HitResult hit = player.pick(dist, 0.0F, false);
+					if (hit.getType() == HitResult.Type.BLOCK) {
+						results.add(((BlockHitResult) hit).getBlockPos().immutable());
+					}
+				} else {
+					int rx = resolveInt(ctx, params, "rx", resolveInt(ctx, params, "radius", 5));
+					int ry = resolveInt(ctx, params, "ry", resolveInt(ctx, params, "radius", 5));
+					int rz = resolveInt(ctx, params, "rz", resolveInt(ctx, params, "radius", 5));
+					
+					// ABWÄRTSKOMPATIBEL: Nur wenn "pos" definiert ist, lösen wir es dynamisch auf!
+					BlockPos center;
+					if (params.has("pos")) {
+						Object raw = resolveObject(ctx, params, "pos");
+						if (raw instanceof BlockPos bp) {
+							center = bp;
+						} else if (raw instanceof Vec3 v) {
+							center = BlockPos.containing(v.x, v.y, v.z);
+						} else {
+							center = player.blockPosition();
+						}
+					} else {
+						// Alte JSONs ohne "pos"-Key nutzen weiterhin stur die Player-Position
+						center = player.blockPosition();
+					}
 
-                    for (BlockPos pos : BlockPos.betweenClosed(center.offset(-rx, -ry, -rz), center.offset(rx, ry, rz))) {
-                        if (matchesFilter(sl, pos, params)) {
-                            if (los) {
-                                BlockHitResult hit = sl.clip(new ClipContext(eyePos, Vec3.atCenterOf(pos), ClipContext.Block.VISUAL, ClipContext.Fluid.NONE, player));
-                                if (hit.getType() == HitResult.Type.BLOCK && !hit.getBlockPos().equals(pos)) continue;
-                            }
-                            results.add(pos.immutable());
-                        }
-                    }
-                }
+					boolean los = params.has("line_of_sight") && params.get("line_of_sight").getAsBoolean();
+					Vec3 eyePos = player.getEyePosition();
 
-                if (params.has("save_to")) {
-                    String varName = resolveString(ctx, params, "save_to", "");
-                    ctx.setVariable(varName, results);
-                    ctx.setVariable(varName + "_count", (float)results.size());
-                }
-            }
+					for (BlockPos pos : BlockPos.betweenClosed(center.offset(-rx, -ry, -rz), center.offset(rx, ry, rz))) {
+						if (matchesFilter(sl, pos, params)) {
+							if (los) {
+								BlockHitResult hit = sl.clip(new ClipContext(eyePos, Vec3.atCenterOf(pos), ClipContext.Block.VISUAL, ClipContext.Fluid.NONE, player));
+								if (hit.getType() == HitResult.Type.BLOCK && !hit.getBlockPos().equals(pos)) continue;
+							}
+							results.add(pos.immutable());
+						}
+					}
+				}
 
-            private boolean matchesFilter(ServerLevel sl, BlockPos pos, JsonObject params) {
-                BlockState state = sl.getBlockState(pos);
-                if (params.has("blocks")) {
-                    for (JsonElement e : params.getAsJsonArray("blocks")) {
-                        if (ForgeRegistries.BLOCKS.getKey(state.getBlock()).toString().equals(e.getAsString())) return true;
-                    }
-                }
-                if (params.has("tags")) {
-                    for (JsonElement e : params.getAsJsonArray("tags")) {
-                        if (state.is(BlockTags.create(new ResourceLocation(e.getAsString())))) return true;
-                    }
-                }
-                return !params.has("blocks") && !params.has("tags");
-            }
-        });		
+				if (params.has("save_to")) {
+					String varName = resolveString(ctx, params, "save_to", "");
+					ctx.setVariable(varName, results);
+					ctx.setVariable(varName + "_count", (float)results.size());
+				}
+			}
+
+			private boolean matchesFilter(ServerLevel sl, BlockPos pos, JsonObject params) {
+				BlockState state = sl.getBlockState(pos);
+				if (params.has("blocks")) {
+					for (JsonElement e : params.getAsJsonArray("blocks")) {
+						if (ForgeRegistries.BLOCKS.getKey(state.getBlock()).toString().equals(e.getAsString())) return true;
+					}
+				}
+				if (params.has("tags")) {
+					for (JsonElement e : params.getAsJsonArray("tags")) {
+						if (state.is(BlockTags.create(new ResourceLocation(e.getAsString())))) return true;
+					}
+				}
+				return !params.has("blocks") && !params.has("tags");
+			}
+		});
+		
 		register(new RuneAction() {
 			@Override public String getId() { return "stones:command"; }
 			@Override public void execute(ActionContext ctx, JsonObject params) {

@@ -20,8 +20,9 @@ import net.stones.client.gui.editor.widget.StudioSuggestTextField;
  * Kontextmenü für das Stones Studio.
  * Unterstützt vollumfängliche Node-Operationen: Kopieren, Einfügen, Löschen, 
  * Ausschneiden sowie ein systemweites Undo-/Redo-System.
- * * NEU: Der dedizierte Parameter-Schnelleditor verwendet nun das neue UniversalSuggestField,
- * um auch dort komfortabel Variablen mit dem $-Operator einzufügen.
+ * 
+ * AKTUALISIERT: Volle Unterstützung für Projektil-Unterkategorien (ON_TICK, ON_HIT_ENTITY, ON_HIT_BLOCK)
+ * inklusive aller Dokumentations- und Übersetzungskommentare im Klartext.
  */
 public class StudioContextMenu {
     public boolean isOpen = false;
@@ -40,6 +41,18 @@ public class StudioContextMenu {
 
     public StudioContextMenu(StonesStudioScreen screen) {
         this.screen = screen;
+    }
+
+    /**
+     * Prüft, ob eine Kategorie Aktionen aufnehmen kann.
+     * Unterstützt Standard-Aktionen, Default-Zweige sowie alle Projektil-Ereignisse.
+     */
+    private static boolean isActionCategory(String rawId) {
+        return "ACTIONS".equals(rawId)
+                || "DEFAULT".equals(rawId)
+                || "ON_TICK".equals(rawId)
+                || "ON_HIT_ENTITY".equals(rawId)
+                || "ON_HIT_BLOCK".equals(rawId);
     }
 
     /**
@@ -131,7 +144,7 @@ public class StudioContextMenu {
                     // Text: "Bedingung einfügen"
                     options.add(Component.translatable("gui.stones.studio.contextmenu.paste_condition").getString());
                 }
-            } else if (node.rawId.equals("ACTIONS") || node.rawId.equals("DEFAULT")) {
+            } else if (isActionCategory(node.rawId)) {
                 // Text: "Aktion hinzufügen..."
                 options.add(Component.translatable("gui.stones.studio.contextmenu.add_action").getString());
                 if (clipboardNode != null && clipboardNode.type == TreeNode.Type.ACTION) {
@@ -329,7 +342,7 @@ public class StudioContextMenu {
                     parentCat = targetNode.children.get(1);
                 } else if (targetNode.type == TreeNode.Type.CATEGORY && targetNode.rawId.equals("CASE")) {
                     parentCat = targetNode.children.get(1);
-                } else if (targetNode.type == TreeNode.Type.CATEGORY && (targetNode.rawId.equals("ACTIONS") || targetNode.rawId.equals("DEFAULT"))) {
+                } else if (targetNode.type == TreeNode.Type.CATEGORY && isActionCategory(targetNode.rawId)) {
                     parentCat = targetNode;
                 }
                 screen.openEditModal(new ActionSelectionModal(screen, parentCat, true));
@@ -391,7 +404,7 @@ public class StudioContextMenu {
                         boolean compatible = false;
                         if ((targetNode.rawId.equals("CONDITIONS") || targetNode.rawId.equals("CONDITION")) && clipboardNode.type == TreeNode.Type.CONDITION) {
                             compatible = true;
-                        } else if ((targetNode.rawId.equals("ACTIONS") || targetNode.rawId.equals("DEFAULT")) && clipboardNode.type == TreeNode.Type.ACTION) {
+                        } else if (isActionCategory(targetNode.rawId) && clipboardNode.type == TreeNode.Type.ACTION) {
                             compatible = true;
                         } else if (targetNode.rawId.equals("CASES") && clipboardNode.type == TreeNode.Type.CATEGORY && clipboardNode.rawId.equals("CASE")) {
                             compatible = true;

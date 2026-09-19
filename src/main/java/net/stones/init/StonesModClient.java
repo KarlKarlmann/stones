@@ -18,6 +18,7 @@ import net.stones.client.gui.EchoTraderScreen;
 import net.stones.client.gui.RunestoneScreen;
 import net.stones.client.renderer.EchoTraderRenderer;
 import net.stones.client.renderer.RunestoneRenderer;
+import net.stones.client.renderer.StonesProjectileRenderer;
 import net.stones.client.renderer.ClientDynamicLabelHandler;
 import net.stones.enchantment.AmplifyEnchantment;
 
@@ -127,15 +128,21 @@ public class StonesModClient {
         });
     }
 
-    @SubscribeEvent
-    public static void registerRenderers(EntityRenderersEvent.RegisterRenderers event) {
-        event.registerBlockEntityRenderer(
-            (BlockEntityType<RunestoneBlockEntity>) StonesModBlockEntities.RUNESTONE.get(), 
-            RunestoneRenderer::new
-        );
-        event.registerEntityRenderer(
-            StonesModEntities.ECHO_TRADER.get(), 
-            EchoTraderRenderer::new
-        );
-    }
+	@SubscribeEvent
+	public static void registerRenderers(EntityRenderersEvent.RegisterRenderers event) {
+		event.registerBlockEntityRenderer(
+			(BlockEntityType<RunestoneBlockEntity>) StonesModBlockEntities.RUNESTONE.get(), 
+			RunestoneRenderer::new
+		);
+		event.registerEntityRenderer(
+			StonesModEntities.ECHO_TRADER.get(), 
+			EchoTraderRenderer::new
+		);
+		
+		// NEU: Projektil-Renderer hier eintragen!
+		event.registerEntityRenderer(
+			StonesModEntities.STONES_PROJECTILE.get(), 
+			StonesProjectileRenderer::new
+		);
+	}
 }

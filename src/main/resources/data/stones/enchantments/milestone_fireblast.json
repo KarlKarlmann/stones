@@ -1,33 +1,40 @@
 {
+  "override_registry_id": "stones:milestone_fireblast",
   "type": "MILESTONE",
-  "name": "DICT:milestone.stones.pyromancer.name",
-  "description": "DICT:milestone.stones.pyromancer.description",
+  "name": "Fireblast",
+  "description": "blasts Fire",
   "icon": "stones:textures/gui/skills/fireball.png",
-  "required_level": 3,
+  "required_level": 3.0,
+  "factor": 0.0,
+  "max_level": 20,
   "stats": [
     {
       "id": "pyro_cooldown",
       "label": "DICT:stat.stones.pyro_recharge",
+      "type": "generic",
       "base": 40.0,
-      "scaling": "RUNE_LEVEL",
       "per_level": -5.0,
+      "scaling": "RUNE_LEVEL",
       "display_factor": 0.05,
-      "suffix": "DICT:stat.stones.suffix.seconds"
+      "suffix": "DICT:stat.stones.suffix.seconds",
+      "min": 10.0
     },
     {
       "id": "pyro_speed",
       "label": "DICT:stat.stones.pyro_speed",
+      "type": "generic",
       "base": 1.0,
-      "scaling": "PLAYER_LEVEL",
       "per_level": 0.05,
+      "scaling": "PLAYER_LEVEL",
       "suffix": "DICT:stat.stones.suffix.multiplier"
     },
     {
       "id": "pyro_radius",
       "label": "DICT:stat.stones.pyro_radius",
+      "type": "generic",
       "base": 2.0,
-      "scaling": "RUNE_LEVEL",
       "per_level": 0.5,
+      "scaling": "RUNE_LEVEL",
       "suffix": " m"
     }
   ],
@@ -47,160 +54,122 @@
           "ticks": "$pyro_cooldown"
         },
         {
-          "type": "stones:add_combo",
-          "id": "pyro_charge",
-          "value": 1.0,
-          "max": 3.0,
-          "timeout": 60,
-          "texture": "stones:textures/gui/combo_fire.png",
-          "color": "#FF8800",
-          "on_max": [
+          "type": "stones:spawn_projectile",
+          "origin": "$player.eye_pos",
+          "direction": "$player.look_angle",
+          "speed": "$pyro_speed",
+          "gravity": 0.0,
+          "lifetime": 80,
+          "hitbox_size": 0.25,
+          "visuals": {
+            "render_mode": "BILLBOARD",
+            "texture": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAC3UlEQVR4XmOgFDDiMuCPHcP//96sDEyMLAzMZd8ZCVp035vh/78LUv//X5b5/8+J6f+/c2L//36f+v/jOZ3/n0KAhnWx/X8/geH/S1eG/xiG/bBj/P/vx7T/f75P/v/ve////idx/f//Ovn//48l/3+0MQH5cv//nlf8//9H5///F+X/v/MUhBvCAjKN3ZeZAWg/A/P/Xwz/J1YwMPhKMDBMKWJg+Pufgf0QUAXjM6CYFlANJwMDnzRQ4BPcEWADGP4xMvy91c/w7/cXBhYfWYb/Wx4xMOz/y/Cf6T/D/7/MQIP/MzCJazP8/3aWgWHPBQah7d/gYQI24P++PwwMmu8YWNQVGRjXXmT4d+Avw45DjAzMTIwM/xn/Mrj+Y2BgZlgNtIeJgclLiuHPmrf/v8/9z8C7/QsjE8gtjD2yDMyujQyMX94wMLCwgHzDYKfByOCs859BipORYfdxZoa/e/8wMAPt/f//PwOzVxUD55+vYG8w/XNk/P//71+Gf0wsIGuAwf2PgZmdkYGV/R8Dix03g7Yq0I7/QO8Adf/1kmD48l8SGBavGJgj+cAGsDDt/8/4j5HxP+N/Jobfu18wMAtwMTD+/8Rw8ApQ47VvDD//MDJ42wLZLusrBtdfMPClRTMw3F3CwPD6F8QAEPm/+Cght42v2vg0L2/1i40N3f4X+N3vE3+O4p9b/X3vL34b1H4z/C1P2p0m+140b/fE079O8O/7a2A/8I8313x3z4O0+0X42Nf0wAAAABJRU5ErkJggg=="
+          },
+          "on_tick": [
             {
-              "type": "stones:apply_effect",
-              "effect": "minecraft:fire_resistance",
-              "duration": 60
+              "type": "stones:set_variable",
+              "name": "temp",
+              "value": "$age"
             },
             {
-              "type": "stones:play_sound",
-              "sound": "minecraft:block.lava.extinguish",
-              "pitch": 0.5
+              "type": "stones:math",
+              "variable": "temp",
+              "operation": "modulo",
+              "value": 1.5
             },
             {
               "type": "stones:spawn_particles",
-              "particle": "minecraft:lava",
               "count": 10,
-              "speed": 0.1
+              "particle": "minecraft:campfire_cosy_smoke",
+              "spread": "$temp",
+              "speed": 0.0,
+              "pos": "$pos"
+            },
+            {
+              "type": "stones:case",
+              "cases": [
+                {
+                  "conditions": {
+                    "type": "stones:chance",
+                    "value": 0.2
+                  },
+                  "actions": [
+                    {
+                      "type": "stones:spawn_particles",
+                      "count": 10,
+                      "particle": "minecraft:campfire_signal_smoke",
+                      "spread": "$temp",
+                      "speed": 0.0,
+                      "pos": "$pos"
+                    }
+                  ]
+                }
+              ]
             }
-          ]
-        },
-        {
-          "type": "stones:invoke",
-          "call": "player.getLookAngle()",
-          "save_result_to": "look"
-        },
-        {
-          "type": "stones:invoke",
-          "call": "player.getEyePosition(float)",
-          "args": [
-            "1.0"
           ],
-          "save_result_to": "eye"
-        },
-        {
-          "type": "stones:set_variable",
-          "name": "px",
-          "value": "$look.x"
-        },
-        {
-          "type": "stones:math",
-          "variable": "px",
-          "operation": "multiply",
-          "value": "$pyro_speed"
-        },
-        {
-          "type": "stones:set_variable",
-          "name": "py",
-          "value": "$look.y"
-        },
-        {
-          "type": "stones:math",
-          "variable": "py",
-          "operation": "multiply",
-          "value": "$pyro_speed"
-        },
-        {
-          "type": "stones:set_variable",
-          "name": "pz",
-          "value": "$look.z"
-        },
-        {
-          "type": "stones:math",
-          "variable": "pz",
-          "operation": "multiply",
-          "value": "$pyro_speed"
-        },
-        {
-          "type": "stones:new",
-          "class": "net.minecraft.world.entity.projectile.SmallFireball",
-          "args": [
-            "$level",
-            "$player",
-            "$px",
-            "$py",
-            "$pz"
+          "on_hit_entity": [
+            {
+              "type": "stones:explode",
+              "radius": "$pyro_radius",
+              "fire": false,
+              "pos": "$hitPos"
+            },
+            {
+              "type": "stones:find_blocks",
+              "radius": "$pyro_radius",
+              "tags": [
+                "minecraft:mineable/shovel"
+              ],
+              "save_to": "destroyed_blocks",
+              "pos": "$hitPos"
+            },
+            {
+              "type": "stones:for_each",
+              "from": "$destroyed_blocks",
+              "as": "current",
+              "actions": [
+                {
+                  "type": "stones:set_block",
+                  "block": "minecraft:air",
+                  "pos": "$current"
+                }
+              ]
+            }
           ],
-          "save_to": "fb"
-        },
-        {
-          "type": "stones:invoke",
-          "call": "$fb.setPos(double, double, double)",
-          "args": [
-            "$eye.x",
-            "$eye.y",
-            "$eye.z"
-          ]
-        },
-        {
-          "type": "stones:invoke",
-          "call": "level.addFreshEntity(net.minecraft.world.entity.Entity)",
-          "args": [
-            "$fb"
-          ]
-        },
-        {
-          "type": "stones:play_sound",
-          "sound": "minecraft:entity.blaze.shoot",
-          "volume": 1.0,
-          "pitch": 0.8
-        },
-        {
-          "type": "stones:spawn_particles",
-          "particle": "minecraft:flame",
-          "count": 15,
-          "speed": 0.2
-        }
-      ]
-    },
-    {
-      "trigger": "ON_PROJECTILE_HIT",
-      "conditions": [
-        {
-          "type": "stones:variable_compare",
-          "variable": "$projectile.getType().toString()",
-          "operator": "==",
-          "value": "entity.minecraft.small_fireball"
-        }
-      ],
-      "actions": [
-        {
-          "type": "stones:explode",
-          "radius": "$pyro_radius",
-          "pos": "$hitPos",
-          "fire": false
-        },
-        {
-          "type": "stones:play_sound",
-          "sound": "minecraft:entity.dragon_fireball.explode",
-          "pos": "$hitPos",
-          "volume": 0.8,
-          "pitch": 1.2
-        },
-        {
-          "type": "stones:spawn_particles",
-          "particle": "minecraft:lava",
-          "pos": "$hitPos",
-          "count": 25,
-          "speed": 0.5
-        },
-        {
-          "type": "stones:spawn_particles",
-          "particle": "minecraft:large_smoke",
-          "pos": "$hitPos",
-          "count": 20,
-          "speed": 0.1
+          "on_hit_block": [
+            {
+              "type": "stones:explode",
+              "radius": "$pyro_radius",
+              "fire": false,
+              "pos": "$hitPos"
+            },
+            {
+              "type": "stones:find_blocks",
+              "radius": "$pyro_radius",
+              "tags": [
+                "minecraft:mineable/shovel"
+              ],
+              "save_to": "destroyed_blocks",
+              "pos": "$hitPos"
+            },
+            {
+              "type": "stones:for_each",
+              "from": "$destroyed_blocks",
+              "as": "current",
+              "actions": [
+                {
+                  "type": "stones:set_block",
+                  "block": "minecraft:air",
+                  "pos": "$current"
+                }
+              ]
+            }
+          ],
+          "render_mode": "BILLBOARD",
+          "texture": "minecraft:textures/particle/glint.png"
         }
       ]
     }
-  ]
+  ],
+  "_template_hash": "2297670a6a07bd0fc4572c14401da41f9bf392fa70fccbfd19fd536b92cc92c9"
 }
-```

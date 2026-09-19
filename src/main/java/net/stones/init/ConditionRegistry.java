@@ -129,33 +129,21 @@ public class ConditionRegistry {
             @Override public boolean test(ActionContext ctx) { return ctx.getPlayer().level().isDay(); }
         });
 
-        register("stones:variable_compare", params -> {
-            final String varName = params.get("variable").getAsString();
-            final String operator = params.has("operator") ? params.get("operator").getAsString() : ">";
-            final var valueResolver = getObjectResolver(params, "value");
-            
-            return new RuneCondition() {
-                @Override public String getId() { return "stones:variable_compare"; }
-                @Override public boolean test(ActionContext ctx) {
-                    Object objA = ctx.getVariable(varName);
-                    Object objB = valueResolver.apply(ctx);
+		register("stones:variable_compare", params -> {
+			final String varName = params.get("variable").getAsString();
+			final String operator = params.has("operator") ? params.get("operator").getAsString() : ">";
+			final var valueResolver = getObjectResolver(params, "value");
 
-                    if (operator.equals("!=")) return !Objects.equals(objA, objB);
-                    if (operator.equals("==")) return Objects.equals(objA, objB);
+			return new RuneCondition() {
+				@Override public String getId() { return "stones:variable_compare"; }
+				@Override public boolean test(ActionContext ctx) {
+					Object objA = ctx.getVariable(varName);      // z.B. $temp (Float/Double 0.0)
+					Object objB = valueResolver.apply(ctx);      // z.B. Wert aus JSON ("0" oder 0)
 
-                    float valA = (objA instanceof Number n) ? n.floatValue() : 0.0f;
-                    float valB = (objB instanceof Number n) ? n.floatValue() : 0.0f;
-
-                    return switch (operator) {
-                        case ">"  -> valA > valB;
-                        case "<"  -> valA < valB;
-                        case ">=" -> valA >= valB;
-                        case "<=" -> valA <= valB;
-                        default   -> false;
-                    };
-                }
-            };
-        });
+					return DynamicComparator.compare(objA, objB, operator);
+				}
+			};
+		});
 
         register("stones:has_air", params -> {
             final var resolver = getFloatResolver(params, "min", 1.0f);
@@ -167,25 +155,35 @@ public class ConditionRegistry {
             };
         });
 
-        register("stones:persistent_var_compare", params -> {
-            final String pVarName = params.get("name").getAsString();
-            final String op = params.get("operator").getAsString();
-            final var valResolver = getFloatResolver(params, "value", 0.0f);
+		register("stones:persistent_var_compare", params -> {
+			final String pVarName = params.get("name").getAsString();
+			final String op = params.has("operator") ? params.get("operator").getAsString() : ">=";
+			final var valueResolver = getObjectResolver(params, "value"); // Nutzt getObjectResolver statt getFloatResolver
 
-            return new RuneCondition() {
-                @Override public String getId() { return "stones:persistent_var_compare"; }
-                @Override public boolean test(ActionContext ctx) {
-                    float cur = ctx.getPlayer().getPersistentData().getFloat("stones_" + pVarName);
-                    float target = valResolver.apply(ctx);
-                    return switch (op) {
-                        case ">" -> cur > target;
-                        case "<" -> cur < target;
-                        case "<=" -> cur <= target;
-                        default -> cur >= target;
-                    };
-                }
-            };
-        });
+			return new RuneCondition() {
+				@Override public String getId() { return "stones:persistent_var_compare"; }
+				@Override public boolean test(ActionContext ctx) {
+					String key = "stones_" + pVarName;
+					var nbt = ctx.getPlayer().getPersistentData();
+
+					// 1. Wert sicher aus dem NBT lesen (Egal ob Number oder String)
+					Object curVal = 0.0f;
+					if (nbt.contains(key)) {
+						if (nbt.contains(key, net.minecraft.nbt.Tag.TAG_ANY_NUMERIC)) {
+							curVal = nbt.getFloat(key);
+						} else if (nbt.contains(key, net.minecraft.nbt.Tag.TAG_STRING)) {
+							curVal = nbt.getString(key);
+						}
+					}
+
+					// 2. Zielwert aus dem Context/JSON auflösen
+					Object targetVal = valueResolver.apply(ctx);
+
+					// 3. Typensicher über den DynamicComparator vergleichen
+					return DynamicComparator.compare(curVal, targetVal, op);
+				}
+			};
+		});
         
         // ==========================================
         // DIE READY CONDITION (Löst den pyro_shot Mismatch)
@@ -249,4 +247,57 @@ public class ConditionRegistry {
             };
         });
     }
+		public static class ScriptValue {
+			private final Object raw;
+
+			public ScriptValue(Object raw) { this.raw = raw; }
+
+			public float asFloat(float fallback) {
+				if (raw instanceof Number n) return n.floatValue();
+				if (raw == null) return fallback;
+				try { return Float.parseFloat(raw.toString()); } 
+				catch (NumberFormatException e) { return fallback; }
+			}
+
+			public boolean isNumeric() {
+				if (raw instanceof Number) return true;
+				if (raw == null) return false;
+				try { Float.parseFloat(raw.toString()); return true; } 
+				catch (NumberFormatException e) { return false; }
+			}
+
+			public String asString() {
+				return raw != null ? raw.toString() : "";
+			}
+		}
+		public static class DynamicComparator {
+			public static boolean compare(Object valA, Object valB, String operator) {
+				ScriptValue a = new ScriptValue(valA);
+				ScriptValue b = new ScriptValue(valB);
+
+				// Numerischer Vergleich (greift bei 0, "0", 0.0, Float, Integer, $age etc.)
+				if (a.isNumeric() && b.isNumeric()) {
+					float fA = a.asFloat(0f);
+					float fB = b.asFloat(0f);
+					return switch (operator) {
+						case "==" -> Math.abs(fA - fB) < 0.0001f;
+						case "!=" -> Math.abs(fA - fB) >= 0.0001f;
+						case ">"  -> fA > fB;
+						case "<"  -> fA < fB;
+						case ">=" -> fA >= fB;
+						case "<=" -> fA <= fB;
+						default   -> false;
+					};
+				}
+
+				// Text-Vergleich (für Strings, IDs, Enums)
+				String sA = a.asString();
+				String sB = b.asString();
+				return switch (operator) {
+					case "==" -> sA.equals(sB);
+					case "!=" -> !sA.equals(sB);
+					default   -> false;
+				};
+			}
+		}
 }

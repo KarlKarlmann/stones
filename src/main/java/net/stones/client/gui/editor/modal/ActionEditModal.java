@@ -11,7 +11,6 @@ import net.stones.client.gui.editor.StudioSerializer;
 import net.stones.client.gui.editor.section.StudioContextMenu;
 import net.stones.client.gui.editor.widget.StudioMultiLineEditBox;
 import net.stones.client.gui.editor.widget.StudioSuggestTextField;
-import net.stones.client.gui.editor.widget.StudioTextField;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -19,7 +18,6 @@ import java.util.List;
 /**
  * Eigenschaften-Modal zum Bearbeiten der logischen Trigger-Knoten im Stones Studio.
  * Verwendet das "Warcraft 3 Trigger Editor" UI-Layout für fließende Sätze mit eingebetteten Werten.
- * * AKTUALISIERT: Behebt Code-Abschnitte und fügt add_combo, get_combo sowie Target-Auswahl für update_combo hinzu.
  */
 public class ActionEditModal extends AbstractStudioModal {
     protected final TreeNode targetNode;
@@ -67,7 +65,6 @@ public class ActionEditModal extends AbstractStudioModal {
             
             this.width = 450; this.height = 200;
             
-            // Text: "JSON"
             // Text: "JSON"
             jsonEditor = addModalWidget(new StudioMultiLineEditBox(screen, font, startX + 15, startY + 40, width - 30, 110, net.minecraft.network.chat.Component.translatable("gui.stones.studio.actionedit.text_04"), net.minecraft.network.chat.Component.translatable("gui.stones.studio.actionedit.text_05")));
             jsonEditor.setValue(targetNode.jsonData.toString());
@@ -120,6 +117,19 @@ public class ActionEditModal extends AbstractStudioModal {
                 // Text: "Textur:"
                 layout.addText(net.minecraft.network.chat.Component.translatable("gui.stones.studio.actionedit.text_15").getString());
                 layout.addInput("texture", 120, "minecraft:textures/particle/glint.png", false);
+                
+                // Canvas-Button mit Laden der bestehenden Textur
+                if (layout.currentX + 60 > layout.maxX) layout.nextLine();
+                Button canvasBtn = Button.builder(Component.literal("🎨"), b -> {
+                    String currentTexture = targetNode.jsonData.has("texture") ? targetNode.jsonData.get("texture").getAsString() : "";
+                    net.minecraft.client.Minecraft.getInstance().setScreen(new CanvasEditModal(screen, 16, currentTexture, base64 -> {
+                        targetNode.jsonData.addProperty("texture", base64);
+                        targetNode.readableText = StudioSerializer.getReadableText(targetNode.jsonData, targetNode.type);
+                    }));
+                }).bounds(layout.currentX, layout.currentY, 60, 14).build();
+                addModalWidget(canvasBtn);
+                layout.currentX += 60 + 4;
+
                 // Text: "Größe:"
                 layout.addText(net.minecraft.network.chat.Component.translatable("gui.stones.studio.actionedit.text_16").getString());
                 layout.addInput("size", 30, "0.4", true);
@@ -153,6 +163,58 @@ public class ActionEditModal extends AbstractStudioModal {
                 layout.addVariableByNameInput("into", 80, "my_combo");
                 // Text: "."
                 layout.addText(net.minecraft.network.chat.Component.translatable("gui.stones.studio.actionedit.text_25").getString());
+            }
+            case "stones:spawn_projectile" -> {
+                actionTitle = Component.translatable("gui.stones.studio.actionedit.title.spawn_projectile").getString();
+                
+                // Zeile 1: Render-Modus & Hitbox
+                layout.addText(Component.translatable("gui.stones.studio.actionedit.spawn_projectile.mode").getString());
+                layout.addDropdown("render_mode", 80, new String[]{"BILLBOARD", "MODEL"}, "BILLBOARD");
+                layout.addText(Component.translatable("gui.stones.studio.actionedit.spawn_projectile.hitbox").getString());
+                layout.addInput("hitbox_size", 35, "0.25", true);
+                layout.nextLine();
+
+                // Zeile 2: Textur & Canvas-Button mit Laden der bestehenden Textur
+                layout.addText(Component.translatable("gui.stones.studio.actionedit.spawn_projectile.texture").getString());
+                layout.addInput("texture", 120, "minecraft:textures/particle/glint.png", false);
+                
+                if (layout.currentX + 60 > layout.maxX) layout.nextLine();
+                Button canvasBtn = Button.builder(Component.translatable("gui.stones.studio.actionedit.btn.canvas"), b -> {
+                    String currentTexture = targetNode.jsonData.has("texture") ? targetNode.jsonData.get("texture").getAsString() : "";
+                    net.minecraft.client.Minecraft.getInstance().setScreen(new CanvasEditModal(screen, 16, currentTexture, base64 -> {
+                        JsonObject visuals = targetNode.jsonData.has("visuals") && targetNode.jsonData.get("visuals").isJsonObject()
+                                ? targetNode.jsonData.getAsJsonObject("visuals")
+                                : new JsonObject();
+                        visuals.addProperty("texture", base64);
+                        visuals.addProperty("render_mode", "BILLBOARD");
+                        
+                        targetNode.jsonData.add("visuals", visuals);
+                        targetNode.readableText = StudioSerializer.getReadableText(targetNode.jsonData, targetNode.type);
+                    }));
+                }).bounds(layout.currentX, layout.currentY, 60, 14).build();
+                addModalWidget(canvasBtn);
+                layout.currentX += 60 + 4;
+                layout.nextLine();
+
+                // Zeile 3: Flug-Physik
+                layout.addText(Component.translatable("gui.stones.studio.actionedit.spawn_projectile.speed").getString());
+                layout.addInput("speed", 35, "1.8", true);
+                layout.addText(Component.translatable("gui.stones.studio.actionedit.spawn_projectile.gravity").getString());
+                layout.addInput("gravity", 35, "0.0", true);
+                layout.addText(Component.translatable("gui.stones.studio.actionedit.spawn_projectile.lifetime").getString());
+                layout.addInput("lifetime", 35, "80", true);
+                layout.addText(Component.translatable("gui.stones.studio.actionedit.spawn_projectile.ticks").getString());
+                layout.nextLine();
+
+                // Zeile 4: Vektoren (Start & Richtung)
+                layout.addText(Component.translatable("gui.stones.studio.actionedit.spawn_projectile.origin").getString());
+                layout.addInput("origin", 80, "$player.eye_pos", false);
+                layout.addText(Component.translatable("gui.stones.studio.actionedit.spawn_projectile.direction").getString());
+                layout.addInput("direction", 80, "$player.look_angle", false);
+                layout.nextLine();
+
+                // Hinweis-Zeile
+                layout.addText(Component.translatable("gui.stones.studio.actionedit.spawn_projectile.hint").getString());
             }
             case "stones:delay" -> {
                 actionTitle = Component.translatable("gui.stones.studio.actionedit.title.delay").getString();
@@ -257,7 +319,11 @@ public class ActionEditModal extends AbstractStudioModal {
             }
             case "stones:add_velocity" -> {
                 actionTitle = Component.translatable("gui.stones.studio.actionedit.title.add_velocity").getString();
-                // Text: "Schleudere den Spieler in die Richtung  X:"
+                // Text: "Schleudere"
+                layout.addText(net.minecraft.network.chat.Component.translatable("gui.stones.studio.actionedit.text_54").getString());
+                layout.addVariableByNameInput("target", 80, "player");
+                layout.nextLine();
+                // Text: "in die Richtung X:"
                 layout.addText(net.minecraft.network.chat.Component.translatable("gui.stones.studio.actionedit.text_54").getString());
                 layout.addInput("x", 30, "0.0", true);
                 // Text: " Y:"
@@ -333,7 +399,11 @@ public class ActionEditModal extends AbstractStudioModal {
             }
             case "stones:heal" -> {
                 actionTitle = Component.translatable("gui.stones.studio.actionedit.title.heal").getString();
-                // Text: "Heile den Spieler um"
+                // Text: "Heile"
+                layout.addText(net.minecraft.network.chat.Component.translatable("gui.stones.studio.actionedit.text_751").getString());
+                layout.addVariableByNameInput("target", 80, "player");
+                layout.nextLine();
+                // Text: "um"
                 layout.addText(net.minecraft.network.chat.Component.translatable("gui.stones.studio.actionedit.text_75").getString());
                 layout.addInput("amount", 40, "0.0", true);
                 // Text: "Lebenspunkte (halbe Herzen),"
@@ -353,7 +423,11 @@ public class ActionEditModal extends AbstractStudioModal {
             }
             case "stones:apply_effect" -> {
                 actionTitle = Component.translatable("gui.stones.studio.actionedit.title.apply_effect").getString();
-                // Text: "Verleihe dem Spieler den Statuseffekt"
+                // Text: "Verleihe"
+                layout.addText(net.minecraft.network.chat.Component.translatable("gui.stones.studio.actionedit.text_811").getString());
+                layout.addVariableByNameInput("target", 80, "player");
+                layout.nextLine();
+                // Text: "den Statuseffekt"
                 layout.addText(net.minecraft.network.chat.Component.translatable("gui.stones.studio.actionedit.text_81").getString());
                 layout.addSuggestInput("effect", 140, "minecraft:speed", 4);
                 layout.nextLine();
@@ -389,7 +463,7 @@ public class ActionEditModal extends AbstractStudioModal {
                 layout.addVariableByNameInput("variable", 80, "my_var"); 
                 // Text: "und"
                 layout.addText(net.minecraft.network.chat.Component.translatable("gui.stones.studio.actionedit.text_90").getString());
-                layout.addDropdown("operation", 70, new String[]{"add", "subtract", "multiply", "divide"}, "add");
+                layout.addDropdown("operation", 75, new String[]{"add", "subtract", "multiply", "divide", "modulo"}, "add");
                 layout.nextLine();
                 // Text: "den Wert"
                 layout.addText(net.minecraft.network.chat.Component.translatable("gui.stones.studio.actionedit.text_91").getString());
@@ -525,29 +599,164 @@ public class ActionEditModal extends AbstractStudioModal {
                 // Text: "Ticks."
                 layout.addText(net.minecraft.network.chat.Component.translatable("gui.stones.studio.actionedit.text_124").getString());
             }
-            case "stones:find_blocks" -> {
+			case "stones:find_blocks" -> {
                 actionTitle = Component.translatable("gui.stones.studio.actionedit.title.find_blocks").getString();
-                // Text: "Suche in der Nähe im Modus"
                 layout.addText(net.minecraft.network.chat.Component.translatable("gui.stones.studio.actionedit.text_125").getString());
                 layout.addDropdown("mode", 80, new String[]{"radius", "raycast"}, "radius");
-                // Text: "nach Blöcken."
                 layout.addText(net.minecraft.network.chat.Component.translatable("gui.stones.studio.actionedit.text_126").getString());
                 layout.nextLine();
-                // Text: "Suchradius / Suchdistanz:"
-                layout.addText(net.minecraft.network.chat.Component.translatable("gui.stones.studio.actionedit.text_127").getString());
-                layout.addInput("radius", 40, "5.0", true);
-                // Text: "Sichtlinie erzwingen?"
+                
+                layout.addRadioVariableInput("pos", 80, "an Position des Spielers", "an Position", "§e(o) Auto-Pos.§7\nSucht um den Spieler herum.\n\n§e( ) Eigene Variable:§7\nErlaubt z.B. $hitPos, $blockPos oder $pos.");
+                layout.nextLine();
+
+                boolean is3D = targetNode.jsonData.has("radius_x") || targetNode.jsonData.has("radius_y") || targetNode.jsonData.has("radius_z");
+                
+                if (is3D) {
+                    layout.addText("Radius X/Y/Z:");
+                    layout.addInput("radius_x", 30, "5.0", true);
+                    layout.addInput("radius_y", 30, "5.0", true);
+                    layout.addInput("radius_z", 30, "5.0", true);
+                    
+                    Button toggleBtn = Button.builder(Component.literal("↺ 1D"), b -> {
+                        targetNode.jsonData.remove("radius_x");
+                        targetNode.jsonData.remove("radius_y");
+                        targetNode.jsonData.remove("radius_z");
+                        targetNode.jsonData.addProperty("radius", 5.0);
+                        this.init();
+                    }).bounds(layout.currentX, layout.currentY, 35, 14).build();
+                    addModalWidget(toggleBtn);
+                    layout.currentX += 39;
+                } else {
+                    layout.addText(net.minecraft.network.chat.Component.translatable("gui.stones.studio.actionedit.text_127").getString());
+                    layout.addInput("radius", 40, "5.0", true);
+                    
+                    Button toggleBtn = Button.builder(Component.literal("➔ 3D"), b -> {
+                        String oldRad = targetNode.jsonData.has("radius") ? targetNode.jsonData.get("radius").getAsString() : "5.0";
+                        targetNode.jsonData.remove("radius");
+                        targetNode.jsonData.addProperty("radius_x", oldRad);
+                        targetNode.jsonData.addProperty("radius_y", oldRad);
+                        targetNode.jsonData.addProperty("radius_z", oldRad);
+                        this.init();
+                    }).bounds(layout.currentX, layout.currentY, 35, 14).build();
+                    addModalWidget(toggleBtn);
+                    layout.currentX += 39;
+                }
+
                 layout.addText(net.minecraft.network.chat.Component.translatable("gui.stones.studio.actionedit.text_128").getString());
                 layout.addDropdown("line_of_sight", 60, new String[]{"false", "true"}, "false");
                 layout.nextLine();
-                // Text: "Speichere die gefundene Block-Liste in die Variable"
+
+                // Tag-Filter Feld (z. B. minecraft:mineable/shovel)
+                layout.addText("Tag-Filter:");
+                
+                String currentTagsStr = "";
+                if (targetNode.jsonData.has("tags")) {
+                    com.google.gson.JsonElement tagEl = targetNode.jsonData.get("tags");
+                    if (tagEl.isJsonArray()) {
+                        java.util.List<String> tagList = new java.util.ArrayList<>();
+                        for (com.google.gson.JsonElement e : tagEl.getAsJsonArray()) {
+                            tagList.add(e.getAsString());
+                        }
+                        currentTagsStr = String.join(", ", tagList);
+                    } else if (tagEl.isJsonPrimitive()) {
+                        currentTagsStr = tagEl.getAsString();
+                    }
+                }
+
+                StudioSuggestTextField.UniversalSuggestField tagsField = new StudioSuggestTextField.UniversalSuggestField(
+                    screen, font, layout.currentX, layout.currentY, 150, 14, Component.literal("")
+                );
+                tagsField.setContextNode(targetNode);
+                tagsField.setValue(currentTagsStr);
+                addModalWidget(tagsField);
+
+                layout.saveHooks.add(() -> {
+                    String val = tagsField.getValue().trim();
+                    if (val.isEmpty()) {
+                        targetNode.jsonData.remove("tags");
+                    } else {
+                        com.google.gson.JsonArray arr = new com.google.gson.JsonArray();
+                        for (String tag : val.split(",")) {
+                            String cleaned = tag.trim();
+                            if (!cleaned.isEmpty()) {
+                                arr.add(cleaned);
+                            }
+                        }
+                        if (arr.size() > 0) {
+                            targetNode.jsonData.add("tags", arr);
+                        } else {
+                            targetNode.jsonData.remove("tags");
+                        }
+                    }
+                });
+
+                layout.currentX += 150 + 4;
+                layout.nextLine();
+
                 layout.addText(net.minecraft.network.chat.Component.translatable("gui.stones.studio.actionedit.text_129").getString());
                 layout.addVariableByNameInput("save_to", 80, "found_blocks"); 
-                // Text: "."
                 layout.addText(net.minecraft.network.chat.Component.translatable("gui.stones.studio.actionedit.text_130").getString());
                 layout.nextLine();
-                // Text: "(Tipp: Filter-Tags und IDs können aktuell nur im JSON Tab bearbeitet werden)."
                 layout.addText(net.minecraft.network.chat.Component.translatable("gui.stones.studio.actionedit.text_131").getString());
+            }
+			case "stones:find_entities" -> {
+                actionTitle = Component.translatable("gui.stones.studio.actionedit.title.find_entities").getString();
+
+                layout.addText(Component.translatable("gui.stones.studio.actionedit.mode").getString());
+                layout.addDropdown("mode", 80, new String[]{"radius", "raycast"}, "radius");
+                layout.nextLine();
+
+                layout.addRadioVariableInput("pos", 80, 
+                    Component.translatable("gui.stones.studio.actionedit.pos_player").getString(), 
+                    Component.translatable("gui.stones.studio.actionedit.pos_custom").getString(), 
+                    Component.translatable("gui.stones.studio.actionedit.pos_tooltip").getString());
+                layout.nextLine();
+
+                boolean is3D = targetNode.jsonData.has("radius_x") || targetNode.jsonData.has("radius_y") || targetNode.jsonData.has("radius_z");
+
+                if (is3D) {
+                    layout.addText("Radius X/Y/Z:");
+                    layout.addInput("radius_x", 30, "5.0", true);
+                    layout.addInput("radius_y", 30, "5.0", true);
+                    layout.addInput("radius_z", 30, "5.0", true);
+
+                    Button toggleBtn = Button.builder(Component.literal("↺ 1D"), b -> {
+                        targetNode.jsonData.remove("radius_x");
+                        targetNode.jsonData.remove("radius_y");
+                        targetNode.jsonData.remove("radius_z");
+                        targetNode.jsonData.addProperty("radius", 5.0);
+                        this.init(); // <-- WICHTIG: Leert altes Layout und baut sauber neu auf
+                    }).bounds(layout.currentX, layout.currentY, 35, 14).build();
+                    addModalWidget(toggleBtn);
+                    layout.currentX += 39;
+                } else {
+                    layout.addText(Component.translatable("gui.stones.studio.actionedit.radius_distance").getString());
+                    layout.addInput("radius", 40, "5.0", true);
+
+                    Button toggleBtn = Button.builder(Component.literal("➔ 3D"), b -> {
+                        String oldRad = targetNode.jsonData.has("radius") ? targetNode.jsonData.get("radius").getAsString() : "5.0";
+                        targetNode.jsonData.remove("radius");
+                        targetNode.jsonData.addProperty("radius_x", oldRad);
+                        targetNode.jsonData.addProperty("radius_y", oldRad);
+                        targetNode.jsonData.addProperty("radius_z", oldRad);
+                        this.init(); // <-- WICHTIG: Leert altes Layout und baut sauber neu auf
+                    }).bounds(layout.currentX, layout.currentY, 35, 14).build();
+                    addModalWidget(toggleBtn);
+                    layout.currentX += 39;
+                }
+                
+                layout.addText(Component.translatable("gui.stones.studio.actionedit.living_only").getString());
+                layout.addDropdown("living_only", 50, new String[]{"true", "false"}, "true");
+                layout.nextLine();
+
+                layout.addText(Component.translatable("gui.stones.studio.actionedit.exclude_self").getString());
+                layout.addDropdown("exclude_self", 50, new String[]{"true", "false"}, "true");
+                layout.addText(Component.translatable("gui.stones.studio.actionedit.line_of_sight").getString());
+                layout.addDropdown("line_of_sight", 50, new String[]{"false", "true"}, "false");
+                layout.nextLine();
+
+                layout.addText(Component.translatable("gui.stones.studio.actionedit.save_to").getString());
+                layout.addVariableByNameInput("save_to", 90, "found_entities");
             }
             case "stones:command" -> {
                 actionTitle = Component.translatable("gui.stones.studio.actionedit.title.command").getString();
@@ -558,7 +767,7 @@ public class ActionEditModal extends AbstractStudioModal {
                 layout.addText(net.minecraft.network.chat.Component.translatable("gui.stones.studio.actionedit.text_133").getString());
                 layout.addInput("command", 300, "say Hallo Welt!", false);
             }
-			case "stones:case" -> {
+            case "stones:case" -> {
                 actionTitle = Component.translatable("gui.stones.studio.actionedit.title.case").getString();
                 layout.addText(Component.translatable("gui.stones.studio.actionedit.text_case_1").getString());
                 layout.nextLine();
@@ -566,18 +775,18 @@ public class ActionEditModal extends AbstractStudioModal {
                 layout.nextLine();
                 layout.addText(Component.translatable("gui.stones.studio.actionedit.text_case_3").getString());
             }
-			case "stones:read_nbt" -> {
-				actionTitle = Component.translatable("gui.stones.studio.actionedit.title.read_nbt").getString();
-				layout.addText(Component.translatable("gui.stones.studio.actionedit.text_read_nbt_1").getString());
-				layout.addInput("target", 80, "$player", false);
-				layout.nextLine();
-				layout.addText(Component.translatable("gui.stones.studio.actionedit.text_read_nbt_2").getString());
-				layout.addInput("path", 200, "ForgeCaps.\"stones:shrine_link\".pos.X", false);
-				layout.nextLine();
-				layout.addText(Component.translatable("gui.stones.studio.actionedit.text_read_nbt_3").getString());
-				layout.addVariableByNameInput("save_to", 80, "nbt_val"); 
-				layout.addText(Component.translatable("gui.stones.studio.actionedit.text_read_nbt_4").getString());
-			}
+            case "stones:read_nbt" -> {
+                actionTitle = Component.translatable("gui.stones.studio.actionedit.title.read_nbt").getString();
+                layout.addText(Component.translatable("gui.stones.studio.actionedit.text_read_nbt_1").getString());
+                layout.addInput("target", 80, "$player", false);
+                layout.nextLine();
+                layout.addText(Component.translatable("gui.stones.studio.actionedit.text_read_nbt_2").getString());
+                layout.addInput("path", 200, "ForgeCaps.\"stones:shrine_link\".pos.X", false);
+                layout.nextLine();
+                layout.addText(Component.translatable("gui.stones.studio.actionedit.text_read_nbt_3").getString());
+                layout.addVariableByNameInput("save_to", 80, "nbt_val"); 
+                layout.addText(Component.translatable("gui.stones.studio.actionedit.text_read_nbt_4").getString());
+            }
             case "stones:remove_random_enchantment" -> {
                 actionTitle = Component.translatable("gui.stones.studio.actionedit.title.remove_random_enchantment").getString();
                 // Text: "Entferne ein zufälliges Enchantment der getragenen Waffe"
@@ -667,13 +876,13 @@ public class ActionEditModal extends AbstractStudioModal {
                 // Text: "."
                 layout.addText(net.minecraft.network.chat.Component.translatable("gui.stones.studio.actionedit.text_154").getString());
             }
-        // Text: "Bedingung: Es regnet derzeit in der Spielwelt."
+            // Text: "Bedingung: Es regnet derzeit in der Spielwelt."
             case "stones:is_raining" -> { actionTitle = Component.translatable("gui.stones.studio.actionedit.title.is_raining").getString(); layout.addText(net.minecraft.network.chat.Component.translatable("gui.stones.studio.actionedit.text_155").getString()); }
-        // Text: "Bedingung: Es gibt derzeit ein Gewitter in der Spielwelt."
+            // Text: "Bedingung: Es gibt derzeit ein Gewitter in der Spielwelt."
             case "stones:is_thundering" -> { actionTitle = Component.translatable("gui.stones.studio.actionedit.title.is_thundering").getString(); layout.addText(net.minecraft.network.chat.Component.translatable("gui.stones.studio.actionedit.text_156").getString()); }
-        // Text: "Bedingung: Der Spieler brennt."
+            // Text: "Bedingung: Der Spieler brennt."
             case "stones:is_on_fire" -> { actionTitle = Component.translatable("gui.stones.studio.actionedit.title.is_on_fire").getString(); layout.addText(net.minecraft.network.chat.Component.translatable("gui.stones.studio.actionedit.text_157").getString()); }
-        // Text: "Bedingung: Es ist derzeit Tag in der Spielwelt."
+            // Text: "Bedingung: Es ist derzeit Tag in der Spielwelt."
             case "stones:is_day" -> { actionTitle = Component.translatable("gui.stones.studio.actionedit.title.is_day").getString(); layout.addText(net.minecraft.network.chat.Component.translatable("gui.stones.studio.actionedit.text_158").getString()); }
             
             default -> layout.usesFallback = true;
@@ -685,7 +894,7 @@ public class ActionEditModal extends AbstractStudioModal {
         if (!sentenceLayout.usesFallback) {
             sentenceLayout.render(graphics, font);
         } else {
-        // Text: "Rohdaten (JSON):"
+            // Text: "Rohdaten (JSON):"
             graphics.drawString(font, net.minecraft.network.chat.Component.translatable("gui.stones.studio.actionedit.text_159").getString(), startX + 15, startY + 28, 0xFFAAAAAA);
         }
     }
@@ -721,16 +930,11 @@ public class ActionEditModal extends AbstractStudioModal {
             currentX += w + 4;
         }
 
-        /**
-         * Erstellt ein Texteingabefeld. Nutzt jetzt UniversalSuggestField, 
-         * um bei der Eingabe von '$' automatisch das Variablen-Dropdown anzuzeigen.
-         */
         public void addInput(String key, int width, String defVal, boolean isNumeric) {
             if (currentX + width > maxX) nextLine();
             
             String currentVal = targetNode.jsonData.has(key) ? targetNode.jsonData.get(key).getAsString() : defVal;
             
-            // Nutzt UniversalSuggestField für automatischen Variablen-Support
             StudioSuggestTextField.UniversalSuggestField field = new StudioSuggestTextField.UniversalSuggestField(
                 screen, font, currentX, currentY, width, 14, Component.literal("")
             );
@@ -760,16 +964,11 @@ public class ActionEditModal extends AbstractStudioModal {
             currentX += width + 4;
         }
 
-        /**
-         * NEU: Erzeugt ein Eingabefeld, welches die Variable OHNE das führende '$'-Zeichen 
-         * speichert und anzeigt. Verwendet das neue VariableByNameSuggestField-Dropdown.
-         */
         public void addVariableByNameInput(String key, int width, String defVal) {
             if (currentX + width > maxX) nextLine();
             
             String currentVal = targetNode.jsonData.has(key) ? targetNode.jsonData.get(key).getAsString() : defVal;
             
-            // Bereinigt das führende '$', falls dieses versehentlich im JSON steht
             if (currentVal.startsWith("$")) {
                 currentVal = currentVal.substring(1);
             }
@@ -783,7 +982,6 @@ public class ActionEditModal extends AbstractStudioModal {
             saveHooks.add(() -> {
                 String val = field.getValue().trim();
                 
-                // Erzwingt das Entfernen des '$' beim Sichern
                 if (val.startsWith("$")) {
                     val = val.substring(1);
                 }
@@ -819,7 +1017,7 @@ public class ActionEditModal extends AbstractStudioModal {
                 return; 
             }
 
-            field.setContextNode(targetNode); // Setzt den Kontext für den $-Variablen-Trigger
+            field.setContextNode(targetNode);
             field.setValue(currentVal);
             addModalWidget(field);
             
@@ -851,7 +1049,7 @@ public class ActionEditModal extends AbstractStudioModal {
                 return; 
             }
 
-            field.setContextNode(targetNode); // Setzt den Kontext für den $-Variablen-Trigger
+            field.setContextNode(targetNode);
             field.setValue(currentVal);
             addModalWidget(field);
             
@@ -869,7 +1067,7 @@ public class ActionEditModal extends AbstractStudioModal {
             
             currentX += width + 4;
 
-        // Text: "▶"
+            // Text: "▶"
             Button playBtn = Button.builder(net.minecraft.network.chat.Component.translatable("gui.stones.studio.actionedit.text_160"), b -> {
                 String val = finalField.getValue().trim();
                 if (previewType.equals("sound")) {
@@ -884,7 +1082,7 @@ public class ActionEditModal extends AbstractStudioModal {
                     } catch (Exception ignored) {}
                 }
             }).bounds(currentX, currentY, 14, 14)
-        // Text: "§aVorschau abspielen"
+              // Text: "§aVorschau abspielen"
               .tooltip(net.minecraft.client.gui.components.Tooltip.create(net.minecraft.network.chat.Component.translatable("gui.stones.studio.actionedit.text_161")))
               .build();
 

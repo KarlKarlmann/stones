@@ -24,9 +24,6 @@ public class StonesModConfig {
     public static final ForgeConfigSpec.IntValue PAUSE_BUTTON_Y;
     public static final ForgeConfigSpec.IntValue PAUSE_BUTTON_WIDTH;
     public static final ForgeConfigSpec.IntValue PAUSE_BUTTON_HEIGHT;
-	
-	public static final ForgeConfigSpec.BooleanValue ENABLE_LEADERBOARD;
-    public static final ForgeConfigSpec.IntValue REWARD_SCORE_THRESHOLD;
 
     // --- Schrein-Konfiguration ---
     public static final ForgeConfigSpec.IntValue GLOBAL_MAX_SHRINE_LEVEL;
@@ -97,15 +94,6 @@ public class StonesModConfig {
         PAUSE_BUTTON_HEIGHT = BUILDER
                 .comment("Die Höhe des Pause-Menü-Knopfs (Standard: 20).")
                 .defineInRange("pauseButtonHeight", 20, 5, 200);
-        BUILDER.pop();
-		
-        BUILDER.push("Rewards");
-		ENABLE_LEADERBOARD = BUILDER
-                .comment("Soll das Leaderboard nach dem Tod angezeigt und globale Highscores gespeichert werden?")
-                .define("enableLeaderboard", true);
-        REWARD_SCORE_THRESHOLD = BUILDER
-                .comment("The minimum score required to obtain a Resonance Box upon death (default: 500).")
-                .defineInRange("rewardScoreThreshold", 500, 0, Integer.MAX_VALUE);
         BUILDER.pop();
 
         // Schrein-Einstellungen

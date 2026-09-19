@@ -236,6 +236,15 @@ public class BehaviorTreeRenderer {
                 } else if (node.rawId.equals("ACTIONS") && node.parent != null && node.parent.jsonData != null && node.parent.jsonData.has("type") && "stones:delay".equals(node.parent.jsonData.get("type").getAsString())) {
         // Text: "§6Verzögerte Ausführung\n§7Alle hier platzierten Aktionen werden nach Ablauf der oben definierten Wartezeit (Ticks) ausgeführt."
                     screen.queueTooltip(net.minecraft.network.chat.Component.translatable("gui.stones.studio.behaviortreerenderer.text_08"), mouseX, mouseY);
+				} else if (node.rawId.equals("ON_TICK")) {
+                    // Text: "§6Flug-Aktionen (on_tick)\n§7Werden in jedem Server-Tick während des Flugs an der aktuellen Position ($pos) des Geschosses ausgeführt.\n\n§7Ideal für Partikelschweife, Rauchspuren oder getaktete AoE-Pulse."
+                    screen.queueTooltip(Component.translatable("gui.stones.studio.behaviortreerenderer.projectile.on_tick.desc"), mouseX, mouseY);
+                } else if (node.rawId.equals("ON_HIT_ENTITY")) {
+                    // Text: "§6Bei Entity-Treffer (on_hit_entity)\n§7Wird ausgelöst, wenn das Geschoss mit einer lebenden Entity ($target) kollidiert.\n\n§7Verfügbare Variablen: §e$target§7 (Getroffenes Wesen), §e$hitPos§7 (Einschlagspunkt) und §e$player§7 (Schütze)."
+                    screen.queueTooltip(Component.translatable("gui.stones.studio.behaviortreerenderer.projectile.on_hit_entity.desc"), mouseX, mouseY);
+                } else if (node.rawId.equals("ON_HIT_BLOCK")) {
+                    // Text: "§6Bei Block-Treffer (on_hit_block)\n§7Wird ausgelöst, wenn das Geschoss auf einen soliden Block prallt.\n\n§7Verfügbare Variablen: §e$blockPos§7 (Block-Koordinate), §e$hitPos§7 (Einschlagskante) und §e$player§7 (Schütze)."
+                    screen.queueTooltip(Component.translatable("gui.stones.studio.behaviortreerenderer.projectile.on_hit_block.desc"), mouseX, mouseY);
                 }
             }
         }
@@ -286,7 +295,7 @@ public class BehaviorTreeRenderer {
         if (category == null || category.type != TreeNode.Type.CATEGORY) return false;
         
         if (node.type == TreeNode.Type.ACTION) {
-            return category.rawId.equals("ACTIONS") || category.rawId.equals("DEFAULT");
+            return category.rawId.equals("ACTIONS") || category.rawId.equals("DEFAULT") || category.rawId.equals("ON_TICK") || category.rawId.equals("ON_HIT_ENTITY") || category.rawId.equals("ON_HIT_BLOCK");
         }
         if (node.type == TreeNode.Type.CONDITION) {
             return category.rawId.equals("CONDITIONS") || category.rawId.equals("CONDITION");

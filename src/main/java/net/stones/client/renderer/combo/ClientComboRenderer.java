@@ -14,15 +14,17 @@ import net.minecraftforge.client.event.RenderLevelStageEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 import net.stones.StonesMod;
+import net.stones.client.texture.Base64TextureManager;
 import net.stones.network.PacketSyncCombo;
 import org.joml.Matrix4f;
-
+import net.stones.client.cache.ClientTextureCache;
 import java.util.HashMap;
 import java.util.Map;
 
 /**
  * Client-Only Rendering Engine.
  * Modifiziert, um wirbelnde Combo-Punkte um jedes beliebige Entity (Spieler und Mobs) darzustellen.
+ * Unterstützt sowohl Dateipfade als auch dynamische Base64 RAM-Texturen.
  */
 @Mod.EventBusSubscriber(modid = StonesMod.MODID, value = Dist.CLIENT)
 public class ClientComboRenderer {
@@ -51,7 +53,10 @@ public class ClientComboRenderer {
         combo.entityId = msg.entityId;
         combo.count = msg.count;
         combo.maxCount = msg.maxCount;
-        combo.texture = new ResourceLocation(msg.texture);
+        
+        // NEU: Löst Base64-Strings im RAM auf ODER lädt Vanilla-ResourceLocations
+        combo.texture = resolveTexture(msg.texture);
+        
         combo.size = msg.size;
         combo.radius = msg.radius;
         combo.speed = msg.speed;
@@ -62,6 +67,32 @@ public class ClientComboRenderer {
             combo.expirationTime = mc.level.getGameTime() + msg.timeoutTicks;
         }
     }
+
+    /**
+     * Hilfsmethode: Wandelt Base64-Strings sicher in RAM-Texturen um.
+     */
+	public static ResourceLocation resolveTexture(String input) {
+		if (input == null || input.isBlank()) {
+			return new ResourceLocation("minecraft", "textures/particle/glint.png");
+		}
+
+		// 1. Dynamische Cache-IDs (z. B. "dynamic:12345") über den ClientTextureCache abfragen
+		if (input.startsWith("dynamic:")) {
+			return ClientTextureCache.getOrRequest(input);
+		}
+
+		// 2. Abwärtskompatibilität: Falls noch rohe Base64-Strings übermittelt werden
+		if (input.startsWith("data:image/") || input.length() > 100) {
+			return Base64TextureManager.getOrCreateOrbTexture(input);
+		}
+
+		// 3. Normaler Dateipfad (z. B. "stones:textures/gui/combo_fire.png")
+		try {
+			return new ResourceLocation(input);
+		} catch (Exception e) {
+			return new ResourceLocation("minecraft", "textures/particle/glint.png");
+		}
+	}
 
     @SubscribeEvent
     public static void onRenderLevel(RenderLevelStageEvent event) {
