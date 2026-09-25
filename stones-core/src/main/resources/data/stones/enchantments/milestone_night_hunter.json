@@ -1,0 +1,83 @@
+{
+  "type": "MILESTONE",
+  "name": "DICT:milestone.stones.nighthunter.name",
+  "description": "Consumes a Spider Eye to grant Night Vision. Deals significant bonus damage against any Glowing target with ranged and arrow strikes.",
+  "icon": "stones:textures/gui/skills/night_hunter.png",
+  "required_level": 3.0,
+  "factor": 0.0,
+  "max_level": 20,
+  "stats": [
+    {
+      "id": "glow_damage_bonus",
+      "label": "DICT:stat.stones.glow_damage_bonus",
+      "type": "generic",
+      "base": 4.0,
+      "per_level": 0.15,
+      "scaling": "SOCKET_LEVEL",
+      "suffix": "DICT:stat.stones.suffix.damage"
+    },
+    {
+      "id": "vision_duration",
+      "label": "DICT:stat.stones.vision_duration",
+      "type": "generic",
+      "base": 300.0,
+      "per_level": 20.0,
+      "scaling": "RUNE_LEVEL",
+      "suffix": "DICT:stat.stones.suffix.seconds",
+      "display_factor": 0.05
+    },
+    {
+      "id": "hunter_cooldown",
+      "label": "DICT:stat.stones.hunter_cooldown",
+      "type": "generic",
+      "base": 200.0,
+      "per_level": -1.0,
+      "scaling": "RUNE_LEVEL",
+      "suffix": "DICT:stat.stones.suffix.seconds",
+      "min": 60.0
+    }
+  ],
+  "behaviors": [
+    {
+      "trigger": "ON_ACTION_BUTTON",
+      "conditions": [
+        {
+          "type": "stones:is_ready",
+          "name": "milestone_nighthunter"
+        }
+      ],
+      "actions": [
+        {
+          "type": "stones:raw_js",
+          "code": "let p = ctx.player;\nif (!p) return;\n\nlet inv = p.getInventory();\nlet foundSlot = -1;\n\nfor (let i = 0; i < inv.getContainerSize(); i++) {\n    let stack = inv.getItem(i);\n    if (!stack.isEmpty() && String(stack.id) === 'minecraft:spider_eye') {\n        foundSlot = i;\n        break;\n    }\n}\n\nlet dur = Math.round(ctx['vision_duration'] || 300);\n\nif (foundSlot !== -1) {\n    inv.getItem(foundSlot).shrink(1);\n    if (p.containerMenu) p.containerMenu.broadcastChanges();\n    \n    p.potionEffects.add('minecraft:night_vision', dur, 0);\n    global.Stones.playSound(p, 'minecraft:entity.spider.ambient', 'players', 1.0, 1.2);\n    global.Stones.spawnParticles(p, 'minecraft:end_rod', p.eyePosition, 12, 0.3, 0.3, 0.3, 0.02);\n} else {\n    p.potionEffects.add('minecraft:blindness', dur, 0);\n    global.Stones.playSound(p, 'minecraft:block.sculk_sensor.clicking', 'players', 1.2, 0.5);\n    global.Stones.spawnParticles(p, 'minecraft:squid_ink', p.eyePosition, 12, 0.3, 0.3, 0.3, 0.05);\n}\n\nglobal.Stones.setCooldown(p, 'milestone_nighthunter', ctx['hunter_cooldown'] || 200);"
+        }
+      ]
+    },
+    {
+      "trigger": "ON_ATTACK",
+      "conditions": [
+        {
+          "type": "stones:nand",
+          "conditions": [
+            {
+              "type": "stones:is_direct"
+            }
+          ]
+        },
+        {
+          "type": "stones:variable_compare",
+          "variable": "target.isGlowing()",
+          "operator": "==",
+          "value": "true"
+        }
+      ],
+      "actions": [
+        {
+          "type": "stones:raw_js",
+          "code": "let p = ctx.player;\nlet target = ctx.target || (ctx.event ? ctx.event.target : null);\nif (!p || !target) return;\n    let bonus = ctx['glow_damage_bonus'] || 4.0;\n    \n    if (ctx.event) {\n        if (typeof ctx.event.setAmount === 'function') {\n            ctx.event.setAmount(ctx.event.getAmount() + bonus);\n        } else if (typeof ctx.event.amount !== 'undefined') {\n            ctx.event.amount += bonus;\n        }\n    }\n    \n    global.Stones.playSound(p, 'minecraft:entity.experience_orb.pickup', 'players', 0.9, 1.8);\n    global.Stones.playSound(p, 'minecraft:entity.arrow.hit_player', 'players', 1.0, 0.5);\n    global.Stones.spawnParticles(p, 'minecraft:damage_indicator', target.position().add(0, 1.2, 0), 10, 0.3, 0.3, 0.3, 0.1);\n    global.Stones.spawnParticles(p, 'minecraft:crit', target.position().add(0, 1.0, 0), 12, 0.3, 0.3, 0.3, 0.2);\n"
+        }
+      ]
+    }
+  ],
+  "_template_hash": "103aa33507b8d9446f8c869d59dbe90fc0ec80820ad7be6eb7406102eba80109"
+}

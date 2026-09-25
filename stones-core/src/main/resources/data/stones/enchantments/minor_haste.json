@@ -1,0 +1,9 @@
+{
+  "type": "MINOR",
+  "attribute": "minecraft:generic.attack_speed",
+  "operation": "MULTIPLY_TOTAL",
+  "factor": 0.05,
+  "name": "Rune of Haste",
+  "required_level": 0.2,
+  "description": "Increases attack speed slightly per level."
+}

@@ -1,0 +1,23 @@
+{
+    "display": {
+        "icon": {
+            "item": "stones:cluster_jewel_milestone"
+        },
+        "title": {
+            "translate": "advancement.stones.singularity.title"
+        },
+        "description": {
+            "translate": "advancement.stones.singularity.desc"
+        },
+        "frame": "challenge",
+        "show_toast": true,
+        "announce_to_chat": true,
+        "hidden": false
+    },
+    "parent": "stones:power/amplified_echo",
+    "criteria": {
+        "triggered_by_code": {
+            "trigger": "minecraft:impossible"
+        }
+    }
+}

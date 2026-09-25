@@ -1,0 +1,68 @@
+{
+  "box_id": "stones:resonance_box",
+  "texture": "stones:textures/entity/resonance_box.png",
+  "lock_duration_seconds": 300,
+  "break_drop_item": "minecraft:lapis_lazuli",
+  "break_drop_count": 3,
+  "guaranteed_items": [
+    { "item": "stones:rune_minor", "min_tier": 1, "max_tier": 1, "count": 1, "nbt": "{UnboundRune:true,RuneTier:1}" },
+    { "item": "stones:rune_minor", "min_tier": 2, "max_tier": 2, "count": 1, "nbt": "{UnboundRune:true,RuneTier:2}" },
+    { "item": "stones:rune_minor", "min_tier": 3, "max_tier": 3, "count": 1, "nbt": "{UnboundRune:true,RuneTier:3}" },
+    { "item": "stones:rune_minor", "min_tier": 4, "max_tier": 4, "count": 1, "nbt": "{UnboundRune:true,RuneTier:4}" },
+
+    { "item": "stones:rune_major", "min_tier": 5, "max_tier": 5, "count": 1, "nbt": "{UnboundRune:true,RuneTier:5}" },
+    { "item": "stones:rune_major", "min_tier": 6, "max_tier": 6, "count": 1, "nbt": "{UnboundRune:true,RuneTier:6}" },
+    { "item": "stones:rune_major", "min_tier": 7, "max_tier": 7, "count": 1, "nbt": "{UnboundRune:true,RuneTier:7}" },
+    { "item": "stones:rune_major", "min_tier": 8, "max_tier": 8, "count": 1, "nbt": "{UnboundRune:true,RuneTier:8}" },
+    { "item": "stones:rune_major", "min_tier": 9, "max_tier": 9, "count": 1, "nbt": "{UnboundRune:true,RuneTier:9}" },
+
+    { "item": "stones:rune_milestone", "min_tier": 10, "max_tier": 10, "count": 1, "nbt": "{UnboundRune:true,RuneTier:10}" },
+    { "item": "stones:rune_milestone", "min_tier": 11, "max_tier": 11, "count": 1, "nbt": "{UnboundRune:true,RuneTier:11}" },
+    { "item": "stones:rune_milestone", "min_tier": 12, "max_tier": 12, "count": 1, "nbt": "{UnboundRune:true,RuneTier:12}" },
+    { "item": "stones:rune_milestone", "min_tier": 13, "max_tier": 13, "count": 1, "nbt": "{UnboundRune:true,RuneTier:13}" },
+    { "item": "stones:rune_milestone", "min_tier": 14, "max_tier": 14, "count": 1, "nbt": "{UnboundRune:true,RuneTier:14}" },
+    { "item": "stones:rune_milestone", "min_tier": 15, "count": 1, "nbt": "{UnboundRune:true,RuneTier:15}" }
+  ],
+  "vanilla_loot_pools": [
+    {
+      "min_tier": 1,
+      "tables": [
+        "minecraft:chests/abandoned_mineshaft",
+        "minecraft:chests/simple_dungeon",
+        "minecraft:chests/ruined_portal",
+        "minecraft:chests/pillager_outpost"
+      ]
+    },
+    {
+      "min_tier": 4,
+      "tables": [
+        "minecraft:chests/bastion_treasure",
+        "minecraft:chests/desert_pyramid",
+        "minecraft:chests/shipwreck_treasure",
+        "minecraft:chests/igloo_chest"
+      ]
+    },
+    {
+      "min_tier": 7,
+      "tables": [
+        "minecraft:chests/end_city_treasure",
+        "minecraft:chests/stronghold_library",
+        "minecraft:chests/ancient_city",
+        "minecraft:chests/buried_treasure"
+      ]
+    },
+    {
+      "min_tier": 10,
+      "tables": [
+        "minecraft:chests/ancient_city",
+        "minecraft:chests/end_city_treasure",
+        "minecraft:chests/bastion_treasure",
+        "minecraft:chests/woodland_mansion"
+      ]
+    }
+  ],
+  "crazy_mod_items": {
+    "min_tier": 15,
+    "enchant_scaling": true
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "type": "MINOR",
+  "attribute": "minecraft:generic.knockback_resistance",
+  "operation": "ADDITION",
+  "factor": 0.1,
+  "name": "Rune of Stability",
+  "required_level": 0.1,
+  "description": "Reduces knockback taken from attacks."
+}

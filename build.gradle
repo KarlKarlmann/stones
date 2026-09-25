@@ -1,98 +1,115 @@
-plugins {
-    id 'eclipse'
-    id 'net.minecraftforge.gradle' version '[6.0.16,6.2)'
-    id 'org.spongepowered.mixin' version '0.7.+'
+buildscript {
+    repositories {
+        maven { url = 'https://maven.minecraftforge.net' }
+        maven { url = 'https://repo.spongepowered.org/repository/maven-public/' }
+        mavenCentral()
+    }
+    dependencies {
+        classpath group: 'net.minecraftforge.gradle', name: 'ForgeGradle', version: '6.0.+'
+        classpath 'org.spongepowered:mixingradle:0.7-SNAPSHOT'
+    }
 }
 
-// Version aus gradle.properties laden (Fallback auf 1.0.0, falls nicht gefunden)
-version = project.hasProperty('mod_version') ? project.getProperty('mod_version') : '1.0.0'
-group = 'net.stones'
-archivesBaseName = 'stones'
+subprojects {
+    apply plugin: 'net.minecraftforge.gradle'
+    apply plugin: 'org.spongepowered.mixin'
+    apply plugin: 'eclipse'
 
-java.toolchain.languageVersion = JavaLanguageVersion.of(17)
+    group = project.hasProperty("group_${project.name}") ? project.getProperty("group_${project.name}") : 'net.stones'
+    version = project.hasProperty("version_${project.name}") ? project.getProperty("version_${project.name}") : '1.0.0'
 
-minecraft {
-    mappings channel: 'official', version: '1.20.1'
-    copyIdeResources = true
+    java.toolchain.languageVersion = JavaLanguageVersion.of(17)
 
-    runs {
-        client {
-            workingDirectory project.file('run')
-            property 'mixin.env.disableRefMap', 'true'
-            arg "-mixin.config=stones.mixins.json"
-            mods { stones { source sourceSets.main } }
+    minecraft {
+        mappings channel: project.hasProperty('mappings_channel') ? project.getProperty('mappings_channel') : 'official', 
+                 version: project.hasProperty('mappings_version') ? project.getProperty('mappings_version') : '1.20.1'
+        
+        copyIdeResources = true
+
+        def atFile = file('src/main/resources/META-INF/accesstransformer.cfg')
+        if (atFile.exists()) {
+            accessTransformer = atFile
         }
-        server {
-            workingDirectory project.file('run')
-            property 'mixin.env.disableRefMap', 'true'
-            arg "-mixin.config=stones.mixins.json"
-            mods { stones { source sourceSets.main } }
+
+        runs {
+            client {
+                workingDirectory rootProject.file("run/${project.name}")
+                property 'forge.logging.markers', 'REGISTRIES'
+                property 'forge.logging.console.level', 'debug'
+                property 'mixin.env.disableRefMap', 'true'
+                arg "-mixin.config=${project.name}.mixins.json"
+                mods { "${project.name}" { source sourceSets.main } }
+            }
+            server {
+                workingDirectory rootProject.file("run/${project.name}_server")
+                property 'forge.logging.markers', 'REGISTRIES'
+                property 'forge.logging.console.level', 'debug'
+                property 'mixin.env.disableRefMap', 'true'
+                arg "-mixin.config=${project.name}.mixins.json"
+                mods { "${project.name}" { source sourceSets.main } }
+            }
         }
     }
-}
 
-mixin {
-    add sourceSets.main, 'stones.refmap.json'
-    config 'stones.mixins.json'
-}
+    mixin {
+        add sourceSets.main, "${project.name}.refmap.json"
+        config "${project.name}.mixins.json"
+    }
 
-repositories {
-    // Jared's maven wurde entfernt, da wir JEI nicht mehr benötigen.
-}
+    repositories {
+        flatDir { dirs rootProject.file('libs') }
+        maven { url = "https://cursemaven.com" } 
+        mavenCentral()
+    }
 
-dependencies {
-    minecraft 'net.minecraftforge:forge:1.20.1-47.3.0'
+    dependencies {
+        minecraft "net.minecraftforge:forge:${mc_version}-${forge_version}"
+        annotationProcessor 'org.spongepowered:mixin:0.8.5:processor'
+    }
 
-    annotationProcessor "org.spongepowered:mixin:${mixin_version}:processor"
+    tasks.withType(JavaCompile).configureEach {
+        options.encoding = 'UTF-8'
+        def refMapFile = project.file("build/resources/main/${project.name}.refmap.json")
+        options.compilerArgs << "-AoutRefMapFile=${refMapFile.absolutePath}"
+        outputs.file(refMapFile)
+    }
 
-    // Scannt den "libs" Ordner automatisch nach ALLEN .jar Dateien und bindet sie ein!
-    implementation fg.deobf(fileTree(dir: 'libs', include: '*.jar'))
-}
+    processResources {
+        def replaceProperties = [
+            version: project.version,
+            mod_version: project.version,
+            mod_id: project.name.replace('-', '_')
+        ]
+        inputs.properties replaceProperties
+        replaceProperties.put 'project', project
 
-tasks.withType(JavaCompile).configureEach {
-    options.encoding = 'UTF-8'
-}
+        filesMatching(['META-INF/mods.toml', 'pack.mcmeta']) {
+            expand replaceProperties
+        }
+    }
 
-// --- WICHTIG 1: Variablen in der mods.toml ersetzen ---
-def replaceProperties = [
-        version: project.version,
-        mod_version: project.version
-]
-
-processResources {
-    inputs.properties replaceProperties
-    replaceProperties.put 'project', project
-
-    filesMatching(['META-INF/mods.toml', 'pack.mcmeta']) {
-        expand replaceProperties
+    jar {
+        archiveFileName = "${project.name}_${mc_version}_${project.version}.jar"
+        manifest {
+            attributes([
+                "Specification-Title"     : project.name,
+                "Specification-Vendor"    : mod_authors,
+                "Specification-Version"   : "1",
+                "Implementation-Title"    : project.name,
+                "Implementation-Version"  : project.version,
+                "Implementation-Vendor"   : mod_authors,
+                "Implementation-Timestamp": new Date().format("yyyy-MM-dd'T'HH:mm:ssZ"),
+                "MixinConfigs"            : "${project.name}.mixins.json"
+            ])
+        }
+        finalizedBy('reobfJar')
     }
 }
 
-// --- WICHTIG 2: Mod Manifest mit sauberen FML-Daten ---
-tasks.named('jar', Jar).configure {
-    archiveFileName = "stones_1.20.1_forge_${project.version}.jar"
-
-    manifest {
-        attributes([
-            "Specification-Title"     : "Stones",
-            "Specification-Vendor"    : "Stones",
-            "Specification-Version"   : "1",
-            "Implementation-Title"    : project.name,
-            "Implementation-Version"  : project.version,
-            "Implementation-Vendor"   : "Stones",
-            "Implementation-Timestamp": new Date().format("yyyy-MM-dd'T'HH:mm:ssZ"),
-            "MixinConfigs"            : "stones.mixins.json"
-        ])
-    }
+tasks.register('build') {
+    group = 'build'
+    dependsOn subprojects.collect { it.tasks.named('build') }
 }
 
-// --- WICHTIG 3: Reobfuscation für das fertige Spiel aktivieren! ---
-jar.finalizedBy('reobfJar')
-
-if (file('local-git.gradle').exists()) {
-    apply from: 'local-git.gradle'
-}
-
-if (file('local-env.gradle').exists()) {
-    apply from: 'local-env.gradle'
-}
+if (file('local-launcher.gradle').exists()) apply from: 'local-launcher.gradle'
+if (file('local-git.gradle').exists()) apply from: 'local-git.gradle'

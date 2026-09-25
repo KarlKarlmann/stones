@@ -1,0 +1,46 @@
+{
+  "type": "MILESTONE",
+  "name": "DICT:milestone.stones.aeon_core.name",
+  "description": "DICT:milestone.stones.aeon_core.description",
+  "icon": "stones:textures/gui/skills/shrineteleport.png",
+  "required_level": 1.0,
+  "max_level": 20,
+  "factor": 0.0,
+  "stats": [
+    {
+      "id": "aeon_cooldown",
+      "label": "DICT:stat.stones.aeon_recharge",
+      "base": 200.0,
+      "per_level": -1.0,
+      "scaling": "PLAYER_LEVEL",
+      "suffix": "DICT:stat.stones.suffix.seconds",
+      "display_factor": 0.05
+    },
+    {
+      "id": "aeon_cost",
+      "label": "DICT:stat.stones.aeon_cost",
+      "base": 5.0,
+      "per_level": 0.0,
+      "scaling": "RUNE_LEVEL",
+      "suffix": "DICT:stat.stones.suffix.levels"
+    }
+  ],
+  "behaviors": [
+    {
+      "trigger": "ON_ACTION_BUTTON",
+      "conditions": [
+        {
+          "type": "stones:is_ready",
+          "name": "milestone_aeoncore"
+        }
+      ],
+      "actions": [
+        {
+          "type": "stones:raw_js",
+          "code": "let p = ctx.player;\nif (!p) return;\n\nlet Component = Java.loadClass('net.minecraft.network.chat.Component');\nlet cost = Math.round(ctx['aeon_cost'] || 5);\nlet cooldownTicks = Math.round(ctx['aeon_cooldown'] || 200);\n\n// 1. Level-Kosten prüfen\nif (p.experienceLevel < cost) {\n    global.Stones.playSound(p, 'minecraft:entity.villager.no', 'players', 1.0, 0.8);\n    if (typeof p.sendSystemMessage === 'function') {\n        p.sendSystemMessage(Component.literal('§c[Aeon Core] Du benötigst mindestens ' + cost + ' XP-Level!'));\n    }\n    return;\n}\n\n// 2. Schrein-Daten abfragen\nlet dimLoc = global.Stones.readNbt(p, 'ForgeCaps.\"stones:shrine_link\".dim');\nlet posX = global.Stones.readNbt(p, 'ForgeCaps.\"stones:shrine_link\".pos.X');\nlet posY = global.Stones.readNbt(p, 'ForgeCaps.\"stones:shrine_link\".pos.Y');\nlet posZ = global.Stones.readNbt(p, 'ForgeCaps.\"stones:shrine_link\".pos.Z');\n\nif (dimLoc && dimLoc != 0 && dimLoc != '0') {\n    let targetX = Number(posX) + 0.5;\n    let targetY = Number(posY) + 1.0;\n    let targetZ = Number(posZ) + 0.5;\n    let targetSelector = p.username || (p.uuid ? p.uuid.toString() : p.stringUUID);\n\n    p.giveExperienceLevels(-cost);\n    global.Stones.setCooldown(p, 'milestone_aeoncore', cooldownTicks);\n\n    p.server.runCommandSilent(`execute in ${dimLoc} run tp ${targetSelector} ${targetX} ${targetY} ${targetZ}`);\n\n    global.Stones.playSound(p, 'minecraft:block.portal.travel', 'players', 0.8, 1.2);\n    global.Stones.spawnParticles(p, 'minecraft:portal', p.position(), 35, 0.5, 0.5, 0.5, 0.1);\n    return;\n}\n\n// Fallback: Kein Schrein gebunden\nglobal.Stones.playSound(p, 'minecraft:entity.villager.no', 'players', 1.0, 0.8);\nif (typeof p.sendSystemMessage === 'function') {\n    p.sendSystemMessage(Component.literal('§c[Aeon Core] Kein Schrein verknüpft!'));\n}"
+        }
+      ]
+    }
+  ],
+  "_template_hash": "b8a7b3fad376d5a2acc14acd39fa358eab53ac432cb06f2f8996e731d1726c01"
+}

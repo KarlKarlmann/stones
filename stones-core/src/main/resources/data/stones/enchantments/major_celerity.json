@@ -1,0 +1,9 @@
+{
+  "type": "MAJOR",
+  "attribute": "minecraft:generic.movement_speed",
+  "operation": "MULTIPLY_TOTAL",
+  "factor": 0.005,
+  "name": "Rune of Celerity",
+  "required_level": 0.4,
+  "description": "Grants movement speed based on level."
+}

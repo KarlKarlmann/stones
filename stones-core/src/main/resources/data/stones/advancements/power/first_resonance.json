@@ -1,0 +1,23 @@
+{
+    "display": {
+        "icon": {
+            "item": "stones:rune_minor"
+        },
+        "title": {
+            "translate": "advancement.stones.first_resonance.title"
+        },
+        "description": {
+            "translate": "advancement.stones.first_resonance.desc"
+        },
+        "frame": "task",
+        "show_toast": true,
+        "announce_to_chat": true,
+        "hidden": false
+    },
+    "parent": "stones:root/soul_bond",
+    "criteria": {
+        "triggered_by_code": {
+            "trigger": "minecraft:impossible"
+        }
+    }
+}

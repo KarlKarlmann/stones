@@ -1,0 +1,67 @@
+{
+  "type": "MILESTONE",
+  "name": "DICT:milestone.stones.berserker.name",
+  "description": "Hurl your heavy weapon forward to crush enemies. High level runestones increase the chance for the weapon to automatically return to your hand. Taking damage grants speed and reduces the remaining throw cooldown.",
+  "icon": "stones:textures/gui/skills/berserker.png",
+  "required_level": 5.0,
+  "factor": 0.0,
+  "max_level": 20,
+  "stats": [
+    {
+      "id": "throw_damage",
+      "label": "DICT:stat.stones.throw_damage",
+      "type": "generic",
+      "base": 12.0,
+      "per_level": 0.25,
+      "scaling": "SOCKET_LEVEL",
+      "suffix": "DICT:stat.stones.suffix.damage"
+    },
+    {
+      "id": "throw_cooldown",
+      "label": "DICT:stat.stones.throw_cooldown",
+      "type": "generic",
+      "base": 200.0,
+      "per_level": -1.0,
+      "scaling": "RUNE_LEVEL",
+      "suffix": "DICT:stat.stones.suffix.seconds",
+      "min": 60.0
+    },
+    {
+      "id": "return_chance",
+      "label": "DICT:stat.stones.return_chance",
+      "type": "generic",
+      "base": 25.0,
+      "per_level": 0.75,
+      "scaling": "RUNE_LEVEL",
+      "suffix": "%",
+      "max": 100.0
+    }
+  ],
+  "behaviors": [
+    {
+      "trigger": "ON_ACTION_BUTTON",
+      "conditions": [
+        {
+          "type": "stones:is_ready",
+          "name": "milestone_berserker"
+        }
+      ],
+      "actions": [
+        {
+          "type": "stones:raw_js",
+          "code": "let held = ctx.player.mainHandItem;\nif (!held || held.isEmpty()) return;\nlet idStr = String(held.id);\nlet isDmgable = held.isDamageableItem();\nlet isWeapon = isDmgable || idStr.includes('axe') || idStr.includes('sword') || idStr.includes('spear') || idStr.includes('weapon') || idStr.includes('hammer') || idStr.includes('trident') || idStr.includes('tool');\nif (!isWeapon) return;\n\nctx['thrown_stack'] = held.copy();\nctx['thrown_item_id'] = idStr;\nctx['total_damage'] = (ctx['throw_damage'] || 12.0) + 4.0;\nctx.player.setMainHandItem('minecraft:air');\nif (ctx.player.containerMenu) { ctx.player.containerMenu.broadcastChanges(); }\n\nglobal.Stones.setCooldown(ctx.player, 'milestone_berserker', ctx['throw_cooldown'] || 200);\nglobal.Stones.playSound(ctx.player, 'minecraft:item.trident.throw', 'players', 1.2, 0.6);\n\nglobal.Stones.spawnProjectile(ctx.player, {\n    origin: ctx.player.eyePosition,\n    direction: ctx.player.lookAngle,\n    speed: 2.2,\n    gravity: 0.02,\n    lifetime: 40,\n    hitboxW: 0.8,\n    hitboxH: 0.8,\n    renderMode: 'MODEL',\n    texture: ctx['thrown_item_id']\n},\nproj => {\n    let player = ctx.player;\n    if (proj && player && !proj.onDestroyConsumer) {\n        proj.onDestroyConsumer = p => {\n            let stack = ctx['thrown_stack'];\n            if (stack && !stack.isEmpty()) {\n                if (stack.isDamageableItem()) {\n                    let curDmg = stack.getDamageValue();\n                    let maxDmg = stack.getMaxDamage();\n                    let nextDmg = curDmg + 1;\n                    if (maxDmg > 0 && nextDmg >= maxDmg) {\n                        global.Stones.playSound(player, 'minecraft:entity.item.break', 'players', 1.0, 1.0);\n                        stack = null;\n                    } else {\n                        stack.setDamageValue(nextDmg);\n                    }\n                }\n\n                if (stack && !stack.isEmpty()) {\n                    let chance = ctx['return_chance'] || 25.0;\n                    let roll = Math.random() * 100.0;\n\n                    if (roll < chance) {\n                        if (player.mainHandItem.isEmpty()) {\n                            player.setMainHandItem(stack);\n                        } else {\n                            player.give(stack);\n                        }\n                        if (player.containerMenu) player.containerMenu.broadcastChanges();\n                        global.Stones.playSound(player, 'minecraft:item.armor.equip_netherite', 'players', 1.0, 0.8);\n                    } else {\n                        let lvl = player.level;\n                        if (lvl) {\n                            let itemEnt = lvl.createEntity('item');\n                            if (itemEnt) {\n                                itemEnt.item = stack;\n                                itemEnt.setPosition(p.getX(), p.getY(), p.getZ());\n                                itemEnt.spawn();\n                            }\n                        }\n                        global.Stones.playSound(player, 'minecraft:entity.item.pickup', 'players', 0.5, 0.5);\n                    }\n                }\n                ctx['thrown_stack'] = null;\n            }\n        };\n    }\n    global.Stones.spawnParticles(ctx.player, 'minecraft:sweep_attack', ctx.player.position(), 2, 0.2, 0.2, 0.2, 0.0);\n},\n(proj, hit) => {\n    if (hit && hit.entity) { hit.entity.attack(ctx['total_damage'] || 16.0); }\n    global.Stones.playSound(ctx.player, 'minecraft:entity.player.attack.crit', 'players', 1.0, 0.7);\n    global.Stones.spawnParticles(ctx.player, 'minecraft:damage_indicator', ctx.player.position(), 10, 0.4, 0.4, 0.4, 0.1);\n    proj.discard();\n},\n(proj, hit) => {\n    global.Stones.playSound(ctx.player, 'minecraft:block.anvil.place', 'players', 0.8, 1.4);\n    proj.discard();\n});"
+        }
+      ]
+    },
+    {
+      "trigger": "ON_HURT",
+      "actions": [
+        {
+          "type": "stones:raw_js",
+          "code": "let p = ctx.player;\nif (!p) return;\n\nlet currentCd = global.Stones.getCooldown ? global.Stones.getCooldown(p, 'milestone_berserker') : 0;\nif (currentCd > 0) {\n    global.Stones.setCooldown(p, 'milestone_berserker', Math.max(0, currentCd - 20));\n}\n\nlet speedEffect = net.minecraft.world.effect.MobEffects.MOVEMENT_SPEED;\nlet MobEffectInstance = net.minecraft.world.effect.MobEffectInstance;\np.addEffect(new MobEffectInstance(speedEffect, 60, 0, false, true));\n\nglobal.Stones.playSound(p, 'minecraft:entity.player.attack.knockback', 'players', 0.5, 1.4);\nglobal.Stones.spawnParticles(p, 'minecraft:angry_villager', p.position().add(0, 1.5, 0), 3, 0.2, 0.2, 0.2, 0.0);"
+        }
+      ]
+    }
+  ],
+  "_template_hash": "451aa48a1a475e1f69929280cee317d96870f5f75030fbda4e7047fe9fe1fe09"
+}

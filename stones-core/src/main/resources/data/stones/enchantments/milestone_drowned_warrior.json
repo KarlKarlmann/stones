@@ -1,0 +1,179 @@
+{
+  "override_registry_id": "stones:milestone_drowned_warrior",
+  "type": "MILESTONE",
+  "name": "DICT:milestone.stones.drowned_warrior.name",
+  "description": "Activate Tidal Vortex to enter Drowned Stance. While active, nearby foes are pulled in, you gain Conduit blessings, and your swings consume oxygen to unleash powerful Hydro Pressure Strikes.",
+  "icon": "stones:textures/gui/skills/drowned.png",
+  "required_level": 5.0,
+  "factor": 0.0,
+  "max_level": 20,
+  "stats": [
+    {
+      "id": "air_cost",
+      "label": "DICT:stat.stones.air_drain",
+      "type": "generic",
+      "base": 25.0,
+      "per_level": -1.0,
+      "scaling": "RUNE_LEVEL",
+      "suffix": "DICT:stat.stones.suffix.points",
+      "min": 10.0
+    },
+    {
+      "id": "hydro_damage",
+      "label": "DICT:stat.stones.damage_bonus",
+      "type": "generic",
+      "base": 8.0,
+      "per_level": 1.0,
+      "scaling": "SOCKET_LEVEL",
+      "suffix": "DICT:stat.stones.suffix.damage"
+    },
+    {
+      "id": "vortex_cooldown",
+      "label": "DICT:stat.stones.vortex_cooldown",
+      "type": "generic",
+      "base": 300.0,
+      "per_level": -10.0,
+      "scaling": "RUNE_LEVEL",
+      "suffix": "DICT:stat.stones.suffix.seconds",
+      "min": 100.0
+    }
+  ],
+  "behaviors": [
+    {
+      "trigger": "ON_ACTION_BUTTON",
+      "conditions": [
+        {
+          "type": "stones:is_ready",
+          "name": "milestone_drowned_warrior"
+        }
+      ],
+      "actions": [
+        {
+          "type": "stones:cooldown",
+          "name": "milestone_drowned_warrior",
+          "ticks": "$vortex_cooldown"
+        },
+        {
+          "type": "stones:add_combo",
+          "id": "drowned_stance",
+          "count": 1,
+          "max": 1,
+          "texture": "minecraft:textures/particle/bubble.png",
+          "size": 0.5,
+          "radius": 1.2,
+          "speed": 0.2,
+          "color": "#00AACC",
+          "timeout": 200
+        },
+        {
+          "type": "stones:play_sound",
+          "sound": "minecraft:entity.drowned.ambient_water",
+          "volume": 1.5,
+          "pitch": 0.6
+        },
+        {
+          "type": "stones:play_sound",
+          "sound": "minecraft:item.trident.riptide_3",
+          "volume": 1.0,
+          "pitch": 0.8
+        },
+        {
+          "type": "stones:apply_effect",
+          "effect": "minecraft:conduit_power",
+          "duration": 200,
+          "amplifier": 0
+        },
+        {
+          "type": "stones:apply_effect",
+          "effect": "minecraft:dolphins_grace",
+          "duration": 200,
+          "amplifier": 0
+        },
+        {
+          "type": "stones:spawn_particles",
+          "particle": "minecraft:current_down",
+          "count": 80,
+          "spread": 1.5,
+          "speed": 0.1
+        },
+        {
+          "type": "stones:find_entities",
+          "mode": "radius",
+          "radius": 7.0,
+          "living_only": true,
+          "exclude_self": true,
+          "save_to": "pulled_mobs"
+        },
+        {
+          "type": "stones:for_each",
+          "from": "$pulled_mobs",
+          "as": "curr_mob",
+          "actions": [
+            {
+              "type": "stones:add_velocity",
+              "target": "$curr_mob",
+              "vec": "$player.position().subtract(ctx['curr_mob'].position()).normalize()",
+              "scale": 0.4
+            },
+            {
+              "type": "stones:apply_effect",
+              "target": "$curr_mob",
+              "effect": "minecraft:slowness",
+              "duration": 60,
+              "amplifier": 2
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "trigger": "ON_SWING",
+      "actions": [
+        {
+          "type": "stones:raw_js",
+          "code": "let isStanceActive = global.Stones.getComboCount(ctx.player, 'drowned_stance') > 0;\nif (isStanceActive) {\n    let air = ctx.player.getAirSupply();\n    let cost = Math.round(ctx['air_cost'] || 25);\n    ctx.player.setAirSupply(air - cost);\n    ctx['is_hydro_hit'] = true;\n} else {\n    ctx['is_hydro_hit'] = false;\n}"
+        },
+        {
+          "type": "stones:case",
+          "cases": [
+            {
+              "conditions": {
+                "type": "stones:variable_compare",
+                "variable": "is_hydro_hit",
+                "operator": "==",
+                "value": "true"
+              },
+              "actions": [
+                {
+                  "type": "stones:spawn_particles",
+                  "particle": "minecraft:splash",
+                  "count": 30,
+                  "spread": 0.5,
+                  "speed": 0.3
+                },
+                {
+                  "type": "stones:spawn_particles",
+                  "particle": "minecraft:bubble_pop",
+                  "count": 20,
+                  "spread": 0.4,
+                  "speed": 0.1
+                },
+                {
+                  "type": "stones:play_sound",
+                  "sound": "minecraft:entity.player.splash",
+                  "volume": 0.9,
+                  "pitch": 1.2
+                },
+                {
+                  "type": "stones:modify_damage",
+                  "add": "$hydro_damage"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "_template_hash": "073c4729690b3cf73db2c0f324b08f0d45a7367655415b353815f9d909786bd2"
+}

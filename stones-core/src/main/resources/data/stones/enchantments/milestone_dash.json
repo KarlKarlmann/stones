@@ -1,0 +1,103 @@
+{
+  "override_registry_id": "stones:milestone_dash",
+  "type": "MILESTONE",
+  "name": "DICT:milestone.stones.void_walker.name",
+  "description": "DICT:milestone.stones.void_walker.description",
+  "icon": "stones:textures/gui/skills/voiddash.png",
+  "required_level": 2.0,
+  "factor": 0.0,
+  "max_level": 20,
+  "stats": [
+    {
+      "id": "dash_power",
+      "label": "DICT:stat.stones.dash_power",
+      "type": "generic",
+      "base": 2.0,
+      "per_level": 0.1,
+      "scaling": "PLAYER_LEVEL"
+    },
+    {
+      "id": "dash_cooldown",
+      "label": "DICT:stat.stones.dash_cooldown",
+      "type": "generic",
+      "base": 70.0,
+      "per_level": -0.6,
+      "scaling": "SOCK_LEVEL",
+      "display_factor": 0.05,
+      "suffix": "DICT:stat.stones.suffix.seconds",
+      "min": 20.0
+    },
+    {
+      "id": "slow_fall_duration",
+      "label": "DICT:stat.stones.slow_fall_duration",
+      "type": "generic",
+      "base": 60.0,
+      "per_level": 20.0,
+      "scaling": "RUNE_LEVEL",
+      "display_factor": 0.05,
+      "suffix": "DICT:stat.stones.suffix.seconds"
+    }
+  ],
+  "behaviors": [
+    {
+      "trigger": "ON_ACTION_BUTTON",
+      "conditions": [
+        {
+          "type": "stones:is_ready",
+          "name": "void_dash"
+        }
+      ],
+      "actions": [
+        {
+          "type": "stones:cooldown",
+          "name": "void_dash",
+          "ticks": "$dash_cooldown"
+        },
+        {
+          "type": "stones:invoke",
+          "call": "player.getLookAngle()",
+          "save_result_to": "look"
+        },
+        {
+          "type": "stones:add_velocity",
+          "vec": "$look",
+          "scale": "$dash_power"
+        },
+        {
+          "type": "stones:case",
+          "cases": [
+            {
+              "conditions": {
+                "type": "stones:variable_compare",
+                "variable": "RuneLevel",
+                "operator": ">=",
+                "value": 5.0
+              },
+              "actions": [
+                {
+                  "type": "stones:apply_effect",
+                  "effect": "minecraft:slow_falling",
+                  "duration": "$slow_fall_duration",
+                  "amplifier": 0
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "stones:spawn_particles",
+          "particle": "minecraft:portal",
+          "count": 25,
+          "speed": 0.1
+        },
+        {
+          "type": "stones:play_sound",
+          "sound": "minecraft:entity.enderman.teleport",
+          "volume": 1.0,
+          "pitch": 1.2
+        }
+      ]
+    }
+  ],
+  "_template_hash": "2a786149f3df74e435b9d6eb96692e32cdecb886a1a9404dbf3516c439a4b357"
+}

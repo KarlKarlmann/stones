@@ -1,0 +1,204 @@
+{
+  "type": "MILESTONE",
+  "name": "DICT:milestone.stones.gravity_well.name",
+  "description": "DICT:milestone.stones.gravity_well.description",
+  "required_level": 25.0,
+  "icon": "stones:textures/gui/skills/gravitywell.png",
+  "factor": 0.0,
+  "max_level": 20,
+  "stats": [
+    {
+      "id": "gravity_cooldown",
+      "label": "DICT:stat.stones.pyro_recharge",
+      "type": "generic",
+      "base": 300.0,
+      "per_level": -5.0,
+      "scaling": "PLAYER_LEVEL",
+      "display_factor": 0.05,
+      "suffix": "DICT:stat.stones.suffix.seconds",
+      "min": 120.0
+    },
+    {
+      "id": "gravity_speed",
+      "label": "DICT:stat.stones.pyro_speed",
+      "type": "generic",
+      "base": 0.12,
+      "per_level": 0.01,
+      "scaling": "RUNE_LEVEL",
+      "suffix": "DICT:stat.stones.suffix.multiplier"
+    },
+    {
+      "id": "gravity_radius",
+      "label": "DICT:stat.stones.gravity_radius",
+      "type": "generic",
+      "base": 7.0,
+      "per_level": 0.5,
+      "scaling": "RUNE_LEVEL",
+      "suffix": " m"
+    },
+    {
+      "id": "gravity_damage",
+      "label": "DICT:stat.stones.gravity_damage",
+      "type": "generic",
+      "base": 14.0,
+      "per_level": 2.5,
+      "scaling": "SOCK_LEVEL",
+      "suffix": "DICT:stat.stones.suffix.damage"
+    }
+  ],
+  "behaviors": [
+    {
+      "trigger": "ON_ACTION_BUTTON",
+      "conditions": [
+        {
+          "type": "stones:is_ready",
+          "name": "milestone_gravity_well"
+        }
+      ],
+      "actions": [
+        {
+          "type": "stones:cooldown",
+          "name": "milestone_gravity_well",
+          "ticks": "$gravity_cooldown"
+        },
+        {
+          "type": "stones:play_sound",
+          "sound": "minecraft:block.respawn_anchor.charge",
+          "volume": 1.2,
+          "pitch": 0.4
+        },
+        {
+          "type": "stones:spawn_projectile",
+          "origin": "$player.eye_pos",
+          "direction": "$player.look_angle",
+          "speed": "$gravity_speed",
+          "gravity": 0.0,
+          "lifetime": 100,
+          "hitbox_size": 0.6,
+          "visuals": {
+            "render_mode": "BILLBOARD",
+            "texture": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAADr0lEQVR4XmNkgABmIKUCxHpAbA3ERkAsxcTAyMvBwMHMwyDwh5GB8f1Lhme7gOKHgfgKED8A4p8gA0CaNYEcDyD2E2OQMBVmkOLgY+BhuMJwmuEnEP5j+P8PhIHyn4D4MhCvA+L9QHwHpFkdyPAB4mhFBlUzdQYzlp8Mzxm0GEwYzBn0GIyBUJBBgvEvw2+m/wz/ODkZOKV+MPyQAqp/B8IgA+yBjHggNjFl0GdkY2Bn0GcwZXgvwsnA+FecQUBGjUFBQp9B9q0sAwvDP4aHDPeY/zD8EQCq5wLiuyAD0uUZlPyZGb6yKgA1KoobMbhnuTG8YrvBMP9WO8ORDxsZgqIdGHw9IxheH+BjMGIwY5BiUGBlY+BVfsnw8BGDMoPqY2EG8b/mDIb/sxmq/y9P3/EfaPJ/BiaG/4yMjP+BNgBpJrDY2Sl3/z9Y/vF/P8O5/3UM80BiW5h+M/zj/cLwgVGAQYFB28iFYdud1QxMTMCw/Q804f9/hr8MDGDzgIYxcAr+Z9i+4BjDI4YLDIcYNoIkpFkYGf6zSDPIMoozSDPo2cowZE2cywBSDBRnADIYIADI+/+P4cOj/wxbd20BGvqa4QTDzn/gcJBhUPjqyOD1f3flpf/1cgv/MzOx/mdiYvrPxAxxtoG8xf/12Uf+T2G8+N+XIeG/EYPVf0kGcaD7GP8wMDBdZ3Rl8PtvwxDEIOIjzODha8PAJsDMcP/JQ4a/P/8zXJ78g+HZ88cMBxkmMDxluMXAzSDM8IeBkeE2w1UGMQbJv68Ynp9g0WEwAApcYji25RPDymNrGJhZmBn4PzIwPPt5j+EFwz2GtwyvGTgY/jPYW3kxiF00ZHj59TZQ/fX/rAxsoEC8zQw0ufYnw18mJobfDG+/32F4/fUGw9O/9xgMTfUZLj47y/AFmKzaI2cwfDoswfD7y2NQOgC6hJvhHcPL58BUuhaUlOPlGaQmsjIwAS3+wGDJ4MUgwiDLIMJowXCOcRcDH48wA993PoZfv+8zfABq28uw5d9vhl+fgEl7LTAQF4IS0q+PDJ8/fGL4Li3FICd8geEsoyAwNX5leMnA/v8PA/fPHwxv/z0FRt1VhmdAL/1k+PftB8P3vUDNK4H4FMiAb0DGt38M/z79YfgvrMSgJvKZ4TPjZaD9rxhA4fAAGAbMDGcZTjFwMQiAcuQGoPoVIM1A/BbkBRDmBHLkgFgXiK34GYTtBRj4pf8AM9B7hnds3xi+XgOK34dqOgmkbwDxe1AaAQDSTznuJEtYtAAAAABJRU5ErkJggg=="
+          },
+          "on_tick": [
+            {
+              "type": "stones:spawn_sprite",
+              "pos": "$pos",
+              "texture": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAACOElEQVR4XmPABziFVCwZKAGMrHz/2fhkYsg2Q4CB4T8DA/t/BlbRHDRDGPEayiOt5ySuYn+sBmgAyBApbbePHLIWC8CauOQlsWpmEzV4x8Yt9V9QXPU/u4DiPxYuqX9A6/8nAQ0RFNf4z8Uj+YsB7KJQZqwG8MjaXJPV8/u/CKjIDGrzfw/n/3+AbC4gBhkmDKRl9Pw8kA1gAnF4JMwd2TkYGH//+fs/npGXYTVQ8D0XUMremYFZQZLhKwcDQzBQ7J+EJsPff7/nsYgZWMMN4ZPUj+UUlPvLCjRdH4jPQW37nxj3//nuvf9/zp7z/7+C5H+QC/ZBXcPKyPSfjV86BGQI0+dXj+b//PCYiRvIkwJiQ5CoFNCxTMwMzL9+MvxjZWFgUFACW2gAJG2AWOL/P4Zfn1+tYmQTfM/ALqrXzy9nfVrUKOCHiq7TP3",
+              "facing": "GROUND_FLAT",
+              "blend_mode": "ADDITIVE",
+              "lifetime": 15,
+              "initial_scale": 1.0,
+              "growth_rate": 0.15,
+              "spin_speed": 7.0,
+              "keyframes": [
+                {
+                  "time": 0.0,
+                  "color": "#8000FF",
+                  "alpha": 0.0
+                },
+                {
+                  "time": 0.5,
+                  "color": "#A020F0",
+                  "alpha": 0.8
+                },
+                {
+                  "time": 1.0,
+                  "color": "#000000",
+                  "alpha": 0.0
+                }
+              ],
+              "speed": 0.5,
+              "drag": 0.92,
+              "gravity": 0.0
+            },
+            {
+              "type": "stones:spawn_particles",
+              "count": 15,
+              "particle": "minecraft:reverse_portal",
+              "spread": 0.6,
+              "speed": -0.3,
+              "pos": "$pos"
+            },
+            {
+              "type": "stones:find_entities",
+              "mode": "radius",
+              "radius": "$gravity_radius",
+              "living_only": true,
+              "exclude_self": true,
+              "line_of_sight": false,
+              "pos": "$pos",
+              "save_to": "pulled_mobs"
+            },
+            {
+              "type": "stones:for_each",
+              "from": "$pulled_mobs",
+              "as": "curr_mob",
+              "actions": [
+                {
+                  "type": "stones:add_velocity",
+                  "target": "$curr_mob",
+                  "vec": "$pos.subtract(ctx['curr_mob'].position()).normalize()",
+                  "scale": 0.25
+                },
+                {
+                  "type": "stones:apply_effect",
+                  "target": "$curr_mob",
+                  "effect": "minecraft:slowness",
+                  "duration": 10,
+                  "amplifier": 2
+                }
+              ]
+            }
+          ],
+          "on_hit_entity": [
+            {
+              "type": "stones:play_sound",
+              "sound": "minecraft:entity.warden.sonic_boom",
+              "volume": 1.2,
+              "pitch": 0.6
+            },
+            {
+              "type": "stones:spawn_particles",
+              "count": 80,
+              "particle": "minecraft:sculk_charge_pop",
+              "spread": 1.2,
+              "speed": 0.6,
+              "pos": "$hitPos"
+            },
+            {
+              "type": "stones:explode",
+              "radius": "$gravity_radius",
+              "fire": false,
+              "pos": "$hitPos"
+            }
+          ],
+          "on_hit_block": [
+            {
+              "type": "stones:play_sound",
+              "sound": "minecraft:entity.warden.sonic_boom",
+              "volume": 1.2,
+              "pitch": 0.6
+            },
+            {
+              "type": "stones:spawn_particles",
+              "count": 80,
+              "particle": "minecraft:sculk_charge_pop",
+              "spread": 1.2,
+              "speed": 0.6,
+              "pos": "$hitPos"
+            },
+            {
+              "type": "stones:explode",
+              "radius": "$gravity_radius",
+              "fire": false,
+              "pos": "$hitPos"
+            }
+          ],
+          "render_mode": "BILLBOARD",
+          "texture": "minecraft:textures/particle/glint.png"
+        }
+      ]
+    }
+  ],
+  "_template_hash": "3478a4310bf2832d48f3ef02467033b1d2311e2844b89324f21e331a28e2cb53"
+}

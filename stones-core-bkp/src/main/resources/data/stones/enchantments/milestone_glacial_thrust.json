@@ -1,0 +1,208 @@
+{
+  "type": "MILESTONE",
+  "name": "Glacial Thrust",
+  "description": "",
+  "icon": "stones:textures/gui/skills/glacialthrust.png",
+  "required_level": 20.0,
+  "stats": [
+    {
+      "id": "frost_damage",
+      "label": "DICT:stat.stones.frost_damage",
+      "base": 12.0,
+      "scaling": "PLAYER_LEVEL",
+      "per_level": 0.5
+    },
+    {
+      "id": "nova_radius",
+      "label": "DICT:stat.stones.nova_radius",
+      "base": 5.0,
+      "scaling": "SOCK_LEVEL",
+      "per_level": 0.2,
+      "suffix": "DICT:stat.stones.suffix.meters"
+    },
+    {
+      "id": "freeze_duration",
+      "label": "DICT:stat.stones.freeze_duration",
+      "base": 100.0,
+      "scaling": "RUNE_LEVEL",
+      "per_level": 20.0,
+      "display_factor": 0.05,
+      "suffix": "DICT:stat.stones.suffix.seconds"
+    },
+    {
+      "id": "nova_cooldown",
+      "label": "DICT:stat.stones.nova_cooldown",
+      "base": 200.0,
+      "scaling": "SOCK_LEVEL",
+      "per_level": -2.0,
+      "min": 60.0,
+      "display_factor": 0.05,
+      "suffix": "DICT:stat.stones.suffix.seconds"
+    }
+  ],
+  "behaviors": [
+    {
+      "trigger": "ON_ACTION_BUTTON",
+      "conditions": [
+        {
+          "type": "stones:is_ready",
+          "name": "glacial_thrust"
+        }
+      ],
+      "actions": [
+        {
+          "type": "stones:cooldown",
+          "name": "glacial_thrust",
+          "ticks": "$nova_cooldown"
+        },
+        {
+          "type": "stones:play_sound",
+          "sound": "minecraft:entity.generic.explode",
+          "volume": 1.5,
+          "pitch": 0.5
+        },
+        {
+          "type": "stones:play_sound",
+          "sound": "minecraft:block.glass.break",
+          "volume": 2.0,
+          "pitch": 0.4
+        },
+        {
+          "type": "stones:play_sound",
+          "sound": "minecraft:block.powder_snow.break",
+          "volume": 1.5,
+          "pitch": 0.6
+        },
+        {
+          "type": "stones:spawn_sprite",
+          "pos": "$player.position()",
+          "texture": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAA9klEQVR4XmP4DwQMKOD/fwYMgE0MoogRRIEMATMYGXAARqAMzBBGuCq4PgaYKUjaGbEaBjEIZBQjI0QFCwNUN4iCCEKksXsDq1fQBEFhAg8XkByyPIwPEYN6AWYjskKEUyEuA5LIQQsNEZCLmRgYsAUQZtww4AhgJohfYUGG3f9wt0EDjuE/yFqUQIQ7FJwuGHFGJwNIL9jNDNBwQlKKbDu20GZEpBm4LkZGJuTogvv8PyzQQJpgmAEfgEUPqnFY0wJKFDMwsKArQg3///9hKQ7o+//YYwxqwn8owGorA7ILoeEDC0SYjag2oRuDJa38xxbQDKQDAD2AmNJmRoKSAAAAAElFTkSuQmCC",
+          "facing": "GROUND_FLAT",
+          "blend_mode": "ADDITIVE",
+          "lifetime": 20,
+          "initial_scale": 0.8,
+          "growth_rate": 0.4,
+          "spin_speed": 1.5,
+          "speed": 0.0,
+          "drag": 1.0,
+          "gravity": 0.0,
+          "keyframes": [
+            {
+              "time": 0.0,
+              "color": "#00FFFF",
+              "alpha": 1.0
+            },
+            {
+              "time": 0.5,
+              "color": "#80FFFF",
+              "alpha": 0.7
+            },
+            {
+              "time": 1.0,
+              "color": "#0033AA",
+              "alpha": 0.0
+            }
+          ]
+        },
+        {
+          "type": "stones:spawn_sprite",
+          "pos": "$player.eyePosition",
+          "texture": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAYElEQVR4XmOgCfgPBDCDcbExLEZWiM1V6PIwPhOyYrJsJhQG/6GA6LDC5VSyAhuX7Rjhhc1WXIFKtJeIjj50vyHbgM0V6GI4oxFfoOHyHgNOCYaBAugBSbILqRqVuEIBADh0k3FA7j0JAAAAAElFTkSuQmCC",
+          "facing": "BILLBOARD",
+          "blend_mode": "ADDITIVE",
+          "lifetime": 25,
+          "initial_scale": 1.5,
+          "growth_rate": 0.08,
+          "spin_speed": 4.0,
+          "speed": 0.1,
+          "drag": 0.9,
+          "gravity": -0.02,
+          "keyframes": [
+            {
+              "time": 0.0,
+              "color": "#FFFFFF",
+              "alpha": 1.0
+            },
+            {
+              "time": 0.3,
+              "color": "#00E5FF",
+              "alpha": 0.85
+            },
+            {
+              "time": 1.0,
+              "color": "#001144",
+              "alpha": 0.0
+            }
+          ]
+        },
+        {
+          "type": "stones:spawn_particles",
+          "particle": "minecraft:snowflake",
+          "count": 60,
+          "speed": 0.6
+        },
+        {
+          "type": "stones:command",
+          "command": "execute at @p run damage @e[type=!player,distance=..$nova_radius] $frost_damage minecraft:freeze"
+        },
+        {
+          "type": "stones:command",
+          "command": "execute at @p run effect give @e[type=!player,distance=..$nova_radius] minecraft:slowness 5 10"
+        },
+        {
+          "type": "stones:command",
+          "command": "execute at @e[type=!player,distance=..$nova_radius] run setblock ~ ~ ~ minecraft:powder_snow keep"
+        },
+        {
+          "type": "stones:case",
+          "cases": [
+            {
+              "conditions": {
+                "type": "stones:variable_compare",
+                "variable": "RuneLevel",
+                "operator": ">=",
+                "value": 5.0
+              },
+              "actions": [
+                {
+                  "type": "stones:command",
+                  "command": "execute at @e[type=!player,distance=..$nova_radius] run fill ~-1 ~ ~-1 ~1 ~1 ~1 minecraft:powder_snow replace air"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "stones:case",
+          "cases": [
+            {
+              "conditions": {
+                "type": "stones:variable_compare",
+                "variable": "RuneLevel",
+                "operator": ">=",
+                "value": 10.0
+              },
+              "actions": [
+                {
+                  "type": "stones:command",
+                  "command": "execute at @e[type=!player,distance=..$nova_radius] run setblock ~ ~2 ~ minecraft:packed_ice replace air"
+                },
+                {
+                  "type": "stones:command",
+                  "command": "execute at @e[type=!player,distance=..$nova_radius] run setblock ~1 ~1 ~ minecraft:packed_ice replace air"
+                },
+                {
+                  "type": "stones:command",
+                  "command": "execute at @e[type=!player,distance=..$nova_radius] run setblock ~-1 ~1 ~ minecraft:packed_ice replace air"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "max_level": 20,
+  "factor": 0.0,
+  "_template_hash": "f85a71c420745293a65b95f97020d00bc286f4bd98bee4b5b506c972f09d1523"
+}

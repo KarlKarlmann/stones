@@ -1,0 +1,9 @@
+{
+  "type": "MINOR",
+  "attribute": "minecraft:generic.max_health",
+  "operation": "ADDITION",
+  "factor": 2.0,
+  "name": "Rune of Vitality",
+  "required_level": 0.3,
+  "description": "Increases maximum health."
+}

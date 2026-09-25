@@ -1,0 +1,17 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "RRR",
+    "RRR",
+    "RRR"
+  ],
+  "key": {
+    "R": {
+      "item": "stones:rune_minor"
+    }
+  },
+  "result": {
+    "item": "stones:cluster_jewel_minor",
+    "count": 1
+  }
+}

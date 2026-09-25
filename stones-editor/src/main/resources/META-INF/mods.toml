@@ -1,0 +1,23 @@
+modLoader="javafml"
+loaderVersion="[47,)"
+license="CC BY-NC 4.0"
+
+[[mods]]
+modId="stones_editor"
+version="${version}"
+displayName="Stones Studio Editor"
+displayURL="https://www.n3g.de"
+credits="luv <3"
+logoFile="stones-editor.png"
+authors="KarlKarlmann"
+description="Der visuelle Behavior-Tree & Visual-Scripting-Editor als eigenständiges Addon für Stones."
+displayTest="IGNORE_ALL_VERSION"
+# --- Optional ---
+issueTrackerURL="https://github.com/KarlKarlmann/stones/issues"
+
+[[dependencies.stones_editor]]
+    modId="stones"
+    mandatory=true
+    versionRange="[1.1.1,)"
+    ordering="AFTER"
+    side="BOTH"

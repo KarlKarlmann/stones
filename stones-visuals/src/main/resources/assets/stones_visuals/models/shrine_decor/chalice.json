@@ -1,0 +1,70 @@
+{
+	"credit": "Made for Stones Mod - Blanchitsu Style",
+	"texture_size": [16, 16],
+	"textures": {
+		"0": "block/iron_block",
+		"1": "block/obsidian",
+		"particle": "block/iron_block"
+	},
+	"elements": [
+		{
+			"name": "Base",
+			"from": [5, 0, 5],
+			"to": [11, 2, 11],
+			"faces": {
+				"north": {"uv": [0, 14, 6, 16], "texture": "#0"},
+				"east": {"uv": [0, 14, 6, 16], "texture": "#0"},
+				"south": {"uv": [0, 14, 6, 16], "texture": "#0"},
+				"west": {"uv": [0, 14, 6, 16], "texture": "#0"},
+				"up": {"uv": [5, 5, 11, 11], "texture": "#0"},
+				"down": {"uv": [5, 5, 11, 11], "texture": "#0"}
+			}
+		},
+		{
+			"name": "Stem",
+			"from": [7, 2, 7],
+			"to": [9, 6, 9],
+			"faces": {
+				"north": {"uv": [7, 10, 9, 14], "texture": "#0"},
+				"east": {"uv": [7, 10, 9, 14], "texture": "#0"},
+				"south": {"uv": [7, 10, 9, 14], "texture": "#0"},
+				"west": {"uv": [7, 10, 9, 14], "texture": "#0"}
+			}
+		},
+		{
+			"name": "CupBase",
+			"from": [5, 6, 5],
+			"to": [11, 7, 11],
+			"faces": {
+				"north": {"uv": [2, 12, 8, 13], "texture": "#0"},
+				"east": {"uv": [2, 12, 8, 13], "texture": "#0"},
+				"south": {"uv": [2, 12, 8, 13], "texture": "#0"},
+				"west": {"uv": [2, 12, 8, 13], "texture": "#0"},
+				"down": {"uv": [5, 5, 11, 11], "texture": "#0"}
+			}
+		},
+		{
+			"name": "CupWalls",
+			"from": [4, 7, 4],
+			"to": [12, 12, 12],
+			"faces": {
+				"north": {"uv": [2, 4, 10, 9], "texture": "#0"},
+				"east": {"uv": [2, 4, 10, 9], "texture": "#0"},
+				"south": {"uv": [2, 4, 10, 9], "texture": "#0"},
+				"west": {"uv": [2, 4, 10, 9], "texture": "#0"},
+				"up": {"uv": [4, 4, 12, 12], "texture": "#1"} 
+			}
+		}
+	],
+	"display": {
+		"thirdperson_righthand": {
+			"rotation": [63, 0, 0],
+			"translation": [-2.5, 4.5, 5.5]
+		},
+		"gui": {
+			"rotation": [30, 225, 0],
+			"translation": [0, 0, 0],
+			"scale": [0.625, 0.625, 0.625]
+		}
+	}
+}

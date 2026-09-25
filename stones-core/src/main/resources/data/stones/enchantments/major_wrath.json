@@ -1,0 +1,9 @@
+{
+  "type": "MAJOR",
+  "attribute": "minecraft:generic.attack_damage",
+  "operation": "MULTIPLY_TOTAL",
+  "factor": 0.01,
+  "name": "Rune of Wrath",
+  "required_level": 1,
+  "description": "Scales damage with your level."
+}

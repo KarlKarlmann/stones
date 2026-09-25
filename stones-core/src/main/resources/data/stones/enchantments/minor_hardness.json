@@ -1,0 +1,9 @@
+{
+  "type": "MINOR",
+  "attribute": "minecraft:generic.armor",
+  "operation": "ADDITION",
+  "factor": 1.0,
+  "name": "Rune of Hardness",
+  "required_level": 0.2,
+  "description": "Increases Armor rating."
+}

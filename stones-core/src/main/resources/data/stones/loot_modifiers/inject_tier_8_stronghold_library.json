@@ -1,0 +1,16 @@
+{
+  "type": "stones:add_nbt_item",
+  "conditions": [
+    {
+      "condition": "forge:loot_table_id",
+      "loot_table_id": "minecraft:chests/stronghold_library"
+    },
+    {
+      "condition": "minecraft:random_chance",
+      "chance": 0.25
+    }
+  ],
+  "item": "stones:rune_major",
+  "count": 1,
+  "nbt": "{UnboundRune:true,RuneTier:8}"
+}

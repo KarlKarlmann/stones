@@ -1,0 +1,6 @@
+archivesBaseName = 'stones-core'
+
+dependencies {
+    implementation fg.deobf(fileTree(dir: rootProject.file('libs'), include: '*actionbar*.jar'))
+    implementation fg.deobf(fileTree(dir: rootProject.file('libs'), include: '*kubejs*.jar'))
+}

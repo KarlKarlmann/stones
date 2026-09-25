@@ -1,0 +1,9 @@
+{
+  "type": "MINOR",
+  "attribute": "stones_irons_bridge:knowledge_camouflage",
+  "operation": "ADDITION",
+  "factor": 0.1,
+  "name": "DICT:runes.stones.minor_camouflage.title",
+  "required_level": 0.2,
+  "description": "DICT:runes.stones.minor_camouflage.description"
+}

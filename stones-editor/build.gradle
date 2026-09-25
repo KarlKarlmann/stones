@@ -1,0 +1,5 @@
+archivesBaseName = 'stones-core'
+
+dependencies {
+    implementation project(':stones-core')
+}

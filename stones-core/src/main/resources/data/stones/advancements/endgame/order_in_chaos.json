@@ -1,0 +1,23 @@
+{
+    "display": {
+        "icon": {
+            "item": "stones:cluster_jewel_major"
+        },
+        "title": {
+            "translate": "advancement.stones.order_in_chaos.title"
+        },
+        "description": {
+            "translate": "advancement.stones.order_in_chaos.desc"
+        },
+        "frame": "goal",
+        "show_toast": true,
+        "announce_to_chat": true,
+        "hidden": false
+    },
+    "parent": "stones:endgame/fractals",
+    "criteria": {
+        "triggered_by_code": {
+            "trigger": "minecraft:impossible"
+        }
+    }
+}

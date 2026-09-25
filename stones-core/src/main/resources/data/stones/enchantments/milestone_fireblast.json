@@ -1,0 +1,175 @@
+{
+  "override_registry_id": "stones:milestone_fireblast",
+  "type": "MILESTONE",
+  "name": "DICT:milestone.stones.pyromancer.name",
+  "description": "DICT:milestone.stones.pyromancer.description",
+  "icon": "stones:textures/gui/skills/fireball.png",
+  "required_level": 3.0,
+  "factor": 0.0,
+  "max_level": 20,
+  "stats": [
+    {
+      "id": "pyro_cooldown",
+      "label": "DICT:stat.stones.pyro_recharge",
+      "type": "generic",
+      "base": 40.0,
+      "per_level": -5.0,
+      "scaling": "RUNE_LEVEL",
+      "display_factor": 0.05,
+      "suffix": "DICT:stat.stones.suffix.seconds",
+      "min": 10.0
+    },
+    {
+      "id": "pyro_speed",
+      "label": "DICT:stat.stones.pyro_speed",
+      "type": "generic",
+      "base": 1.0,
+      "per_level": 0.05,
+      "scaling": "PLAYER_LEVEL",
+      "suffix": "DICT:stat.stones.suffix.multiplier"
+    },
+    {
+      "id": "pyro_radius",
+      "label": "DICT:stat.stones.pyro_radius",
+      "type": "generic",
+      "base": 2.0,
+      "per_level": 0.5,
+      "scaling": "RUNE_LEVEL",
+      "suffix": " m"
+    }
+  ],
+  "behaviors": [
+    {
+      "trigger": "ON_ACTION_BUTTON",
+      "conditions": [
+        {
+          "type": "stones:is_ready",
+          "name": "pyro_shot"
+        }
+      ],
+      "actions": [
+        {
+          "type": "stones:cooldown",
+          "name": "pyro_shot",
+          "ticks": "$pyro_cooldown"
+        },
+        {
+          "type": "stones:spawn_projectile",
+          "origin": "$player.eye_pos",
+          "direction": "$player.look_angle",
+          "speed": "$pyro_speed",
+          "gravity": 0.0,
+          "lifetime": 80,
+          "hitbox_size": 0.25,
+          "visuals": {
+            "render_mode": "BILLBOARD",
+            "texture": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAC3UlEQVR4XmOgFDDiMuCPHcP//96sDEyMLAzMZd8ZCVp035vh/78LUv//X5b5/8+J6f+/c2L//36f+v/jOZ3/n0KAhnWx/X8/geH/S1eG/xiG/bBj/P/vx7T/f75P/v/ve////xdk/v//Ovn//48l/3+0MQH5cv//nlf8//9H5///F+X/v/MUhBvCAjKN3ZeZAWg/A/P/Xwz/J1YwMPhKMDBMKWJg+Pufgf0QUAXjM6CYFlANJwMDnzRQ4BPcEWADGP4xMvy91c/w7/cXBhYfWYb/Wx4xMOz/y/Cf6T/D/7/MQIP/MzCJazP8/3aWgWHPBQah7d/gYQI24P++PwwMmu8YWNQVGRjXXmT4d+Avw45DjAzMTIwM/xn/Mrj+Y2BgZlgNtIeJgclLiuHPmrf/v8/9z8C7/QsjE8gtjD2yDMyujQyMX94wMLCwgHzDYKfByOCs859BipORYfdxZoa/e/8wMAPt/f//PwOzVxUD55+vYG8w/XNk/P//71+Gf0wsIGuAwf2PgZmdkYGV/R8Dix03g7Yq0I7/QO8Adf/1kmD48l8SGBavGJgj+cAGsDDt/8/4j5HxP+N/Jobfu18wMAtwMTD+/8Rw8ApQ47VvDD//MDJ42wLZLuwMjNtfMPClRTMw3F3CwPD6F8QAEPm/+CkDg1shAwszOwODkSgDw/ufDG52/xj+7/8NdBEDA5M9LKzZGf7/fsbAtP0Nw5c9/5EMALqKObcbKPCN4d/tWQyMXqLAcAAawPSOgYkBSDOyMjDkNzMwAr3KCEyZ/933AF37BhIGIPL9JWB03Wpi+PePg4FRvZDh319grKgWMzDltTIweEgxMLoCxf8BXfEfaBAwWoGhxiDoyg42AB6f/3t4/zM4CQHd+5/hW81rBq4WoFcYfjAwqJcw/J/SxMDICExszoJATX+BaeQ9w6t9nAziW17jzyM7fDT+7/PVhifbnb6a/3d4a2HmBQYKAAAjMRU4NKChQAAAAABJRU5ErkJggg=="
+          },
+          "on_tick": [
+            {
+              "type": "stones:set_variable",
+              "name": "temp",
+              "value": "$age"
+            },
+            {
+              "type": "stones:math",
+              "variable": "temp",
+              "operation": "modulo",
+              "value": 1.5
+            },
+            {
+              "type": "stones:spawn_particles",
+              "count": 10,
+              "particle": "minecraft:campfire_cosy_smoke",
+              "spread": "$temp",
+              "speed": 0.0,
+              "pos": "$pos"
+            },
+            {
+              "type": "stones:case",
+              "cases": [
+                {
+                  "conditions": {
+                    "type": "stones:chance",
+                    "value": 0.2
+                  },
+                  "actions": [
+                    {
+                      "type": "stones:spawn_particles",
+                      "count": 10,
+                      "particle": "minecraft:campfire_signal_smoke",
+                      "spread": "$temp",
+                      "speed": 0.0,
+                      "pos": "$pos"
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+          "on_hit_entity": [
+            {
+              "type": "stones:explode",
+              "radius": "$pyro_radius",
+              "fire": false,
+              "pos": "$hitPos"
+            },
+            {
+              "type": "stones:find_blocks",
+              "radius": "$pyro_radius",
+              "tags": [
+                "minecraft:mineable/shovel"
+              ],
+              "save_to": "destroyed_blocks",
+              "pos": "$hitPos"
+            },
+            {
+              "type": "stones:for_each",
+              "from": "$destroyed_blocks",
+              "as": "current",
+              "actions": [
+                {
+                  "type": "stones:set_block",
+                  "block": "minecraft:air",
+                  "pos": "$current"
+                }
+              ]
+            }
+          ],
+          "on_hit_block": [
+            {
+              "type": "stones:explode",
+              "radius": "$pyro_radius",
+              "fire": false,
+              "pos": "$hitPos"
+            },
+            {
+              "type": "stones:find_blocks",
+              "radius": "$pyro_radius",
+              "tags": [
+                "minecraft:mineable/shovel"
+              ],
+              "save_to": "destroyed_blocks",
+              "pos": "$hitPos"
+            },
+            {
+              "type": "stones:for_each",
+              "from": "$destroyed_blocks",
+              "as": "current",
+              "actions": [
+                {
+                  "type": "stones:set_block",
+                  "block": "minecraft:air",
+                  "pos": "$current"
+                }
+              ]
+            }
+          ],
+          "render_mode": "BILLBOARD",
+          "texture": "minecraft:textures/particle/glint.png"
+        }
+      ]
+    }
+  ],
+  "_template_hash": "556c65adf4b168355144a2336b277ae2b1507ee3c8eecb0cf4b234d1688894a4"
+}

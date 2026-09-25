@@ -1,0 +1,23 @@
+{
+    "display": {
+        "icon": {
+            "item": "stones:runestone"
+        },
+        "title": {
+            "translate": "advancement.stones.critical_cargo.title"
+        },
+        "description": {
+            "translate": "advancement.stones.critical_cargo.desc"
+        },
+        "frame": "goal",
+        "show_toast": true,
+        "announce_to_chat": true,
+        "hidden": false
+    },
+    "parent": "stones:root/soul_bond",
+    "criteria": {
+        "triggered_by_code": {
+            "trigger": "minecraft:impossible"
+        }
+    }
+}

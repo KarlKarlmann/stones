@@ -1,0 +1,9 @@
+{
+  "type": "MINOR",
+  "attribute": "minecraft:generic.luck",
+  "operation": "ADDITION",
+  "factor": 0.5,
+  "name": "Rune of Fortune",
+  "required_level": 0.4,
+  "description": "Increases luck, affecting loot tables."
+}

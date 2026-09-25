@@ -1,0 +1,83 @@
+{
+  "replace": true,
+  "thresholds": [
+    {
+      "minScore": 29000,
+      "item": "reward_box:reward_chest",
+      "count": 1,
+      "nbt": "{BoxId:\"stones:resonance_box\", RewardTier:13}"
+    },
+    {
+      "minScore": 19000,
+      "item": "reward_box:reward_chest",
+      "count": 1,
+      "nbt": "{BoxId:\"stones:resonance_box\", RewardTier:12}"
+    },
+    {
+      "minScore": 14000,
+      "item": "reward_box:reward_chest",
+      "count": 1,
+      "nbt": "{BoxId:\"stones:resonance_box\", RewardTier:11}"
+    },
+    {
+      "minScore": 9000,
+      "item": "reward_box:reward_chest",
+      "count": 1,
+      "nbt": "{BoxId:\"stones:resonance_box\", RewardTier:10}"
+    },
+    {
+      "minScore": 8000,
+      "item": "reward_box:reward_chest",
+      "count": 1,
+      "nbt": "{BoxId:\"stones:resonance_box\", RewardTier:9}"
+    },
+    {
+      "minScore": 7000,
+      "item": "reward_box:reward_chest",
+      "count": 1,
+      "nbt": "{BoxId:\"stones:resonance_box\", RewardTier:8}"
+    },
+    {
+      "minScore": 6000,
+      "item": "reward_box:reward_chest",
+      "count": 1,
+      "nbt": "{BoxId:\"stones:resonance_box\", RewardTier:7}"
+    },
+    {
+      "minScore": 5000,
+      "item": "reward_box:reward_chest",
+      "count": 1,
+      "nbt": "{BoxId:\"stones:resonance_box\", RewardTier:6}"
+    },
+    {
+      "minScore": 4000,
+      "item": "reward_box:reward_chest",
+      "count": 1,
+      "nbt": "{BoxId:\"stones:resonance_box\", RewardTier:5}"
+    },
+    {
+      "minScore": 3000,
+      "item": "reward_box:reward_chest",
+      "count": 1,
+      "nbt": "{BoxId:\"stones:resonance_box\", RewardTier:4}"
+    },
+    {
+      "minScore": 2000,
+      "item": "reward_box:reward_chest",
+      "count": 1,
+      "nbt": "{BoxId:\"stones:resonance_box\", RewardTier:3}"
+    },
+    {
+      "minScore": 1000,
+      "item": "reward_box:reward_chest",
+      "count": 1,
+      "nbt": "{BoxId:\"stones:resonance_box\", RewardTier:2}"
+    },
+    {
+      "minScore": 0,
+      "item": "reward_box:reward_chest",
+      "count": 1,
+      "nbt": "{BoxId:\"stones:resonance_box\", RewardTier:1}"
+    }
+  ]
+}

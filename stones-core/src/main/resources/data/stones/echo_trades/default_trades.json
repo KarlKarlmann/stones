@@ -1,0 +1,148 @@
+{
+"replace": false,
+"trades": [
+{
+"id": "stones:trade_resonance_box_1",
+"item": "reward_box:reward_chest",
+"cost_type": "levels",
+"cost_base": 5,
+"cost_add_per_tier": 4,
+"nbt": "{BoxId:"stones:resonance_box"}",
+"nbt_random_int": {
+"key": "RewardTier",
+"min": 1,
+"max": 10
+}
+},
+{
+"id": "stones:trade_resonance_box_2",
+"item": "reward_box:reward_chest",
+"cost_type": "levels",
+"cost_base": 5,
+"cost_add_per_tier": 4,
+"nbt": "{BoxId:"stones:resonance_box"}",
+"nbt_random_int": {
+"key": "RewardTier",
+"min": 1,
+"max": 10
+}
+},
+{
+"id": "stones:trade_resonance_box_3",
+"item": "reward_box:reward_chest",
+"cost_type": "levels",
+"cost_base": 5,
+"cost_add_per_tier": 4,
+"nbt": "{BoxId:"stones:resonance_box"}",
+"nbt_random_int": {
+"key": "RewardTier",
+"min": 1,
+"max": 10
+}
+},
+{
+"id": "stones:trade_resonance_box_4",
+"item": "reward_box:reward_chest",
+"cost_type": "levels",
+"cost_base": 5,
+"cost_add_per_tier": 4,
+"nbt": "{BoxId:"stones:resonance_box"}",
+"nbt_random_int": {
+"key": "RewardTier",
+"min": 1,
+"max": 10
+}
+},
+{
+"id": "stones:trade_rune_minor",
+"item": "stones:rune_minor",
+"cost_type": "levels",
+"cost_base": 10,
+"enchantments": [
+{
+"namespace": "stones",
+"path_contains": "minor",
+"only_tradeable": true,
+"min_level": 1,
+"max_level": 10,
+"chance": 1.0
+},
+{
+"id": "stones:amplify",
+"min_level": 20,
+"max_level": 90,
+"chance": 0.25,
+"cost_add_per_level": 0.1
+}
+]
+},
+{
+"id": "stones:trade_rune_major",
+"item": "stones:rune_major",
+"cost_type": "levels",
+"cost_base": 25,
+"enchantments": [
+{
+"namespace": "stones",
+"path_contains": "major",
+"only_tradeable": true,
+"min_level": 1,
+"max_level": 10,
+"chance": 1.0
+},
+{
+"id": "stones:amplify",
+"min_level": 20,
+"max_level": 90,
+"chance": 0.25,
+"cost_add_per_level": 0.1
+}
+]
+},
+{
+"id": "stones:trade_rune_milestone",
+"item": "stones:rune_milestone",
+"chance": 0.5,
+"cost_type": "levels",
+"cost_base": 40,
+"enchantments": [
+{
+"namespace": "stones",
+"path_contains": "milestone",
+"only_tradeable": true,
+"min_level": 1,
+"max_level": 10,
+"chance": 1.0
+},
+{
+"id": "stones:amplify",
+"min_level": 20,
+"max_level": 90,
+"chance": 0.25,
+"cost_add_per_level": 0.1
+}
+]
+},
+{
+"id": "stones:trade_cluster_minor",
+"item": "stones:cluster_jewel_minor",
+"chance": 0.05,
+"cost_type": "levels",
+"cost_base": 50
+},
+{
+"id": "stones:trade_cluster_major",
+"item": "stones:cluster_jewel_major",
+"chance": 0.02,
+"cost_type": "levels",
+"cost_base": 70
+},
+{
+"id": "stones:trade_cluster_milestone",
+"item": "stones:cluster_jewel_milestone",
+"chance": 0.005,
+"cost_type": "levels",
+"cost_base": 100
+},
+]
+}

@@ -1,0 +1,16 @@
+{
+  "type": "stones:add_nbt_item",
+  "conditions": [
+    {
+      "condition": "forge:loot_table_id",
+      "loot_table_id": "minecraft:chests/bastion_treasure"
+    },
+    {
+      "condition": "minecraft:random_chance",
+      "chance": 0.25
+    }
+  ],
+  "item": "stones:rune_milestone",
+  "count": 1,
+  "nbt": "{UnboundRune:true,RuneTier:11}"
+}

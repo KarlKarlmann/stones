@@ -1,0 +1,6 @@
+{
+  "parent": "builtin/entity",
+  "textures": {
+    "layer0": "stones:item/cluster_jewel_milestone_1"
+  }
+}

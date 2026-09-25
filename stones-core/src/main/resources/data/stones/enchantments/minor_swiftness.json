@@ -1,0 +1,9 @@
+{
+  "type": "MINOR",
+  "attribute": "minecraft:generic.movement_speed",
+  "operation": "MULTIPLY_TOTAL",
+  "factor": 0.05,
+  "name": "Rune of Swiftness",
+  "required_level": 0.25,
+  "description": "Increases movement speed slightly."
+}
