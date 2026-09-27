@@ -17,7 +17,6 @@ import net.minecraftforge.network.NetworkEvent;
 import net.minecraftforge.network.NetworkRegistry;
 import net.minecraftforge.network.PacketDistributor;
 import net.minecraftforge.network.simple.SimpleChannel;
-import net.stones.StonesMod;
 import net.stones.editor.StonesEditorMod;
 import net.stones.editor.client.gui.StonesStudioScreen;
 import net.stones.editor.init.StonesEditorConfig;
@@ -33,7 +32,7 @@ import java.util.function.Supplier;
 
 public class StudioNetwork {
 
-    private static final String PROTOCOL_VERSION = "3"; // Version erhöht für neue Pakete
+    private static final String PROTOCOL_VERSION = "3";
     public static final SimpleChannel CHANNEL = NetworkRegistry.newSimpleChannel(
             new ResourceLocation(StonesEditorMod.MODID, "studio_channel"),
             () -> PROTOCOL_VERSION,
@@ -52,7 +51,7 @@ public class StudioNetwork {
         CHANNEL.registerMessage(packetId++, S2CSyncRuneFile.class,    S2CSyncRuneFile::encode,    S2CSyncRuneFile::decode,    S2CSyncRuneFile::handle);
         CHANNEL.registerMessage(packetId++, C2SSaveRuneFile.class,    C2SSaveRuneFile::encode,    C2SSaveRuneFile::decode,    C2SSaveRuneFile::handle);
         
-        // NEUE SCRIPT-PAKETE
+        // SCRIPT-PAKETE
         CHANNEL.registerMessage(packetId++, C2SRequestScriptFile.class, C2SRequestScriptFile::encode, C2SRequestScriptFile::decode, C2SRequestScriptFile::handle);
         CHANNEL.registerMessage(packetId++, S2CSyncScriptFile.class,    S2CSyncScriptFile::encode,    S2CSyncScriptFile::decode,    S2CSyncScriptFile::handle);
         CHANNEL.registerMessage(packetId++, C2SSaveScriptFile.class,    C2SSaveScriptFile::encode,    C2SSaveScriptFile::decode,    C2SSaveScriptFile::handle);
@@ -67,6 +66,61 @@ public class StudioNetwork {
             return rawName;
         }
         return rawName + ".json";
+    }
+
+    // === HILFSMETHODEN FÜR DIRECT KUBEJS EXPORT ===
+
+    private static void exportKubeJsScript(String rawFileName, JsonElement parsedJson, String activePack) {
+        try {
+            if (!parsedJson.isJsonObject()) return;
+            JsonObject json = parsedJson.getAsJsonObject();
+
+            String logicalId = rawFileName.replace(".json", "").replace(".bak", "");
+            String jsCode = null;
+
+            if (json.has("raw_script")) {
+                String scriptLink = json.get("raw_script").getAsString().trim();
+                if (!scriptLink.isEmpty()) {
+                    String scriptFileName = scriptLink;
+                    if (scriptFileName.contains("/")) scriptFileName = scriptFileName.substring(scriptFileName.lastIndexOf('/') + 1);
+                    if (scriptFileName.contains("\\")) scriptFileName = scriptFileName.substring(scriptFileName.lastIndexOf('\\') + 1);
+                    if (!scriptFileName.endsWith(".js")) scriptFileName += ".js";
+
+                    File scriptFile = new File(FMLPaths.GAMEDIR.get().resolve("datapacks/" + activePack + "/data/stones_workspace/scripts").toFile(), scriptFileName);
+                    if (scriptFile.exists()) {
+                        jsCode = Files.readString(scriptFile.toPath(), StandardCharsets.UTF_8);
+                    }
+                }
+            } else if (json.has("behaviors")) {
+                jsCode = net.stones.transpiler.StonesTranspiler.transpile(logicalId, json);
+            }
+
+            if (jsCode != null && !jsCode.isBlank()) {
+                File scriptDir = FMLPaths.GAMEDIR.get().resolve("kubejs/server_scripts/stones_generated").toFile();
+                File scriptFile = new File(scriptDir, logicalId + ".js");
+                if (scriptFile.getParentFile() != null) {
+                    scriptFile.getParentFile().mkdirs();
+                }
+                Files.writeString(scriptFile.toPath(), jsCode, StandardCharsets.UTF_8);
+            }
+        } catch (Exception e) {
+            StonesEditorMod.LOGGER.error("Fehler beim sofortigen KubeJS Export in StudioNetwork: ", e);
+        }
+    }
+
+    private static void exportDirectScriptToKubeJs(String fName, String content) {
+        try {
+            if (content == null || content.isBlank()) return;
+            String logicalId = fName.endsWith(".js") ? fName.substring(0, fName.length() - 3) : fName;
+            File scriptDir = FMLPaths.GAMEDIR.get().resolve("kubejs/server_scripts/stones_generated").toFile();
+            File scriptFile = new File(scriptDir, logicalId + ".js");
+            if (scriptFile.getParentFile() != null) {
+                scriptFile.getParentFile().mkdirs();
+            }
+            Files.writeString(scriptFile.toPath(), content, StandardCharsets.UTF_8);
+        } catch (Exception e) {
+            StonesEditorMod.LOGGER.error("Fehler beim direkten KubeJS Export in StudioNetwork: ", e);
+        }
     }
 
     private static S2CSyncPackList buildSyncPacket() {
@@ -91,7 +145,6 @@ public class StudioNetwork {
                             }
                         }
                         
-                        // SKRIPTE SCANNEN
                         File scriptDir = new File(file, "data/stones_workspace/scripts");
                         if (scriptDir.exists() && scriptDir.listFiles() != null) {
                             for (File scriptFile : scriptDir.listFiles()) {
@@ -284,6 +337,10 @@ public class StudioNetwork {
                     Gson prettyGson = new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create();
                     file.getParentFile().mkdirs();
                     Files.writeString(file.toPath(), prettyGson.toJson(parsed), StandardCharsets.UTF_8);
+
+                    // KubeJS Skript sofort auf Server-Ebene aktualisieren
+                    exportKubeJsScript(msg.fileName, parsed, activePack);
+
                     player.sendSystemMessage(Component.translatable("chat.stones.studio.server.file_saved", fileNameWithExt));
                 } catch (Exception e) {
                     player.sendSystemMessage(Component.translatable("chat.stones.studio.server.file_save_error", msg.fileName));
@@ -293,7 +350,7 @@ public class StudioNetwork {
         }
     }
 
-    // --- NEU: JS SCRIPT PACKETS ---
+    // --- JS SCRIPT PACKETS ---
 
     public static class C2SRequestScriptFile {
         private final String fileName;
@@ -314,7 +371,7 @@ public class StudioNetwork {
 
                 if (file.exists()) {
                     try {
-                        String content = Files.readString(file.toPath());
+                        String content = Files.readString(file.toPath(), StandardCharsets.UTF_8);
                         CHANNEL.send(PacketDistributor.PLAYER.with(() -> player), new S2CSyncScriptFile(fName, content));
                     } catch (Exception e) {}
                 }
@@ -355,6 +412,10 @@ public class StudioNetwork {
                     File file = new File(FMLPaths.GAMEDIR.get().resolve("datapacks/" + activePack + "/data/stones_workspace/scripts").toFile(), fName);
                     file.getParentFile().mkdirs();
                     Files.writeString(file.toPath(), msg.content, StandardCharsets.UTF_8);
+
+                    // KubeJS Skript sofort auf Server-Ebene aktualisieren
+                    exportDirectScriptToKubeJs(fName, msg.content);
+
                     player.sendSystemMessage(Component.translatable("chat.stones.studio.server.file_saved", fName));
                 } catch (Exception e) {}
             });
@@ -362,7 +423,7 @@ public class StudioNetwork {
         }
     }
 
-    // --- SYSTEM PACKETS (Unverändert) ---
+    // --- SYSTEM PACKETS ---
 
     public static class C2SProjectAction {
         private final String actionType;

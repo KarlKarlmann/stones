@@ -1,4 +1,0 @@
-{
-  "parent": "stones:item/rune_minor",
-  "textures": { "layer0": "stones:item/rune_milestone_3" }
-}

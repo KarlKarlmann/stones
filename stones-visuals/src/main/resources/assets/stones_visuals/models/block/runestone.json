@@ -1,8 +1,0 @@
-{
-  "parent": "block/cube_all",
-  "textures": {
-    "all": "stones:block/runestonetexture",
-    "particle": "stones:block/runestonetexture"
-  },
-  "render_type": "solid"
-}
