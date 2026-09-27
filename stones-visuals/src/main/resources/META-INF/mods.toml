@@ -32,6 +32,6 @@ issueTrackerURL="https://github.com/KarlKarlmann/stones/issues"
 [[dependencies.stones_visuals]]
     modId="stones"
     mandatory=true
-    versionRange="[1.1.1,)"
+    versionRange="[1.1.0,)"
     ordering="AFTER"
     side="BOTH"
