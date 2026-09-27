@@ -38,7 +38,6 @@ public class StudioMenuBar {
         StonesStudioScreen.PackInfo activePack = StonesStudioScreen.discoveredPacks.isEmpty() ? new StonesStudioScreen.PackInfo("Empty", false) : StonesStudioScreen.discoveredPacks.get(StonesStudioScreen.activePackIndex);
         boolean isActiveInConfig = activePack.name().equals(StonesStudioScreen.serverActivePackName);
         
-        // Dynamisch den aktiven Status holen und als Literal an den Namen anfügen
         String activeStatus = isActiveInConfig ? " " + Component.translatable("gui.stones.studio.studiomenubar.active_in_game").getString() : "";
         Component text = Component.literal("Studio: " + activePack.name() + activeStatus);
         graphics.drawString(screen.getFont(), text, (screen.width / 2) - (screen.getFont().width(text) / 2), 4, isActiveInConfig ? 0xFF55FF55 : 0xFFBBBBBB);
@@ -138,20 +137,41 @@ public class StudioMenuBar {
             return true;
         }
 
+        // --- SPEICHERN LOGIK ---
         if (mouseX >= menuSaveX && mouseX < menuSaveX + saveWidth && mouseY >= 16 && mouseY < 32) {
             if (!StonesStudioScreen.currentFileName.isEmpty()) {
-                JsonObject savedJson = screen.serializeActiveTree();
                 
-                // --- NEU: Nach dem Speichern ist das unser neuer, sicherer Baseline-Snapshot ---
-                screen.setLastSavedJson(savedJson.toString()); 
-                
-                StudioNetwork.CHANNEL.sendToServer(new StudioNetwork.C2SSaveRuneFile(StonesStudioScreen.currentFileName, savedJson.toString()));
+                // Fall 1: Benutzer bearbeitet eine direkte .js Datei aus der Sidebar
+                if (StonesStudioScreen.currentFileName.endsWith(".js")) {
+                    String jsContent = screen.fldRawScriptContent != null ? screen.fldRawScriptContent.getValue() : "";
+                    StudioNetwork.CHANNEL.sendToServer(new StudioNetwork.C2SSaveScriptFile(StonesStudioScreen.currentFileName, jsContent));
+                    screen.setLastSavedJson(screen.serializeActiveTree().toString());
+                } 
+                // Fall 2: Benutzer bearbeitet eine normale Rune JSON
+                else {
+                    JsonObject savedJson = screen.serializeActiveTree();
+                    screen.setLastSavedJson(savedJson.toString()); 
+                    StudioNetwork.CHANNEL.sendToServer(new StudioNetwork.C2SSaveRuneFile(StonesStudioScreen.currentFileName, savedJson.toString()));
+                    
+                    // Falls Raw-JS Modus aktiv ist, speichern wir das verlinkte Skript in scripts/ direkt mit
+                    if (screen.isRawJsMode() && screen.fldRawScriptLink != null && screen.fldRawScriptContent != null) {
+                        String link = screen.fldRawScriptLink.getValue().trim();
+                        String jsContent = screen.fldRawScriptContent.getValue();
+                        
+                        String jsFileName = link;
+                        if (link.contains("/")) jsFileName = link.substring(link.lastIndexOf("/") + 1);
+                        else if (link.contains("\\")) jsFileName = link.substring(link.lastIndexOf("\\") + 1);
+                        
+                        if (!jsFileName.isEmpty()) {
+                            StudioNetwork.CHANNEL.sendToServer(new StudioNetwork.C2SSaveScriptFile(jsFileName, jsContent));
+                        }
+                    }
+                }
             }
             return true;
         }
 
         if (mouseX >= menuReloadX && mouseX < menuReloadX + reloadWidth && mouseY >= 16 && mouseY < 32) {
-            // --- NEU: Das zerschießt ebenfalls ungespeicherte Änderungen! Abgesichert. ---
             screen.requestActionWithUnsavedWarning(() -> {
                 StudioNetwork.CHANNEL.sendToServer(new StudioNetwork.C2STriggerReload());
             });

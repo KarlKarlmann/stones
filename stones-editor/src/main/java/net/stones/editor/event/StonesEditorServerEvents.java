@@ -14,7 +14,7 @@ import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.loading.FMLPaths;
 import net.stones.editor.StonesEditorMod;
 import net.stones.editor.init.StonesEditorConfig;
-import net.stones.util.TemplateHashHelper;
+import net.stones.editor.data.TemplateHashHelper;
 
 import java.io.File;
 import java.io.InputStream;

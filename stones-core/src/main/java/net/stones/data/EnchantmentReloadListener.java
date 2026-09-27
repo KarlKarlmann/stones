@@ -1,13 +1,17 @@
 package net.stones.data;
 
+import java.io.BufferedReader;
 import java.io.File;
 import java.nio.file.Files;
 import java.util.Map;
+import java.util.Optional;
+import java.util.stream.Collectors;
 import com.google.gson.Gson;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.packs.resources.Resource;
 import net.minecraft.server.packs.resources.ResourceManager;
 import net.minecraft.server.packs.resources.SimpleJsonResourceReloadListener;
 import net.minecraft.util.profiling.ProfilerFiller;
@@ -18,15 +22,13 @@ import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.registries.ForgeRegistries;
 import net.minecraftforge.server.ServerLifecycleHooks;
-import net.minecraft.commands.CommandSourceStack;
 import net.minecraftforge.fml.loading.FMLPaths;
 import net.minecraftforge.network.PacketDistributor;
 import net.stones.StonesMod;
 import net.stones.enchantment.RuneEnchantment;
 import net.stones.network.PacketSyncEnchantments;
-
+import javax.annotation.Nullable;
 import java.util.HashMap;
-import java.util.Map;
 
 @Mod.EventBusSubscriber(modid = StonesMod.MODID)
 public class EnchantmentReloadListener extends SimpleJsonResourceReloadListener {
@@ -76,12 +78,10 @@ public class EnchantmentReloadListener extends SimpleJsonResourceReloadListener 
             if (!prioritizedMap.containsKey(targetRegistryId)) {
                 prioritizedMap.put(targetRegistryId, Map.entry(fileLoc, json));
             } else {
-                // Vergleiche Priorität der bestehenden vs. der neuen Datei
                 Map.Entry<ResourceLocation, JsonObject> existing = prioritizedMap.get(targetRegistryId);
                 int existingPrio = getPriorityScore(existing.getKey(), existing.getValue());
                 int newPrio = getPriorityScore(fileLoc, json);
 
-                // Datei mit höherer oder gleicher Priorität überschreibt den Platzhalter
                 if (newPrio >= existingPrio) {
                     prioritizedMap.put(targetRegistryId, Map.entry(fileLoc, json));
                 }
@@ -102,10 +102,13 @@ public class EnchantmentReloadListener extends SimpleJsonResourceReloadListener 
                 if (targetEnchantment instanceof RuneEnchantment rune) {
                     String logicalId = fileLoc.getPath(); 
                     
-                    rune.loadFromJson(logicalId, json);
+                    // Skriptinhalt aus data/<namespace>/scripts/ einlesen
+                    String scriptContent = resolveScriptContent(resourceManager, fileLoc.getNamespace(), json);
+
+                    rune.loadFromJson(logicalId, json, scriptContent);
                     loadedCount++;
 
-                    exportJsScriptIfNeeded(logicalId, json);
+                    exportJsScriptIfNeeded(logicalId, json, scriptContent);
 
                     StonesMod.LOGGER.info("[Stones] Rune geladen: {} -> Slot: {} (Quelle: {})", 
                         rune.getFullname(1).getString(), targetRegistryId, fileLoc);
@@ -145,21 +148,80 @@ public class EnchantmentReloadListener extends SimpleJsonResourceReloadListener 
         }
     }
 
-    /**
-     * Rein interne Prioritäts-Berechnung anhand von Vanilla ResourceLocations.
-     */
+    private static String resolveScriptContent(ResourceManager resourceManager, String defaultNamespace, JsonObject json) {
+        if (!json.has("raw_script")) return null;
+
+        String raw = json.get("raw_script").getAsString().trim();
+        if (raw.isEmpty()) return null;
+
+        ResourceLocation scriptLoc;
+        if (raw.contains(":")) {
+            ResourceLocation parsed = ResourceLocation.tryParse(raw);
+            if (parsed == null) {
+                StonesMod.LOGGER.error("[Stones] Ungültige Skript-ResourceLocation: '{}'", raw);
+                return null;
+            }
+
+            String path = parsed.getPath();
+            if (!path.endsWith(".js")) path += ".js";
+
+            // Nur wenn kein Ordner angegeben ist, standardmäßig "scripts/" voranstellen
+            if (!path.contains("/")) {
+                path = "scripts/" + path;
+            }
+
+            scriptLoc = new ResourceLocation(parsed.getNamespace(), path);
+        } else {
+            String path = raw.trim();
+            if (!path.endsWith(".js")) path += ".js";
+            if (!path.contains("/")) {
+                path = "scripts/" + path;
+            }
+            scriptLoc = new ResourceLocation(defaultNamespace, path);
+        }
+
+        if (scriptLoc == null) {
+            StonesMod.LOGGER.error("[Stones] Ungültige Skript-ResourceLocation: '{}'", raw);
+            return null;
+        }
+
+        // 1. Wenn die JSON aus einem Workspace/Pack stammt (defaultNamespace != scriptLoc.getNamespace()),
+        // prüfen wir zuerst, ob im lokalen Pack (z.B. stones_workspace:scripts/...) eine überschriebene Datei liegt!
+        if (!defaultNamespace.equalsIgnoreCase(scriptLoc.getNamespace())) {
+            ResourceLocation localOverrideLoc = new ResourceLocation(defaultNamespace, scriptLoc.getPath());
+            Optional<Resource> localRes = resourceManager.getResource(localOverrideLoc);
+            if (localRes.isPresent()) {
+                try (BufferedReader reader = localRes.get().openAsReader()) {
+                    return reader.lines().collect(Collectors.joining("\n"));
+                } catch (Exception e) {
+                    StonesMod.LOGGER.error("[Stones] Konnte lokales Override-Skript '{}' nicht lesen: ", localOverrideLoc, e);
+                }
+            }
+        }
+
+        // 2. Ansonsten Fallback auf die deklarierte scriptLoc (z.B. stones:scripts/... aus der Mod-JAR)
+        Optional<Resource> res = resourceManager.getResource(scriptLoc);
+        if (res.isPresent()) {
+            try (BufferedReader reader = res.get().openAsReader()) {
+                return reader.lines().collect(Collectors.joining("\n"));
+            } catch (Exception e) {
+                StonesMod.LOGGER.error("[Stones] Konnte Skript-Datei '{}' nicht lesen: ", scriptLoc, e);
+            }
+        } else {
+            StonesMod.LOGGER.warn("[Stones] Skript-Datei nicht gefunden unter data/{}/ (Resource: {})", 
+                scriptLoc.getNamespace(), scriptLoc);
+        }
+
+        return null;
+    }
+
     private static int getPriorityScore(ResourceLocation fileLoc, JsonObject json) {
-        // Explizites Override im JSON hat höchste Priorität
         if (json.has("override_registry_id")) {
             return 300;
         }
-
-        // Jedes Datapack/Workspace (Namespace != "stones") hat Vorrang vor JAR-Defaults
         if (!fileLoc.getNamespace().equalsIgnoreCase(StonesMod.MODID)) {
             return 200;
         }
-
-        // Standard-Dateien aus der eigenen Mod-JAR ("stones") -> Niedrigste Priorität
         return 100;
     }
 	
@@ -182,21 +244,24 @@ public class EnchantmentReloadListener extends SimpleJsonResourceReloadListener 
         return directLoc;
     }
 
-    private static void exportJsScriptIfNeeded(String logicalId, JsonObject json) {
+    private static void exportJsScriptIfNeeded(String logicalId, JsonObject json, @Nullable String resolvedScript) {
         try {
             String jsCode = null;
 
-            if (json.has("raw_script")) {
-                jsCode = json.get("raw_script").getAsString();
+            if (resolvedScript != null && !resolvedScript.isBlank()) {
+                jsCode = resolvedScript;
             } else if (json.has("behaviors")) {
                 jsCode = net.stones.transpiler.StonesTranspiler.transpile(logicalId, json);
             }
 
             if (jsCode != null && !jsCode.isBlank()) {
                 File scriptDir = FMLPaths.GAMEDIR.get().resolve("kubejs/server_scripts/stones_generated").toFile();
-                if (!scriptDir.exists()) scriptDir.mkdirs();
-
                 File scriptFile = new File(scriptDir, logicalId + ".js");
+
+                if (scriptFile.getParentFile() != null) {
+                    scriptFile.getParentFile().mkdirs();
+                }
+
                 Files.writeString(scriptFile.toPath(), jsCode);
             }
         } catch (Exception e) {

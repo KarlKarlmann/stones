@@ -20,6 +20,8 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
+import net.minecraft.world.damagesource.DamageSource;
+import net.minecraft.world.damagesource.DamageTypes;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.EntityHitResult;
 import net.minecraft.world.phys.HitResult;
@@ -30,6 +32,8 @@ import net.minecraftforge.network.PacketDistributor;
 import net.minecraftforge.registries.ForgeRegistries;
 import net.stones.StonesMod;
 import net.stones.client.fx.SpriteInstance;
+import net.stones.client.fx.BeamInstance;
+import net.stones.client.fx.BeamType;
 import net.stones.network.S2CSpawnSpritePacket;
 import net.stones.network.S2CSpawnBeamPacket;
 import net.stones.cap.PlayerShrineCapProvider;
@@ -48,11 +52,12 @@ import net.minecraft.world.damagesource.DamageType;
 import net.minecraftforge.event.entity.living.LivingDamageEvent;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.resources.ResourceKey;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
-
+import javax.annotation.Nullable;
 /**
  * Zentrale, absturzsichere API-Brücke im Transpiler-Paket für KubeJS-Skripte.
  */
@@ -455,37 +460,107 @@ public class StonesScriptBridge {
             level.setBlock(pos, block.defaultBlockState(), 3);
         }
     }
-	
-public static void spawnBeam(
-			LivingEntity actor, Vec3 start, Vec3 end, float width, String textureId,
-			float r, float g, float b, float a, float scrollSpeed, float repeat,
-			String blendStr, int lifetime
+
+	public static void dealDamage(
+			@Nullable Entity directAttacker, 
+			@Nullable Entity indirectAttacker, 
+			Entity target, 
+			float amount, 
+			String damageTypeId
 	) {
-		if (actor == null || start == null || end == null) return;
+		if (!(target instanceof LivingEntity livingTarget) || amount <= 0.0f) return;
+		Level level = livingTarget.level();
+		if (level.isClientSide()) return;
 
-		SpriteInstance.BlendMode blendMode = SpriteInstance.BlendMode.ADDITIVE;
-		if (blendStr != null && !blendStr.isEmpty()) {
-			try {
-				blendMode = SpriteInstance.BlendMode.valueOf(blendStr.toUpperCase());
-			} catch (Exception ignored) {}
-		}
-
-		String rawTexture = (textureId != null && !textureId.isEmpty()) ? textureId : "minecraft:textures/entity/beacon_beam.png";
-		// FIX: Nur processTextureForNetwork aufrufen, wenn es sich um eine data: Base64-Textur handelt!
-		String safeTexture = rawTexture.startsWith("data:") ? ServerTextureRegistry.processTextureForNetwork(rawTexture) : rawTexture;
-
-		S2CSpawnBeamPacket packet = new S2CSpawnBeamPacket(
-			start, end, width, safeTexture,
-			r, g, b, a, scrollSpeed, repeat, blendMode, lifetime
-		);
-
-		if (actor.level() instanceof ServerLevel level) {
-			PacketDistributor.TargetPoint target = new PacketDistributor.TargetPoint(
-				start.x, start.y, start.z, 64.0, level.dimension()
+		// 1. Check if ID is provided
+		if (damageTypeId == null || damageTypeId.isBlank()) {
+			throw new IllegalArgumentException(
+				"[Stones Mod] Parameter 'damage_type' cannot be empty! Please provide a full DamageType ID (e.g. 'minecraft:indirect_magic')."
 			);
-			StonesMod.PACKET_HANDLER.send(PacketDistributor.NEAR.with(() -> target), packet);
 		}
+
+		String cleanId = damageTypeId.trim();
+
+		// 2. Strict Namespace Check
+		if (!cleanId.contains(":")) {
+			throw new IllegalArgumentException(
+				"[Stones Mod] Invalid DamageType ID '" + damageTypeId + "'! " +
+				"Namespace prefix is missing. Did you mean 'minecraft:" + cleanId + "'?"
+			);
+		}
+
+		// 3. Syntax validation for ResourceLocation
+		ResourceLocation loc = ResourceLocation.tryParse(cleanId);
+		if (loc == null) {
+			throw new IllegalArgumentException(
+				"[Stones Mod] Invalid ResourceLocation syntax for DamageType ID: '" + damageTypeId + "'!"
+			);
+		}
+
+		// 4. Server Registry Lookup
+		var registryOpt = level.registryAccess().registry(Registries.DAMAGE_TYPE);
+		if (registryOpt.isEmpty()) {
+			throw new IllegalStateException("[Stones Mod] Failed to access DamageType registry from world level.");
+		}
+
+		ResourceKey<DamageType> key = ResourceKey.create(Registries.DAMAGE_TYPE, loc);
+		var holderOpt = registryOpt.get().getHolder(key);
+
+		// 5. Strict Existence Check
+		if (holderOpt.isEmpty()) {
+			throw new IllegalArgumentException(
+				"[Stones Mod] Unknown DamageType '" + cleanId + "'! " +
+				"This type does not exist in the active server registry."
+			);
+		}
+
+		// 6. Apply damage
+		DamageSource source = new DamageSource(holderOpt.get(), directAttacker, indirectAttacker);
+		livingTarget.hurt(source, amount);
 	}
+
+public static void spawnBeam(
+        LivingEntity actor, 
+        Vec3 start, 
+        Vec3 end, 
+        BeamType beamType, 
+        String texture,
+        float coreWidth, 
+        float coronaWidth, 
+        float r, float g, float b, float a,
+        float scrollSpeed, 
+        float repeat, 
+        float helixRadius, 
+        float helixFreq, 
+        float helixSpeed, 
+        int lifetime
+) {
+    if (actor == null || !(actor.level() instanceof ServerLevel level) || start == null || end == null) return;
+
+    String rawTexture = texture != null ? texture : "minecraft:textures/entity/beacon_beam.png";
+    String safeTextureId = rawTexture.startsWith("data:") 
+            ? ServerTextureRegistry.processTextureForNetwork(rawTexture) 
+            : rawTexture;
+
+    BeamInstance beamFx = new BeamInstance(
+        start, end, beamType, safeTextureId,
+        coreWidth, coronaWidth,
+        r, g, b, a,
+        scrollSpeed, repeat,
+        helixRadius, helixFreq, helixSpeed,
+        lifetime
+    );
+
+    S2CSpawnBeamPacket packet = new S2CSpawnBeamPacket(beamFx);
+
+    // Sendet das Paket an alle Spieler im Umkreis von 64 Blöcken um den Startpunkt
+    PacketDistributor.TargetPoint target = new PacketDistributor.TargetPoint(
+        start.x, start.y, start.z, 64.0, level.dimension()
+    );
+    
+    StonesMod.PACKET_HANDLER.send(PacketDistributor.NEAR.with(() -> target), packet);
+}
+
 	
 	public static boolean checkBlock(Level level, BlockPos pos, Object blocksInput, Object tagsInput) {
 		if (level == null || pos == null) return false;
@@ -807,6 +882,14 @@ public static void spawnBeam(
 		return false;
 	}
 	
+	public static boolean isDamageType(DamageSource source, String typeId) {
+		if (source == null || typeId == null) return false;
+		
+		ResourceLocation loc = new ResourceLocation(typeId);
+		ResourceKey<DamageType> key = ResourceKey.create(Registries.DAMAGE_TYPE, loc);
+
+		return source.is(key);
+	}	
     private static String getString(Object obj, String fallback) {
         return obj != null ? obj.toString() : fallback;
     }

@@ -12,20 +12,17 @@ import net.stones.editor.client.gui.StonesStudioScreen;
 import net.stones.editor.client.gui.section.StudioMenuBar;
 import net.stones.editor.client.gui.widget.StudioUIHelper;
 
-/**
- * Verwaltet das Sidepanel des Stones Studio Editors.
- * * Behebt den Hitbox-Offset beim Neuladen-Button [↻].
- */
 public class SidePanelRenderer {
 
     public static final int WIDTH = 180;
     
     private final StonesStudioScreen screen;
 
-    private boolean isMinorExpanded = true;
-    private boolean isMajorExpanded = true;
-    private boolean isMilestoneExpanded = true;
-    private boolean isOtherExpanded = true;
+    private boolean isMinorExpanded = false;
+    private boolean isMajorExpanded = false;
+    private boolean isMilestoneExpanded = false;
+    private boolean isOtherExpanded = false;
+    private boolean isScriptsExpanded = false; // NEU
     
     private double fileScrollY = 0;
 
@@ -111,6 +108,18 @@ public class SidePanelRenderer {
             }
         }
         
+        // NEU: Scripte hinzufügen
+        if (StonesStudioScreen.activePackScripts != null && !StonesStudioScreen.activePackScripts.isEmpty()) {
+            panelItems.add(new SidePanelItem(true, "scripts", "Scripts (JS)", null, layoutY, isScriptsExpanded));
+            layoutY += 15;
+            if (isScriptsExpanded) {
+                for (String file : StonesStudioScreen.activePackScripts) {
+                    panelItems.add(new SidePanelItem(false, null, "    📜 " + file, file, layoutY, false));
+                    layoutY += 15;
+                }
+            }
+        }
+        
         return panelItems;
     }
 
@@ -135,8 +144,6 @@ public class SidePanelRenderer {
             Component.translatable("gui.stones.studio.sidepanelrenderer.pack_tooltip")
         );
         
-        // --- BUTTON FÜR LIVE-RELOAD VOM SERVER ---
-        // FIX: reloadBtnX/Y sauber berechnet und deklariert für identische Hitbox beim Rendern und Klicken
         int reloadBtnX = WIDTH - 25;
         int reloadBtnY = StudioMenuBar.HEIGHT + 40;
         int btnWidth = font.width("[↻]");
@@ -168,6 +175,7 @@ public class SidePanelRenderer {
                     case "minor" -> Component.translatable("gui.stones.studio.sidepanelrenderer.tooltip.minor");
                     case "major" -> Component.translatable("gui.stones.studio.sidepanelrenderer.tooltip.major");
                     case "milestone" -> Component.translatable("gui.stones.studio.sidepanelrenderer.tooltip.milestone");
+                    case "scripts" -> Component.literal("Enthält alle manuell geschriebenen JavaScript-Dateien."); // NEU
                     default -> Component.translatable("gui.stones.studio.sidepanelrenderer.tooltip.other");
                 };
 
@@ -191,8 +199,6 @@ public class SidePanelRenderer {
     }
 
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        // --- BUTTON KLICK-LOGIK FÜR LIVE-RELOAD ---
-        // FIX: Verwendet exakt dieselben Hitbox-Koordinaten und Dimensionen wie beim Rendern
         int reloadBtnX = WIDTH - 25;
         int reloadBtnY = StudioMenuBar.HEIGHT + 40;
         int btnWidth = Minecraft.getInstance().font.width("[↻]");
@@ -210,7 +216,11 @@ public class SidePanelRenderer {
                 StudioNetwork.CHANNEL.sendToServer(new StudioNetwork.C2SRequestPackList());
                 
                 if (!StonesStudioScreen.currentFileName.isEmpty()) {
-                    StudioNetwork.CHANNEL.sendToServer(new StudioNetwork.C2SRequestRuneFile(StonesStudioScreen.currentFileName));
+                    if (StonesStudioScreen.currentFileName.endsWith(".js")) {
+                        StudioNetwork.CHANNEL.sendToServer(new StudioNetwork.C2SRequestScriptFile(StonesStudioScreen.currentFileName));
+                    } else {
+                        StudioNetwork.CHANNEL.sendToServer(new StudioNetwork.C2SRequestRuneFile(StonesStudioScreen.currentFileName));
+                    }
                 }
                 
                 Minecraft.getInstance().player.displayClientMessage(
@@ -235,11 +245,17 @@ public class SidePanelRenderer {
                     if (item.categoryId.equals("minor")) isMinorExpanded = !isMinorExpanded;
                     else if (item.categoryId.equals("major")) isMajorExpanded = !isMajorExpanded;
                     else if (item.categoryId.equals("milestone")) isMilestoneExpanded = !isMilestoneExpanded;
+                    else if (item.categoryId.equals("scripts")) isScriptsExpanded = !isScriptsExpanded;
                     else if (item.categoryId.equals("other")) isOtherExpanded = !isOtherExpanded;
                 } else {
                     String selectedFile = item.fileName;
                     screen.requestActionWithUnsavedWarning(() -> {
-                        StudioNetwork.CHANNEL.sendToServer(new StudioNetwork.C2SRequestRuneFile(selectedFile));
+                        // REINE SKRIPTE ODER JSON?
+                        if (selectedFile.endsWith(".js")) {
+                            StudioNetwork.CHANNEL.sendToServer(new StudioNetwork.C2SRequestScriptFile(selectedFile));
+                        } else {
+                            StudioNetwork.CHANNEL.sendToServer(new StudioNetwork.C2SRequestRuneFile(selectedFile));
+                        }
                         StonesStudioScreen.isWaitingForServer = true; 
                     });
                 }

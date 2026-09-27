@@ -6,7 +6,7 @@ import net.minecraft.client.gui.components.Button;
 import net.minecraft.network.chat.Component;
 import net.stones.editor.client.gui.StonesStudioScreen;
 import net.stones.editor.network.StudioNetwork;
-import net.stones.util.TemplateHashHelper;
+import net.stones.editor.data.TemplateHashHelper;
 
 public class TemplateUpdateModal extends AbstractStudioModal {
 
@@ -15,7 +15,6 @@ public class TemplateUpdateModal extends AbstractStudioModal {
     private final JsonObject jarJson;
     private final String newJarHash;
     private final Runnable onComplete;
-
     public TemplateUpdateModal(StonesStudioScreen screen, String fileName, JsonObject playerJson, JsonObject jarJson, String newJarHash, Runnable onComplete) {
         super(screen, Component.translatable("gui.stones.studio.templateupdate.title"), 340, 130);
         this.fileName = fileName;

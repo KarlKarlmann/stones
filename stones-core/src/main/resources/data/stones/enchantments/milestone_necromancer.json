@@ -1,42 +1,41 @@
 {
-  "override_registry_id": "stones:milestone_necromancer",
-  "type": "MILESTONE",
-  "name": "DICT:milestone.stones.necromancer.name",
-  "description": "Harvests soul bones on kills to form an orbiting Bone Shield that absorbs damage. Detonate your shield via action button to unleash a soul blast and summon Wither Skeleton servants.",
-  "icon": "stones:textures/gui/skills/necromancer.png",
-  "required_level": 5.0,
-  "factor": 0.0,
-  "max_level": 20,
-  "stats": [
-    {
-      "id": "bone_damage",
-      "label": "DICT:stat.stones.bone_damage",
-      "type": "generic",
-      "base": 4.0,
-      "per_level": 0.8,
-      "scaling": "RUNE_LEVEL",
-      "suffix": "DICT:stat.stones.suffix.damage"
-    },
-    {
-      "id": "max_bones",
-      "label": "DICT:stat.stones.max_bones",
-      "type": "generic",
-      "base": 3.0,
-      "per_level": 0.25,
-      "scaling": "SOCK_LEVEL",
-      "suffix": "DICT:stat.stones.suffix.souls",
-      "max": 8.0
-    },
-    {
-      "id": "absorb_heal",
-      "label": "DICT:stat.stones.absorb_heal",
-      "type": "generic",
-      "base": 2.0,
-      "per_level": 0.3,
-      "scaling": "RUNE_LEVEL",
-      "suffix": "DICT:stat.stones.suffix.hp"
-    }
-  ],
-  "raw_script": "function getNecroStats(player) {\n    let data = global.Stones.getRuneData(player, 'stones:milestone_necromancer');\n    let rLvl = Math.max(1, Number(data.runeLevel || 1));\n    let sLvl = Math.max(1, Number(data.socketLevel || 1));\n    return {\n        boneDamage: 4.0 + (0.8 * (rLvl - 1)),\n        maxBones: Math.min(8, Math.floor(3.0 + (0.25 * (sLvl - 1)))),\n        absorbHeal: 2.0 + (0.3 * (rLvl - 1))\n    };\n}\n\nglobal.Stones.register('ON_KILL', 'milestone_necromancer', ctx => {\n    const player = ctx.player;\n    if (!player) return;\n\n    let stats = getNecroStats(player);\n    let currentBones = Number(global.Stones.getComboCount(player, 'necromancer_bones') || 0);\n    let newBones = Math.min(stats.maxBones, currentBones + 1);\n\n    global.Stones.updateCombo(player, 'necromancer_bones', newBones, stats.maxBones, 'minecraft:textures/item/bone.png', 0.6, 1.5, 2.5, '#EAE0D0', 1200);\n\n    global.Stones.playSound(player, 'minecraft:entity.skeleton.ambient', 'players', 0.8, 1.2);\n    global.Stones.spawnParticles(player, 'minecraft:soul', player.position().add(0, 1, 0), 15, 0.4, 0.4, 0.4, 0.05);\n});\n\nglobal.Stones.register('ON_HURT', 'milestone_necromancer', ctx => {\n    const player = ctx.player;\n    if (!player) return;\n\n    let currentBones = Number(global.Stones.getComboCount(player, 'necromancer_bones') || 0);\n    if (currentBones <= 0) return;\n\n    let stats = getNecroStats(player);\n    let newBones = currentBones - 1;\n    global.Stones.updateCombo(player, 'necromancer_bones', newBones, stats.maxBones, 'minecraft:textures/item/bone.png', 0.6, 1.5, 2.5, '#EAE0D0', 1200);\n\n    player.potionEffects.add('minecraft:resistance', 20, 2);\n    player.potionEffects.add('minecraft:absorption', 100, 1);\n    player.heal(stats.absorbHeal);\n\n    const pos = player.position();\n    global.Stones.playSound(player, 'minecraft:entity.skeleton.hurt', 'players', 1.0, 0.6);\n    global.Stones.spawnParticles(player, 'minecraft:soul_fire_flame', pos.add(0, 1, 0), 30, 0.5, 0.8, 0.5, 0.15);\n});\n\nglobal.Stones.register('ON_ACTION_BUTTON', 'milestone_necromancer', ctx => {\n    const player = ctx.player;\n    if (!player || !global.Stones.isReady(player, 'milestone_necromancer')) return;\n\n    let bones = Number(global.Stones.getComboCount(player, 'necromancer_bones') || 0);\n    if (bones <= 0) {\n        global.Stones.playSound(player, 'minecraft:entity.villager.no', 'players', 1.0, 0.8);\n        player.tell('c[Necromancer] You need at least 1 Bone Charge from kills to activate Bone Explosion!');\n        return;\n    }\n\n    global.Stones.setCooldown(player, 'milestone_necromancer', 400);\n\n    let stats = getNecroStats(player);\n    const level = player.level;\n    const pos = player.position();\n\n    const offsetsX = [1.0, -1.0, 1.5, -1.5, 2.0, -2.0, 2.5, -2.5];\n    const offsetsZ = [0.0,  0.5, -0.5,  1.0, -1.0,  1.5, -1.5,  2.0];\n\n    let minionCount = Math.max(1, Math.floor(bones / 2));\n    let totalDamage = bones * stats.boneDamage;\n\n    if (level) {\n        let targets = global.Stones.findEntities(player, 'RADIUS', 8, 8, 8, 8, true, true, false);\n        if (targets) {\n            targets.forEach(e => {\n                if (!e.tags.contains('stones_minion')) {\n                    e.attack(totalDamage);\n                }\n            });\n        }\n\n        for (let i = 0; i < minionCount; i++) {\n            let skel = level.createEntity('wither_skeleton');\n            let offsetX = offsetsX[i % offsetsX.length];\n            let offsetZ = offsetsZ[i % offsetsZ.length];\n\n            skel.setPosition(player.x + offsetX, player.y + 0.2, player.z + offsetZ);\n            skel.spawn();\n\n            // NEUER SCHRITT: Netherit-Schwert ausrüsten\n            skel.setMainHandItem('minecraft:netherite_sword');\n\n            global.Stones.makeMinion(skel, player);\n        }\n    }\n\n    global.Stones.playSound(player, 'minecraft:entity.wither.spawn', 'hostile', 0.9, 1.2);\n    global.Stones.playSound(player, 'minecraft:entity.wither_skeleton.death', 'hostile', 1.0, 0.7);\n    global.Stones.spawnParticles(player, 'minecraft:soul_fire_flame', pos.add(0, 1, 0), 100, 1.5, 1.0, 1.5, 0.2);\n\n    global.Stones.updateCombo(player, 'necromancer_bones', 0, stats.maxBones, '', 0, 0, 0, '#000000', 0);\n\n    player.tell(`b✦ BONE EXPLOSION! Detonated ${bones} Bone Shield(s) for ${totalDamage.toFixed(1)} damage & summoned ${minionCount} Soul Servant(s)!`);\n});",
-  "_template_hash": "92147deac87a38cf49feb96d6e3eaf12c93590652a74a555361fdbcac40505bb"
+"override_registry_id": "stones:milestone_necromancer",
+"type": "MILESTONE",
+"name": "DICT:milestone.stones.necromancer.name",
+"description": "Harvests soul bones on kills to form an orbiting Bone Shield that absorbs damage. Detonate your shield via action button to unleash a soul blast and summon Wither Skeleton servants.",
+"icon": "stones:textures/gui/skills/necromancer.png",
+"required_level": 5.0,
+"factor": 0.0,
+"max_level": 20,
+"stats": [
+{
+"id": "bone_damage",
+"label": "DICT:stat.stones.bone_damage",
+"type": "generic",
+"base": 4.0,
+"per_level": 0.8,
+"scaling": "RUNE_LEVEL",
+"suffix": "DICT:stat.stones.suffix.damage"
+},
+{
+"id": "max_bones",
+"label": "DICT:stat.stones.max_bones",
+"type": "generic",
+"base": 3.0,
+"per_level": 0.25,
+"scaling": "SOCK_LEVEL",
+"suffix": "DICT:stat.stones.suffix.souls",
+"max": 8.0
+},
+{
+"id": "absorb_heal",
+"label": "DICT:stat.stones.absorb_heal",
+"type": "generic",
+"base": 2.0,
+"per_level": 0.3,
+"scaling": "RUNE_LEVEL",
+"suffix": "DICT:stat.stones.suffix.hp"
+}
+],
+"raw_script": "stones:scripts/milestone_necromancer.js"
 }

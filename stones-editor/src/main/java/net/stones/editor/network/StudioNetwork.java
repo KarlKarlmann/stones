@@ -21,8 +21,8 @@ import net.stones.StonesMod;
 import net.stones.editor.StonesEditorMod;
 import net.stones.editor.client.gui.StonesStudioScreen;
 import net.stones.editor.init.StonesEditorConfig;
-import net.stones.util.ServerDatapackExporter;
-import net.stones.util.TemplateHashHelper;
+import net.stones.editor.data.ServerDatapackExporter;
+import net.stones.editor.data.TemplateHashHelper;
 
 import java.io.File;
 import java.nio.charset.StandardCharsets;
@@ -31,13 +31,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Supplier;
 
-/**
- * Verwaltet die komplette Client-Server-Kommunikation für das Stones Studio.
- * Läuft im Addon 'stones_editor'.
- */
 public class StudioNetwork {
 
-    private static final String PROTOCOL_VERSION = "2";
+    private static final String PROTOCOL_VERSION = "3"; // Version erhöht für neue Pakete
     public static final SimpleChannel CHANNEL = NetworkRegistry.newSimpleChannel(
             new ResourceLocation(StonesEditorMod.MODID, "studio_channel"),
             () -> PROTOCOL_VERSION,
@@ -55,6 +51,11 @@ public class StudioNetwork {
         CHANNEL.registerMessage(packetId++, C2SRequestRuneFile.class, C2SRequestRuneFile::encode, C2SRequestRuneFile::decode, C2SRequestRuneFile::handle);
         CHANNEL.registerMessage(packetId++, S2CSyncRuneFile.class,    S2CSyncRuneFile::encode,    S2CSyncRuneFile::decode,    S2CSyncRuneFile::handle);
         CHANNEL.registerMessage(packetId++, C2SSaveRuneFile.class,    C2SSaveRuneFile::encode,    C2SSaveRuneFile::decode,    C2SSaveRuneFile::handle);
+        
+        // NEUE SCRIPT-PAKETE
+        CHANNEL.registerMessage(packetId++, C2SRequestScriptFile.class, C2SRequestScriptFile::encode, C2SRequestScriptFile::decode, C2SRequestScriptFile::handle);
+        CHANNEL.registerMessage(packetId++, S2CSyncScriptFile.class,    S2CSyncScriptFile::encode,    S2CSyncScriptFile::decode,    S2CSyncScriptFile::handle);
+        CHANNEL.registerMessage(packetId++, C2SSaveScriptFile.class,    C2SSaveScriptFile::encode,    C2SSaveScriptFile::decode,    C2SSaveScriptFile::handle);
     }
 
     public static String sanitizeProjectName(String name) {
@@ -72,6 +73,7 @@ public class StudioNetwork {
         File datapacksDir = FMLPaths.GAMEDIR.get().resolve("datapacks").toFile();
         List<String> packs = new ArrayList<>();
         List<String> activeFiles = new ArrayList<>();
+        List<String> activeScripts = new ArrayList<>();
         String activePack = StonesEditorConfig.ACTIVE_WORKSPACE_PACK.get();
 
         if (datapacksDir.exists() && datapacksDir.listFiles() != null) {
@@ -88,11 +90,21 @@ public class StudioNetwork {
                                 }
                             }
                         }
+                        
+                        // SKRIPTE SCANNEN
+                        File scriptDir = new File(file, "data/stones_workspace/scripts");
+                        if (scriptDir.exists() && scriptDir.listFiles() != null) {
+                            for (File scriptFile : scriptDir.listFiles()) {
+                                if (scriptFile.getName().endsWith(".js")) {
+                                    activeScripts.add(scriptFile.getName());
+                                }
+                            }
+                        }
                     }
                 }
             }
         }
-        return new S2CSyncPackList(packs, activePack, true, activeFiles);
+        return new S2CSyncPackList(packs, activePack, true, activeFiles, activeScripts);
     }
 
     // --- PACKETS ---
@@ -107,13 +119,11 @@ public class StudioNetwork {
             ctx.enqueueWork(() -> {
                 ServerPlayer player = ctx.getSender();
                 if (player == null) return;
-
                 if (!player.hasPermissions(2)) {
                     CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
-                            new S2CSyncPackList(new ArrayList<>(), "", false, new ArrayList<>()));
+                            new S2CSyncPackList(new ArrayList<>(), "", false, new ArrayList<>(), new ArrayList<>()));
                     return;
                 }
-
                 CHANNEL.send(PacketDistributor.PLAYER.with(() -> player), buildSyncPacket());
             });
             ctx.setPacketHandled(true);
@@ -125,12 +135,14 @@ public class StudioNetwork {
         private final String activePackName;
         private final boolean authorized;
         private final List<String> activePackFiles;
+        private final List<String> activePackScripts;
 
-        public S2CSyncPackList(List<String> packNames, String activePackName, boolean authorized, List<String> activePackFiles) {
+        public S2CSyncPackList(List<String> packNames, String activePackName, boolean authorized, List<String> activePackFiles, List<String> activePackScripts) {
             this.packNames = packNames;
             this.activePackName = activePackName;
             this.authorized = authorized;
             this.activePackFiles = activePackFiles;
+            this.activePackScripts = activePackScripts;
         }
 
         public static void encode(S2CSyncPackList msg, FriendlyByteBuf buf) {
@@ -140,6 +152,8 @@ public class StudioNetwork {
             buf.writeUtf(msg.activePackName);
             buf.writeInt(msg.activePackFiles.size());
             for (String file : msg.activePackFiles) buf.writeUtf(file);
+            buf.writeInt(msg.activePackScripts.size());
+            for (String file : msg.activePackScripts) buf.writeUtf(file);
         }
 
         public static S2CSyncPackList decode(FriendlyByteBuf buf) {
@@ -151,21 +165,24 @@ public class StudioNetwork {
             int fSize = buf.readInt();
             List<String> files = new ArrayList<>();
             for (int i = 0; i < fSize; i++) files.add(buf.readUtf());
-            return new S2CSyncPackList(names, active, auth, files);
+            int sSize = buf.readInt();
+            List<String> scripts = new ArrayList<>();
+            for (int i = 0; i < sSize; i++) scripts.add(buf.readUtf());
+            return new S2CSyncPackList(names, active, auth, files, scripts);
         }
 
         public static void handle(S2CSyncPackList msg, Supplier<NetworkEvent.Context> ctxGetter) {
             NetworkEvent.Context ctx = ctxGetter.get();
             ctx.enqueueWork(() -> DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () ->
-                    ClientHandler.handlePackList(msg.packNames, msg.activePackName, msg.authorized, msg.activePackFiles)
+                    ClientHandler.handlePackList(msg.packNames, msg.activePackName, msg.authorized, msg.activePackFiles, msg.activePackScripts)
             ));
             ctx.setPacketHandled(true);
         }
     }
 
     private static class ClientHandler {
-        public static void handlePackList(List<String> packs, String active, boolean authorized, List<String> files) {
-            StonesStudioScreen.receiveServerPackList(packs, active, authorized, files);
+        public static void handlePackList(List<String> packs, String active, boolean authorized, List<String> files, List<String> scripts) {
+            StonesStudioScreen.receiveServerPackList(packs, active, authorized, files, scripts);
         }
 
         public static void handleRuneLoad(String fileName, String jsonStr, boolean hasConflict, String jarTemplateStr, String newJarHash) {
@@ -173,13 +190,19 @@ public class StudioNetwork {
                 sss.loadRuneFromJson(fileName, jsonStr, hasConflict, jarTemplateStr, newJarHash);
             }
         }
+        
+        public static void handleScriptLoad(String fileName, String content) {
+            if (Minecraft.getInstance().screen instanceof StonesStudioScreen sss) {
+                sss.loadScriptOnly(fileName, content);
+            }
+        }
     }
+
+    // --- JSON RUNE PACKETS ---
 
     public static class C2SRequestRuneFile {
         private final String fileName;
-
         public C2SRequestRuneFile(String fileName) { this.fileName = fileName; }
-
         public static void encode(C2SRequestRuneFile msg, FriendlyByteBuf buf) { buf.writeUtf(msg.fileName); }
         public static C2SRequestRuneFile decode(FriendlyByteBuf buf) { return new C2SRequestRuneFile(buf.readUtf()); }
 
@@ -188,31 +211,24 @@ public class StudioNetwork {
             ctx.enqueueWork(() -> {
                 ServerPlayer player = ctx.getSender();
                 if (player == null || !player.hasPermissions(2)) return;
-
                 String activePack = StonesEditorConfig.ACTIVE_WORKSPACE_PACK.get();
                 if (activePack.isEmpty()) return;
 
                 String fileNameWithExt = resolveFileName(msg.fileName);
-                File file = new File(
-                        FMLPaths.GAMEDIR.get().resolve("datapacks/" + activePack + "/data/stones_workspace/enchantments").toFile(),
-                        fileNameWithExt);
+                File file = new File(FMLPaths.GAMEDIR.get().resolve("datapacks/" + activePack + "/data/stones_workspace/enchantments").toFile(), fileNameWithExt);
 
                 if (file.exists()) {
                     try {
                         String content = Files.readString(file.toPath());
                         TemplateHashHelper.CheckResult result = TemplateHashHelper.verifyServerFile(msg.fileName, content);
-
                         if (result.status() == TemplateHashHelper.Status.SILENT_UPDATE) {
                             content = result.processedJson().toString();
                             Files.writeString(file.toPath(), content, StandardCharsets.UTF_8);
                         }
-
                         boolean hasConflict = (result.status() == TemplateHashHelper.Status.MODIFIED_CONFLICT);
                         String jarTemplateStr = hasConflict ? result.jarJson().toString() : "";
                         String newJarHash = result.newJarHash() != null ? result.newJarHash() : "";
-
-                        CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
-                                new S2CSyncRuneFile(msg.fileName, content, hasConflict, jarTemplateStr, newJarHash));
+                        CHANNEL.send(PacketDistributor.PLAYER.with(() -> player), new S2CSyncRuneFile(msg.fileName, content, hasConflict, jarTemplateStr, newJarHash));
                     } catch (Exception e) {
                         player.sendSystemMessage(Component.translatable("chat.stones.studio.server.file_read_error"));
                     }
@@ -230,34 +246,18 @@ public class StudioNetwork {
         private final String newJarHash;
 
         public S2CSyncRuneFile(String fileName, String jsonContent, boolean hasConflict, String jarTemplateStr, String newJarHash) {
-            this.fileName = fileName;
-            this.jsonContent = jsonContent;
-            this.hasConflict = hasConflict;
-            this.jarTemplateStr = jarTemplateStr;
-            this.newJarHash = newJarHash;
+            this.fileName = fileName; this.jsonContent = jsonContent; this.hasConflict = hasConflict; this.jarTemplateStr = jarTemplateStr; this.newJarHash = newJarHash;
         }
-
-        public S2CSyncRuneFile(String fileName, String jsonContent) {
-            this(fileName, jsonContent, false, "", "");
-        }
-
+        public S2CSyncRuneFile(String fileName, String jsonContent) { this(fileName, jsonContent, false, "", ""); }
         public static void encode(S2CSyncRuneFile msg, FriendlyByteBuf buf) {
-            buf.writeUtf(msg.fileName);
-            buf.writeUtf(msg.jsonContent, 1048576);
-            buf.writeBoolean(msg.hasConflict);
-            buf.writeUtf(msg.jarTemplateStr, 1048576);
-            buf.writeUtf(msg.newJarHash);
+            buf.writeUtf(msg.fileName); buf.writeUtf(msg.jsonContent, 1048576); buf.writeBoolean(msg.hasConflict); buf.writeUtf(msg.jarTemplateStr, 1048576); buf.writeUtf(msg.newJarHash);
         }
-
         public static S2CSyncRuneFile decode(FriendlyByteBuf buf) {
             return new S2CSyncRuneFile(buf.readUtf(), buf.readUtf(1048576), buf.readBoolean(), buf.readUtf(1048576), buf.readUtf());
         }
-
         public static void handle(S2CSyncRuneFile msg, Supplier<NetworkEvent.Context> ctxGetter) {
             NetworkEvent.Context ctx = ctxGetter.get();
-            ctx.enqueueWork(() -> DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () ->
-                    ClientHandler.handleRuneLoad(msg.fileName, msg.jsonContent, msg.hasConflict, msg.jarTemplateStr, msg.newJarHash)
-            ));
+            ctx.enqueueWork(() -> DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> ClientHandler.handleRuneLoad(msg.fileName, msg.jsonContent, msg.hasConflict, msg.jarTemplateStr, msg.newJarHash)));
             ctx.setPacketHandled(true);
         }
     }
@@ -265,78 +265,117 @@ public class StudioNetwork {
     public static class C2SSaveRuneFile {
         private final String fileName;
         private final String jsonContent;
-
-        public C2SSaveRuneFile(String fileName, String jsonContent) {
-            this.fileName = fileName;
-            this.jsonContent = jsonContent;
-        }
-
-        public static void encode(C2SSaveRuneFile msg, FriendlyByteBuf buf) {
-            buf.writeUtf(msg.fileName);
-            buf.writeUtf(msg.jsonContent, 1048576);
-        }
-
-        public static C2SSaveRuneFile decode(FriendlyByteBuf buf) {
-            return new C2SSaveRuneFile(buf.readUtf(), buf.readUtf(1048576));
-        }
-
+        public C2SSaveRuneFile(String fileName, String jsonContent) { this.fileName = fileName; this.jsonContent = jsonContent; }
+        public static void encode(C2SSaveRuneFile msg, FriendlyByteBuf buf) { buf.writeUtf(msg.fileName); buf.writeUtf(msg.jsonContent, 1048576); }
+        public static C2SSaveRuneFile decode(FriendlyByteBuf buf) { return new C2SSaveRuneFile(buf.readUtf(), buf.readUtf(1048576)); }
         public static void handle(C2SSaveRuneFile msg, Supplier<NetworkEvent.Context> ctxGetter) {
             NetworkEvent.Context ctx = ctxGetter.get();
             ctx.enqueueWork(() -> {
                 ServerPlayer player = ctx.getSender();
                 if (player == null || !player.hasPermissions(2)) return;
-
                 String activePack = StonesEditorConfig.ACTIVE_WORKSPACE_PACK.get();
                 if (activePack.isEmpty()) return;
 
                 try {
                     String fileNameWithExt = resolveFileName(msg.fileName);
-                    File file = new File(
-                            FMLPaths.GAMEDIR.get().resolve("datapacks/" + activePack + "/data/stones_workspace/enchantments").toFile(),
-                            fileNameWithExt);
-
+                    File file = new File(FMLPaths.GAMEDIR.get().resolve("datapacks/" + activePack + "/data/stones_workspace/enchantments").toFile(), fileNameWithExt);
                     JsonElement parsed = JsonParser.parseString(msg.jsonContent);
                     TemplateHashHelper.ensureHashExists(parsed, msg.fileName);
-
                     Gson prettyGson = new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create();
+                    file.getParentFile().mkdirs();
                     Files.writeString(file.toPath(), prettyGson.toJson(parsed), StandardCharsets.UTF_8);
-
                     player.sendSystemMessage(Component.translatable("chat.stones.studio.server.file_saved", fileNameWithExt));
                 } catch (Exception e) {
                     player.sendSystemMessage(Component.translatable("chat.stones.studio.server.file_save_error", msg.fileName));
-                    StonesMod.LOGGER.error("Speichern fehlgeschlagen: ", e);
                 }
             });
             ctx.setPacketHandled(true);
         }
     }
 
+    // --- NEU: JS SCRIPT PACKETS ---
+
+    public static class C2SRequestScriptFile {
+        private final String fileName;
+        public C2SRequestScriptFile(String fileName) { this.fileName = fileName; }
+        public static void encode(C2SRequestScriptFile msg, FriendlyByteBuf buf) { buf.writeUtf(msg.fileName); }
+        public static C2SRequestScriptFile decode(FriendlyByteBuf buf) { return new C2SRequestScriptFile(buf.readUtf()); }
+
+        public static void handle(C2SRequestScriptFile msg, Supplier<NetworkEvent.Context> ctxGetter) {
+            NetworkEvent.Context ctx = ctxGetter.get();
+            ctx.enqueueWork(() -> {
+                ServerPlayer player = ctx.getSender();
+                if (player == null || !player.hasPermissions(2)) return;
+                String activePack = StonesEditorConfig.ACTIVE_WORKSPACE_PACK.get();
+                if (activePack.isEmpty()) return;
+
+                String fName = msg.fileName.endsWith(".js") ? msg.fileName : msg.fileName + ".js";
+                File file = new File(FMLPaths.GAMEDIR.get().resolve("datapacks/" + activePack + "/data/stones_workspace/scripts").toFile(), fName);
+
+                if (file.exists()) {
+                    try {
+                        String content = Files.readString(file.toPath());
+                        CHANNEL.send(PacketDistributor.PLAYER.with(() -> player), new S2CSyncScriptFile(fName, content));
+                    } catch (Exception e) {}
+                }
+            });
+            ctx.setPacketHandled(true);
+        }
+    }
+
+    public static class S2CSyncScriptFile {
+        private final String fileName;
+        private final String content;
+        public S2CSyncScriptFile(String fileName, String content) { this.fileName = fileName; this.content = content; }
+        public static void encode(S2CSyncScriptFile msg, FriendlyByteBuf buf) { buf.writeUtf(msg.fileName); buf.writeUtf(msg.content, 1048576); }
+        public static S2CSyncScriptFile decode(FriendlyByteBuf buf) { return new S2CSyncScriptFile(buf.readUtf(), buf.readUtf(1048576)); }
+        public static void handle(S2CSyncScriptFile msg, Supplier<NetworkEvent.Context> ctxGetter) {
+            NetworkEvent.Context ctx = ctxGetter.get();
+            ctx.enqueueWork(() -> DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> ClientHandler.handleScriptLoad(msg.fileName, msg.content)));
+            ctx.setPacketHandled(true);
+        }
+    }
+
+    public static class C2SSaveScriptFile {
+        private final String fileName;
+        private final String content;
+        public C2SSaveScriptFile(String fileName, String content) { this.fileName = fileName; this.content = content; }
+        public static void encode(C2SSaveScriptFile msg, FriendlyByteBuf buf) { buf.writeUtf(msg.fileName); buf.writeUtf(msg.content, 1048576); }
+        public static C2SSaveScriptFile decode(FriendlyByteBuf buf) { return new C2SSaveScriptFile(buf.readUtf(), buf.readUtf(1048576)); }
+        public static void handle(C2SSaveScriptFile msg, Supplier<NetworkEvent.Context> ctxGetter) {
+            NetworkEvent.Context ctx = ctxGetter.get();
+            ctx.enqueueWork(() -> {
+                ServerPlayer player = ctx.getSender();
+                if (player == null || !player.hasPermissions(2)) return;
+                String activePack = StonesEditorConfig.ACTIVE_WORKSPACE_PACK.get();
+                if (activePack.isEmpty()) return;
+
+                try {
+                    String fName = msg.fileName.endsWith(".js") ? msg.fileName : msg.fileName + ".js";
+                    File file = new File(FMLPaths.GAMEDIR.get().resolve("datapacks/" + activePack + "/data/stones_workspace/scripts").toFile(), fName);
+                    file.getParentFile().mkdirs();
+                    Files.writeString(file.toPath(), msg.content, StandardCharsets.UTF_8);
+                    player.sendSystemMessage(Component.translatable("chat.stones.studio.server.file_saved", fName));
+                } catch (Exception e) {}
+            });
+            ctx.setPacketHandled(true);
+        }
+    }
+
+    // --- SYSTEM PACKETS (Unverändert) ---
+
     public static class C2SProjectAction {
         private final String actionType;
         private final String projectName;
-
-        public C2SProjectAction(String actionType, String projectName) {
-            this.actionType = actionType;
-            this.projectName = projectName;
-        }
-
-        public static void encode(C2SProjectAction msg, FriendlyByteBuf buf) {
-            buf.writeUtf(msg.actionType);
-            buf.writeUtf(msg.projectName);
-        }
-
-        public static C2SProjectAction decode(FriendlyByteBuf buf) {
-            return new C2SProjectAction(buf.readUtf(), buf.readUtf());
-        }
-
+        public C2SProjectAction(String actionType, String projectName) { this.actionType = actionType; this.projectName = projectName; }
+        public static void encode(C2SProjectAction msg, FriendlyByteBuf buf) { buf.writeUtf(msg.actionType); buf.writeUtf(msg.projectName); }
+        public static C2SProjectAction decode(FriendlyByteBuf buf) { return new C2SProjectAction(buf.readUtf(), buf.readUtf()); }
         public static void handle(C2SProjectAction msg, Supplier<NetworkEvent.Context> ctxGetter) {
             NetworkEvent.Context ctx = ctxGetter.get();
             ctx.enqueueWork(() -> {
                 ServerPlayer player = ctx.getSender();
                 if (player == null || !player.hasPermissions(2)) return;
-
                 String sanitizedName = sanitizeProjectName(msg.projectName);
-
                 if (msg.actionType.equals("CREATE") && !sanitizedName.isEmpty()) {
                     ServerDatapackExporter.createAndExportNewPack(player, sanitizedName);
                     StonesEditorConfig.ACTIVE_WORKSPACE_PACK.set(sanitizedName);
@@ -350,7 +389,6 @@ public class StudioNetwork {
                     StonesEditorConfig.SPEC.save();
                     player.sendSystemMessage(Component.translatable("chat.stones.studio.server.project_deactivated"));
                 }
-
                 CHANNEL.send(PacketDistributor.PLAYER.with(() -> player), buildSyncPacket());
             });
             ctx.setPacketHandled(true);
@@ -359,22 +397,15 @@ public class StudioNetwork {
 
     public static class C2STriggerReload {
         public C2STriggerReload() {}
-
         public static void encode(C2STriggerReload msg, FriendlyByteBuf buf) {}
         public static C2STriggerReload decode(FriendlyByteBuf buf) { return new C2STriggerReload(); }
-
         public static void handle(C2STriggerReload msg, Supplier<NetworkEvent.Context> ctxGetter) {
             NetworkEvent.Context ctx = ctxGetter.get();
             ctx.enqueueWork(() -> {
                 ServerPlayer player = ctx.getSender();
                 if (player == null || !player.hasPermissions(2)) return;
-
-                // Triggert den Vanilla/Forge-Datapack-Reload (der automatisch unseren EnchantmentReloadListener
-                // mit JS-Generierung und KubeJS-Update ausführt)
                 player.getServer().getCommands().performPrefixedCommand(
-                        player.getServer().createCommandSourceStack().withSuppressedOutput().withPermission(4),
-                        "reload"
-                );
+                        player.getServer().createCommandSourceStack().withSuppressedOutput().withPermission(4), "reload");
                 player.sendSystemMessage(Component.translatable("chat.stones.studio.server.reload_success"));
             });
             ctx.setPacketHandled(true);

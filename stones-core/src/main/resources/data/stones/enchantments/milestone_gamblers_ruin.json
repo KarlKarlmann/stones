@@ -1,32 +1,31 @@
 {
-  "override_registry_id": "stones:milestone_gamblers_ruin",
-  "type": "MILESTONE",
-  "name": "DICT:milestone.stones.gamblers_ruin.name",
-  "description": "Sacrifices a random enchantment from your held item to gamble for cosmic power. Grants high-tier blessings, powerful buffs, or loyal companions—but carries the risk of summoning deadly monstrosities or destroying your item in a violent explosion.",
-  "icon": "stones:textures/gui/skills/aeoncore.png",
-  "required_level": 5.0,
-  "factor": 0.0,
-  "max_level": 20,
-  "stats": [
-    {
-      "id": "risk_multiplier",
-      "label": "DICT:stat.stones.risk_multiplier",
-      "type": "generic",
-      "base": 4.0,
-      "per_level": 0.5,
-      "scaling": "SOCK_LEVEL",
-      "suffix": "DICT:stat.stones.suffix.multiplier"
-    },
-    {
-      "id": "power_conversion",
-      "label": "DICT:stat.stones.power_conversion",
-      "type": "generic",
-      "base": 2.0,
-      "per_level": 0.5,
-      "scaling": "RUNE_LEVEL",
-      "suffix": "DICT:stat.stones.suffix.dmg_per_lvl"
-    }
-  ],
-  "raw_script": "global.Stones.register('ON_ACTION_BUTTON', 'milestone_gamblers_ruin', ctx => {\n    const player = ctx.player;\n    // Key auf die volle ID 'milestone_gamblers_ruin' angepasst\n    if (!player || !global.Stones.isReady(player, 'milestone_gamblers_ruin')) return;\n\n    const mainHand = player.mainHandItem;\n\n    // 1. Prerequisite: Held item MUST be enchanted!\n    if (!mainHand || mainHand.isEmpty() || !mainHand.isEnchanted()) {\n        global.Stones.playSound(player, 'minecraft:entity.villager.no', 'players', 1.0, 0.8);\n        player.tell('c[Gambler\\'s Ruin] You need an enchanted item in your hand as a stake!');\n        return;\n    }\n\n    // 2. Sacrifice: Remove random enchantment & set HUD cooldown\n    const sacPow = Number(global.Stones.removeRandomEnchantment(player) || 1);\n    global.Stones.setCooldown(player, 'milestone_gamblers_ruin', 400); // 20s Cooldown for HUD Sync\n\n    const level = player.level;\n    const pos = player.position();\n    \n    // 3. Roll outcome (0 to 4)\n    const outcome = Math.floor(Math.random() * 5);\n\n    switch (outcome) {\n\n        // ===================================================\n        // OUTCOME 0: ITEM ENCHANTMENT UPGRADE\n        // ===================================================\n        case 0: {\n            mainHand.enchant('minecraft:mending', 1);\n            mainHand.enchant('minecraft:unbreaking', 3);\n\n            global.Stones.playSound(player, 'minecraft:ui.toast.challenge_complete', 'players', 1.0, 1.0);\n            global.Stones.spawnParticles(player, 'minecraft:totem_of_undying', pos.add(0, 1, 0), 60, 0.5, 0.8, 0.5, 0.15);\n            player.tell('6★ WIN! The sacrifice blessed your item with Mending & Unbreaking III!');\n            break;\n        }\n\n        // ===================================================\n        // OUTCOME 1: MASSIVE PLAYER BUFF\n        // ===================================================\n        case 1: {\n            player.potionEffects.add('minecraft:resistance', 3600, 1);\n            player.potionEffects.add('minecraft:strength', 3600, 1);\n\n            global.Stones.playSound(player, 'minecraft:entity.zombie_villager.cure', 'players', 1.0, 1.2);\n            global.Stones.spawnParticles(player, 'minecraft:witch', pos.add(0, 1, 0), 40, 0.5, 1.0, 0.5, 0.05);\n            player.tell('b✦ BLESSING! The sacrificed magic surges through your body for 3 minutes!');\n            break;\n        }\n\n        // ===================================================\n        // OUTCOME 2: SHARD HOUND (ALLIED PET)\n        // ===================================================\n        case 2: {\n            if (level) {\n                let wolf = level.createEntity('wolf');\n                wolf.setPosition(player.x + 1.0, player.y, player.z + 1.0);\n                wolf.mergeNbt({\n                    Owner: String(player.getUuid()),\n                    Tame: true,\n                    CustomName: '{\"text\":\"Shard Hound\"}',\n                    CustomNameVisible: true,\n                    Glowing: true,\n                    CollarColor: 10\n                });\n                wolf.setAttributeBaseValue('generic.max_health', 40.0);\n                wolf.setHealth(40.0);\n                wolf.spawn();\n            }\n\n            global.Stones.playSound(player, 'minecraft:entity.wolf.howl', 'players', 1.0, 1.0);\n            global.Stones.spawnParticles(player, 'minecraft:enchant', pos.add(0, 1, 0), 30, 0.5, 0.5, 0.5, 0.1);\n            player.tell('d✦ LOYAL COMPANION! A magical Shard Hound awakes from the magic!');\n            break;\n        }\n\n        // ===================================================\n        // OUTCOME 3: HOSTILE MONSTER\n        // ===================================================\n        case 3: {\n            if (level) {\n                let zombie = level.createEntity('zombie');\n                zombie.setPosition(player.x + 1.5, player.y, player.z + 1.5);\n                \n                zombie.mergeNbt({\n                    CustomName: '{\"text\":\"cWrath of Sacrificed Magic\"}',\n                    CustomNameVisible: true,\n                    Glowing: true,\n                    HandItems: [\n                        {\n                            id: \"minecraft:netherite_sword\",\n                            Count: 1,\n                            tag: {\n                                Enchantments: [{ id: \"minecraft:sharpness\", lvl: 4 }]\n                            }\n                        },\n                        {}\n                    ],\n                    ArmorDropChances: [0.0, 0.0, 0.0, 0.0]\n                });\n                zombie.spawn();\n                zombie.setTarget(player);\n            }\n\n            global.Stones.playSound(player, 'minecraft:entity.wither.spawn', 'hostile', 0.6, 1.4);\n            global.Stones.spawnParticles(player, 'minecraft:flame', pos.add(0, 1, 0), 40, 0.5, 0.5, 0.5, 0.1);\n            player.tell('c⚠️ BACKFIRE! The sacrificed magic turned into a hostile monster!');\n            break;\n        }\n\n        // ===================================================\n        // OUTCOME 4: TOTAL DESTRUCTION (Item Explodes & Is Destroyed!)\n        // ===================================================\n        case 4: {\n            // Das geopferte Item wird in der Hand vernichtet\n            mainHand.shrink(1);\n\n            global.Stones.explode(player, pos, 4.0, false);\n            global.Stones.playSound(player, 'minecraft:entity.generic.explode', 'players', 1.0, 0.7);\n            global.Stones.spawnParticles(player, 'minecraft:explosion_emitter', pos.add(0, 1, 0), 1, 0, 0, 0, 0);\n\n            player.tell('4☠ TOTAL DESTRUCTION! The item exploded right in your hands!');\n            break;\n        }\n    }\n});",
-  "_template_hash": "7502599b99ec427840c72b201004df29b6007bc329afa6f464d1322b6b99eff4"
+"override_registry_id": "stones:milestone_gamblers_ruin",
+"type": "MILESTONE",
+"name": "DICT:milestone.stones.gamblers_ruin.name",
+"description": "Sacrifices a random enchantment from your held item to gamble for cosmic power. Grants high-tier blessings, powerful buffs, or loyal companions—but carries the risk of summoning deadly monstrosities or destroying your item in a violent explosion.",
+"icon": "stones:textures/gui/skills/aeoncore.png",
+"required_level": 5.0,
+"factor": 0.0,
+"max_level": 20,
+"stats": [
+{
+"id": "risk_multiplier",
+"label": "DICT:stat.stones.risk_multiplier",
+"type": "generic",
+"base": 4.0,
+"per_level": 0.5,
+"scaling": "SOCK_LEVEL",
+"suffix": "DICT:stat.stones.suffix.multiplier"
+},
+{
+"id": "power_conversion",
+"label": "DICT:stat.stones.power_conversion",
+"type": "generic",
+"base": 2.0,
+"per_level": 0.5,
+"scaling": "RUNE_LEVEL",
+"suffix": "DICT:stat.stones.suffix.dmg_per_lvl"
+}
+],
+"raw_script": "stones:scripts/milestone_gamblers_ruin.js"
 }

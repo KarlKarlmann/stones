@@ -32,6 +32,14 @@ issueTrackerURL="https://github.com/KarlKarlmann/stones/issues"
     ordering="AFTER"
     side="BOTH"
 
+
+[[dependencies.stones]]
+    modId="kubejs"
+    mandatory=true
+    versionRange= "2001.6.5-build.26"
+    ordering="NONE"
+    side="SERVER"
+	
 # --- Eigene Pflicht-Mods ---
 [[dependencies.stones]]
     modId="actionbar"
@@ -40,12 +48,6 @@ issueTrackerURL="https://github.com/KarlKarlmann/stones/issues"
     ordering="AFTER"
     side="CLIENT"
 
-[[dependencies.stones]]
-    modId="reward_box"
-    mandatory=true
-    versionRange="[1.0,)"
-    ordering="AFTER"
-    side="BOTH"
 
 # --- Eigene Optionale Mods ---
 [[dependencies.stones]]

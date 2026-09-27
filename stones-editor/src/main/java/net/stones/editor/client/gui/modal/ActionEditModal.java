@@ -150,20 +150,46 @@ public class ActionEditModal extends AbstractStudioModal {
                 // Text: "(Tipp: Aktionen für on_add/on_max können im JSON Tab bearbeitet werden)"
                 layout.addText(net.minecraft.network.chat.Component.translatable("gui.stones.studio.actionedit.text_21").getString());
             }
+			case "stones:deal_damage" -> {
+				actionTitle = Component.translatable("gui.stones.studio.actionedit.title.deal_damage").getString();
+				
+				// Text: "Füge"
+				layout.addText(Component.translatable("gui.stones.studio.actionedit.deal_damage.text_1").getString());
+				layout.addVariableByNameInput("target", 80, "target");
+				
+				// Text: "insgesamt"
+				layout.addText(Component.translatable("gui.stones.studio.actionedit.deal_damage.text_2").getString());
+				layout.addInput("amount", 40, "5.0", true);
+				
+				// Text: "Schaden vom Typ"
+				layout.addText(Component.translatable("gui.stones.studio.actionedit.deal_damage.text_3").getString());
+				layout.addSuggestInput("damage_type", 150, "minecraft:indirect_magic", 7);
+				
+				layout.nextLine();
+				
+				// Text: "zu. Direkte Quelle:"
+				layout.addText(Component.translatable("gui.stones.studio.actionedit.deal_damage.text_4").getString());
+				layout.addInput("direct_attacker", 60, "null", false);
+				
+				// Text: "Indirekte Quelle:"
+				layout.addText(Component.translatable("gui.stones.studio.actionedit.deal_damage.text_5").getString());
+				layout.addVariableByNameInput("indirect_attacker", 60, "player");
+			}
 			case "stones:raw_js" -> {
-				actionTitle = "📜 Raw JavaScript Action";
-				layout.addText("Führe folgenden JavaScript-Code direkt im Event-Kontext aus:");
+				actionTitle = Component.translatable("gui.stones.studio.actionedit.title.raw_js").getString();
+				layout.addText(Component.translatable("gui.stones.studio.actionedit.raw_js.text_1").getString());
 				layout.nextLine();
 
 				int codeWidth = width - 30;
 				int codeHeight = 90;
 				String currentCode = targetNode.jsonData.has("code") 
 						? targetNode.jsonData.get("code").getAsString() 
-						: "// JavaScript Code hier eingeben\n";
+						: Component.translatable("gui.stones.studio.actionedit.raw_js.default_code").getString();
 
 				StudioMultiLineEditBox codeEditor = addModalWidget(new StudioMultiLineEditBox(
 					screen, font, layout.currentX, layout.currentY, codeWidth, codeHeight, 
-					Component.literal("Code"), Component.literal("JavaScript Code...")
+					Component.translatable("gui.stones.studio.actionedit.raw_js.label_code"), 
+					Component.translatable("gui.stones.studio.actionedit.raw_js.hint_code")
 				));
 				codeEditor.setValue(currentCode);
 
@@ -839,6 +865,13 @@ case "stones:is_direct" -> {
                 layout.nextLine();
                 layout.addSuggestInput("tag", 180, "minecraft:is_explosion", 6);
             }
+			case "stones:is_damage_type", "stones:damage_type" -> {
+				actionTitle = Component.translatable("gui.stones.studio.actionedit.title.damage_type").getString();
+				layout.addText(Component.translatable("gui.stones.studio.actionedit.damage_type.text_1").getString());
+				layout.nextLine();
+				// HIER DIE ÄNDERUNG: Typ 6 (DamageTag) -> Typ 7 (DamageType)
+				layout.addSuggestInput("damage_type", 180, "minecraft:in_fire", 7);
+			}
             case "stones:damage_amount", "stones:damage_compare" -> {
                 actionTitle = "💥 Schadenshöhe Prüfen";
                 layout.addText("Die Höhe des erlittenen Schadens ist");
@@ -1076,7 +1109,7 @@ case "stones:is_direct" -> {
             else if (suggestType == 4) field = new StudioSuggestTextField.EffectSuggestField(screen, font, currentX, currentY, width, 14, Component.literal(""));
             else if (suggestType == 5) field = new StudioSuggestTextField.ParticleSuggestField(screen, font, currentX, currentY, width, 14, Component.literal(""));
 			else if (suggestType == 6) field = new StudioSuggestTextField.DamageTagSuggestField(screen, font, currentX, currentY, width, 14, Component.literal(""));
-            
+            else if (suggestType == 7) field = new StudioSuggestTextField.DamageTypeSuggestField(screen, font, currentX, currentY, width, 14, Component.literal(""));
             if (field == null) { 
                 addInput(key, width, defVal, false); 
                 return; 

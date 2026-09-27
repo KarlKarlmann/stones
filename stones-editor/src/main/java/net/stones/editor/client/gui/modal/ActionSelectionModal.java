@@ -60,9 +60,17 @@ public class ActionSelectionModal extends ActionEditModal {
 
         // SCHADEN & HEILUNG
         addType("stones:modify_damage", "💥", json("type", "stones:modify_damage", "multiplier", 1.0, "add", 0.0));
+		
         addType("stones:heal", "❤️", json("type", "stones:heal", "amount", 4.0));
         addType("stones:cancel", "🚫", json("type", "stones:cancel"));
-
+		addType("stones:deal_damage", "🗡️", json(
+            "type", "stones:deal_damage", 
+            "target", "$target", 
+            "amount", 5.0, 
+            "damage_type", "minecraft:indirect_magic",
+            "direct_attacker", "null",
+            "indirect_attacker", "$player"
+        ));
         // LOGIK & KONTROLLE
         addType("stones:cooldown", "⏳", json("type", "stones:cooldown", "name", "$runeId", "ticks", 100));
         addType("stones:delay", "⏰", json("type", "stones:delay", "ticks", 20));
@@ -97,6 +105,23 @@ public class ActionSelectionModal extends ActionEditModal {
 			"drag", 0.92,
 			"gravity", 0.01
 		));
+		addType("stones:spawn_beam", "⚡", json(
+				"type", "stones:spawn_beam",
+				"start", "$player.eye_pos",
+				"end", "$hitPos",
+				"beam_type", "LASER",
+				"texture", "minecraft:textures/entity/beacon_beam.png",
+				"core_width", 0.2,
+				"corona_width", 0.8,
+				"color", "#FFFFFF",
+				"alpha", 1.0,
+				"uv_scroll_speed", 0.2,
+				"uv_repeat", 1.0,
+				"helix_radius", 0.0,
+				"helix_frequency", 0.0,
+				"helix_speed", 0.0,
+				"lifetime", 40
+			));
         // ADVANCED & REFLECTION
         addType("stones:invoke", "⚡", json("type", "stones:invoke", "call", "player.getLookAngle()"));
         addType("stones:set_field", "⚙️", json("type", "stones:set_field", "target", "$player", "field", "hurtTime", "value", "0"));
@@ -119,6 +144,7 @@ public class ActionSelectionModal extends ActionEditModal {
         addType("stones:is_on_fire", "🔥", json("type", "stones:is_on_fire"));
         addType("stones:is_day", "☀️", json("type", "stones:is_day"));
 		addType("stones:is_direct", "🎯", json("type", "stones:is_direct"));
+		addType("stones:is_damage_type", "🛡️", json("type", "stones:is_damage_type", "damage_type", "minecraft:in_fire"));
 		addType("stones:has_damage_tag", "🏷️", json("type", "stones:has_damage_tag", "tag", "minecraft:is_explosion"));
 		addType("stones:damage_amount", "💥", json("type", "stones:damage_amount", "operator", ">=", "value", 5.0));
 

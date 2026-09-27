@@ -57,6 +57,10 @@ public class RuneEnchantment extends Enchantment {
     private final List<String> triggerIds = new ArrayList<>();
     private JsonArray rawBehaviors = null; // Gecachtes Original-JSON für verlustfreien Re-Export
     
+    // Skript-Referenz & Inhalt
+    @Nullable private String rawScriptPath = null; // Z.B. "stones:scripts/milestone_necromancer.js"
+    @Nullable private String rawScriptContent = null; // Der tatsächliche JS-Code
+    
     // Schlanke Metadaten für das ActionSystem (ohne doppelte Buchführung)
     private boolean isActionRune = false;
     @Nullable private String actionCooldownName = null;
@@ -125,6 +129,8 @@ public class RuneEnchantment extends Enchantment {
         this.stats.clear();
         this.triggerIds.clear();
         this.rawBehaviors = null;
+        this.rawScriptPath = null;
+        this.rawScriptContent = null;
         this.isActionRune = false;
         this.actionCooldownName = null;
         this.maxLevel = 1;
@@ -150,6 +156,20 @@ public class RuneEnchantment extends Enchantment {
         return this.rawBehaviors;
     }
 
+    @Nullable
+    public String getRawScriptPath() {
+        return this.rawScriptPath;
+    }
+
+    public void setRawScriptPath(@Nullable String path) {
+        this.rawScriptPath = path;
+    }
+
+    @Nullable
+    public String getRawScriptContent() {
+        return this.rawScriptContent;
+    }
+
     public List<String> getTriggerIds() {
         return this.triggerIds;
     }
@@ -171,6 +191,10 @@ public class RuneEnchantment extends Enchantment {
     }
 
     public void loadFromJson(String id, JsonObject json) {
+        loadFromJson(id, json, null);
+    }
+
+    public void loadFromJson(String id, JsonObject json, @Nullable String resolvedScriptContent) {
         this.logicalId = id; 
 
         if (json.has("type")) {
@@ -218,6 +242,9 @@ public class RuneEnchantment extends Enchantment {
         this.isActionRune = false;
         this.actionCooldownName = null;
         this.triggerIds.clear();
+        this.rawBehaviors = null;
+        this.rawScriptPath = null;
+        this.rawScriptContent = null;
 
         if (json.has("behaviors")) {
             this.rawBehaviors = json.getAsJsonArray("behaviors").deepCopy();
@@ -247,29 +274,17 @@ public class RuneEnchantment extends Enchantment {
                 }
             }
         }
-		if (json.has("raw_script")) {
-			String script = json.get("raw_script").getAsString();
-			
-			// Pattern sucht nach: global.Stones.register('TRIGGER_NAME', 'RUNE_NAME', ...)
-			java.util.regex.Pattern pattern = java.util.regex.Pattern.compile(
-				"global\\.Stones\\.register\\s*\\(\\s*['\"]([^'\"]+)['\"]\\s*,\\s*['\"]([^'\"]+)['\"]"
-			);
-			java.util.regex.Matcher matcher = pattern.matcher(script);
-			
-			while (matcher.find()) {
-				String trigStr = matcher.group(1).trim().toUpperCase();
-				
-				// 1. Jeden gefundenen Trigger (ON_ATTACK, ON_TICK, etc.) in die Java-Liste eintragen
-				if (!trigStr.isEmpty() && !this.triggerIds.contains(trigStr)) {
-					this.triggerIds.add(trigStr);
-				}
-				
-				// 2. Spezieller Flag-Check für das Actionbar-HUD
-				if ("ON_ACTION_BUTTON".equals(trigStr)) {
-					this.isActionRune = true;
-				}
-			}
-		}
+
+        // Pfad im JSON merken (z.B. "stones:scripts/milestone_necromancer.js")
+        if (json.has("raw_script")) {
+            this.rawScriptPath = json.get("raw_script").getAsString().trim();
+        }
+
+        // Gelösten Skriptinhalt annehmen (wurde vom ReloadListener aus der .js Datei geladen)
+        if (resolvedScriptContent != null && !resolvedScriptContent.isBlank()) {
+            this.applyScriptContent(resolvedScriptContent);
+        }
+
         if (json.has("max_level")) {
             this.setMaxLevel(json.get("max_level").getAsInt());
         } else {
@@ -278,6 +293,35 @@ public class RuneEnchantment extends Enchantment {
         
         this.hasServerLogic = true; 
         this.isAwake = true; 
+    }
+
+    public void applyScriptContent(String script) {
+        this.rawScriptContent = script;
+
+        java.util.regex.Pattern registerPattern = java.util.regex.Pattern.compile(
+            "(?:global\\.)?Stones\\.register\\s*\\(\\s*['\"`]([^'\"`]+)['\"`]\\s*,\\s*['\"`](?:[a-z0-9_]+:)?([^'\"`]+)['\"`]"
+        );
+        java.util.regex.Matcher matcher = registerPattern.matcher(script);
+        
+        while (matcher.find()) {
+            String trigStr = matcher.group(1).trim().toUpperCase();
+            
+            if (!trigStr.isEmpty() && !this.triggerIds.contains(trigStr)) {
+                this.triggerIds.add(trigStr);
+            }
+            
+            if ("ON_ACTION_BUTTON".equals(trigStr)) {
+                this.isActionRune = true;
+            }
+        }
+
+        java.util.regex.Pattern cdPattern = java.util.regex.Pattern.compile(
+            "(?:global\\.)?Stones\\.(?:setCooldown|isReady)\\s*\\(\\s*[^,]+,\\s*['\"`](?:[a-z0-9_]+:)?([^'\"`]+)['\"`]"
+        );
+        java.util.regex.Matcher cdMatcher = cdPattern.matcher(script);
+        if (cdMatcher.find()) {
+            this.actionCooldownName = cdMatcher.group(1).trim().toLowerCase();
+        }
     }
 
     public static Component resolveComponent(@Nullable String input) {
@@ -378,6 +422,13 @@ public class RuneEnchantment extends Enchantment {
             tag.putString("actionCooldownName", this.actionCooldownName);
         }
 
+        if (this.rawScriptPath != null) {
+            tag.putString("rawScriptPath", this.rawScriptPath);
+        }
+        if (this.rawScriptContent != null) {
+            tag.putString("rawScriptContent", this.rawScriptContent);
+        }
+
         ListTag triggerList = new ListTag();
         for (String trig : this.triggerIds) {
             triggerList.add(StringTag.valueOf(trig));
@@ -435,6 +486,13 @@ public class RuneEnchantment extends Enchantment {
 
         this.isActionRune = tag.getBoolean("isActionRune");
         this.actionCooldownName = tag.contains("actionCooldownName") ? tag.getString("actionCooldownName") : null;
+
+        if (tag.contains("rawScriptPath")) {
+            this.rawScriptPath = tag.getString("rawScriptPath");
+        }
+        if (tag.contains("rawScriptContent")) {
+            this.rawScriptContent = tag.getString("rawScriptContent");
+        }
 
         this.triggerIds.clear();
         ListTag triggerList = tag.getList("triggerIds", Tag.TAG_STRING);

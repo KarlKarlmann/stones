@@ -102,25 +102,36 @@ global.Stones = {
             return false;
         }
     },
+	isDamageType: function(event, typeId) {
+		try {
+			return StonesBridge.isDamageType(event, typeId);
+		} catch (e) {
+			return false;
+		}
+	},
 	spawnSprite: function(player, pos, velocity, config) {
         StonesBridge.spawnSprite(player, pos, velocity, config);
     },
-	spawnBeam: function(player, start, end, width, texture, r, g, b, a, scrollSpeed, repeat, blend, lifetime) {
-        if (!player || !start || !end) return;
+	spawnBeam: function(player, start, end, type, texture, coreWidth, coronaWidth, r, g, b, a, scrollSpeed, repeat, helixRadius, helixFreq, helixSpeed, lifetime) {
+		if (!player || !start || !end) return;
 
-        var w = (width !== undefined && width !== null) ? Number(width) : 0.8;
-        var tex = texture ? String(texture) : 'minecraft:textures/entity/beacon_beam.png';
-        var cr = (r !== undefined && r !== null) ? Number(r) : 1.0;
-        var cg = (g !== undefined && g !== null) ? Number(g) : 1.0;
-        var cb = (b !== undefined && b !== null) ? Number(b) : 1.0;
-        var ca = (a !== undefined && a !== null) ? Number(a) : 1.0;
-        var spd = (scrollSpeed !== undefined && scrollSpeed !== null) ? Number(scrollSpeed) : 0.2;
-        var rep = (repeat !== undefined && repeat !== null) ? Number(repeat) : 1.0;
-        var bMode = blend ? String(blend) : 'ADDITIVE';
-        var lt = (lifetime !== undefined && lifetime !== null) ? Math.round(Number(lifetime)) : 40;
+		var bType = type ? String(type) : 'LASER';
+		var tex = texture ? String(texture) : 'minecraft:textures/entity/beacon_beam.png';
+		var cWidth = (coreWidth !== undefined && coreWidth !== null) ? Number(coreWidth) : 0.2;
+		var corWidth = (coronaWidth !== undefined && coronaWidth !== null) ? Number(coronaWidth) : 0.8;
+		var cr = (r !== undefined && r !== null) ? Number(r) : 1.0;
+		var cg = (g !== undefined && g !== null) ? Number(g) : 1.0;
+		var cb = (b !== undefined && b !== null) ? Number(b) : 1.0;
+		var ca = (a !== undefined && a !== null) ? Number(a) : 1.0;
+		var spd = (scrollSpeed !== undefined && scrollSpeed !== null) ? Number(scrollSpeed) : 0.2;
+		var rep = (repeat !== undefined && repeat !== null) ? Number(repeat) : 1.0;
+		var hRad = (helixRadius !== undefined && helixRadius !== null) ? Number(helixRadius) : 0.0;
+		var hFreq = (helixFreq !== undefined && helixFreq !== null) ? Number(helixFreq) : 0.0;
+		var hSpd = (helixSpeed !== undefined && helixSpeed !== null) ? Number(helixSpeed) : 0.0;
+		var lt = (lifetime !== undefined && lifetime !== null) ? Math.round(Number(lifetime)) : 40;
 
-        StonesBridge.spawnBeam(player, start, end, w, tex, cr, cg, cb, ca, spd, rep, bMode, lt);
-    },
+		StonesBridge.spawnBeam(player, start, end, bType, tex, cWidth, corWidth, cr, cg, cb, ca, spd, rep, hRad, hFreq, hSpd, lt);
+	},
     readNbt: function(target, path) {
         return StonesBridge.readNbt(target, path);
     },
@@ -133,7 +144,17 @@ global.Stones = {
     setBlock: function(level, pos, blockId) {
         StonesBridge.setBlock(level, pos, blockId);
     },
-
+	dealDamage: function(directAttacker, indirectAttacker, target, amount, damageTypeId) {
+		// Die Java-Methode validiert die Parameter selbst und wirft saubere Exceptions, 
+		// falls damageTypeId null, leer oder ungültig ist.
+		StonesBridge.dealDamage(
+			directAttacker, 
+			indirectAttacker, 
+			target, 
+			Number(amount), 
+			damageTypeId
+		);
+	},
     explode: function(player, pos, radius, fire) {
         StonesBridge.explode(player, pos, Number(radius), fire === true || fire === 'true');
     },

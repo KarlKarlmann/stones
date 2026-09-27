@@ -232,6 +232,12 @@ public class StudioContextMenu {
                         // Text: "Parameter: Ticks ändern..."
                         options.add(Component.translatable("gui.stones.studio.contextmenu.param.ticks").getString());
                     }
+					case "stones:deal_damage" -> {
+                        // Text: "Parameter: Schadenshöhe ändern..."
+                        options.add(Component.translatable("gui.stones.studio.contextmenu.param.damage_amount").getString());
+                        // Text: "Parameter: Schadens-Typ ändern..."
+                        options.add(Component.translatable("gui.stones.studio.contextmenu.param.damage_type").getString());
+                    }
                     case "stones:apply_effect" -> {
                         // Text: "Parameter: Effekt-ID ändern..."
                         options.add(Component.translatable("gui.stones.studio.contextmenu.param.effect_id").getString());
@@ -485,6 +491,16 @@ public class StudioContextMenu {
                 Component.translatable("gui.stones.studio.contextmenu.param.chance.title").getString(),
                 Component.translatable("gui.stones.studio.contextmenu.param.chance.desc").getString(),
                 json.has("value") ? json.get("value").getAsString() : "0.5", true));
+		} else if (option.equals(Component.translatable("gui.stones.studio.contextmenu.param.damage_amount").getString())) {
+            screen.openEditModal(new ActionParameterModal(screen, targetNode, "amount", 
+                Component.translatable("gui.stones.studio.contextmenu.param.damage_amount.title").getString(),
+                Component.translatable("gui.stones.studio.contextmenu.param.damage_amount.desc").getString(),
+                json.has("amount") ? json.get("amount").getAsString() : "5.0", true));
+        } else if (option.equals(Component.translatable("gui.stones.studio.contextmenu.param.damage_type").getString())) {
+            screen.openEditModal(new ActionParameterModal(screen, targetNode, "damage_type", 
+                Component.translatable("gui.stones.studio.contextmenu.param.damage_type.title").getString(),
+                Component.translatable("gui.stones.studio.contextmenu.param.damage_type.desc").getString(),
+                json.has("damage_type") ? json.get("damage_type").getAsString() : "minecraft:generic", false));
         }
     }
 

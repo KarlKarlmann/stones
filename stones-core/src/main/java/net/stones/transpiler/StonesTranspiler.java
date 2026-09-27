@@ -1,5 +1,6 @@
 package net.stones.transpiler;
 
+import javax.annotation.Nullable;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -18,60 +19,62 @@ import java.util.regex.Pattern;
 public class StonesTranspiler {
 
     private static final Pattern VAR_PATTERN = Pattern.compile("\\$([a-zA-Z0-9_]+)");
-	private static final Pattern BASE64_IMAGE_PATTERN = Pattern.compile("data:image/[^\"'\\s]+");
-	
-	public static String transpile(String fileName, JsonObject json) {
-		boolean hasRawScript = json.has("raw_script") && !json.get("raw_script").getAsString().trim().isEmpty();
-		boolean hasBehaviors = json.has("behaviors");
+    private static final Pattern BASE64_IMAGE_PATTERN = Pattern.compile("data:image/[^\"'\\s]+");
+    
+    public static String transpile(String fileName, JsonObject json) {
+        return transpile(fileName, json, null);
+    }
 
-		// Wenn weder RawScript noch Behaviors da sind, direkt abbrechen
-		if (!hasRawScript && !hasBehaviors) return "";
+    public static String transpile(String fileName, JsonObject json, @Nullable String resolvedScript) {
+        boolean hasRawScript = resolvedScript != null && !resolvedScript.isBlank();
+        boolean hasBehaviors = json.has("behaviors") && json.get("behaviors").isJsonArray() && !json.getAsJsonArray("behaviors").isEmpty();
 
-		String baseRuneName = fileName.replace(".json", "");
-		StringBuilder sb = new StringBuilder();
+        // Wenn weder externes Skript noch visuelle Behaviors vorhanden sind, abbrechen
+        if (!hasRawScript && !hasBehaviors) return "";
 
-		// 1. Header-Kommentar
-		sb.append("// ========================================================\n");
-		sb.append("// GENERIERTER CODE AUS STONES STUDIO: ").append(fileName).append("\n");
-		sb.append("// NICHT MANUELL EDITIEREN - WIRD BEIM RELOAD UEBERSCHRIEBEN\n");
-		sb.append("// ========================================================\n\n");
+        String baseRuneName = fileName.replace(".json", "");
+        StringBuilder sb = new StringBuilder();
 
-		// 2. Gemeinsamer IIFE-Scope & Stat-Initialisierung
-		sb.append("(() => {\n");
-		sb.append("    // --- Zentrale Stat-Initialisierung fuer diese Rune ---\n");
-		sb.append("    function initStats(ctx) {\n");
-		sb.append("        let _runeData = global.Stones.getRuneData(ctx.player, 'stones:").append(baseRuneName).append("');\n");
-		sb.append("        ctx['RuneLevel'] = _runeData.runeLevel || 1;\n");
-		sb.append("        ctx['SocketLevel'] = _runeData.socketLevel || 1;\n");
-		sb.append("        ctx['RuneMult'] = _runeData.mult || 1.0;\n");
-		sb.append("        // --- Dynamische Berechnung der Stats aus dem JSON ---\n");
-		injectStats(json, sb, 2);
-		sb.append("    }\n\n");
+        // 1. Header-Kommentar
+        sb.append("// ========================================================\n");
+        sb.append("// GENERIERTER CODE AUS STONES STUDIO: ").append(fileName).append("\n");
+        sb.append("// NICHT MANUELL EDITIEREN - WIRD BEIM RELOAD UEBERSCHRIEBEN\n");
+        sb.append("// ========================================================\n\n");
 
-		// 3. Weiche: Raw Script ODER Visueller Baum
-			if (hasRawScript) {
-				sb.append("    // --- NATIVES BENUTZER-SKRIPT (RAW JS) ---\n");
-				String rawScript = json.get("raw_script").getAsString();
-				
-				// Base64 extrahieren, im Server registrieren und durch dynamic: ID ersetzen
-				rawScript = processBase64InScript(rawScript);
+        // 2. Gemeinsamer IIFE-Scope & Stat-Initialisierung
+        sb.append("(() => {\n");
+        sb.append("    // --- Zentrale Stat-Initialisierung fuer diese Rune ---\n");
+        sb.append("    function initStats(ctx) {\n");
+        sb.append("        let _runeData = global.Stones.getRuneData(ctx.player, 'stones:").append(baseRuneName).append("');\n");
+        sb.append("        ctx['RuneLevel'] = _runeData.runeLevel || 1;\n");
+        sb.append("        ctx['SocketLevel'] = _runeData.socketLevel || 1;\n");
+        sb.append("        ctx['RuneMult'] = _runeData.mult || 1.0;\n");
+        sb.append("        // --- Dynamische Berechnung der Stats aus dem JSON ---\n");
+        injectStats(json, sb, 2);
+        sb.append("    }\n\n");
 
-				for (String line : rawScript.split("\\r?\\n")) {
-					sb.append("    ").append(line).append("\n");
-				}
-			} else {
-			JsonArray behaviors = json.getAsJsonArray("behaviors");
-			for (JsonElement bEl : behaviors) {
-				if (bEl.isJsonObject()) {
-					transpileBehavior(baseRuneName, bEl.getAsJsonObject(), sb);
-				}
-			}
-		}
+        // 3. Weiche: Externes Skript (aus .js) ODER Visueller Baum (behaviors)
+        if (hasRawScript) {
+            sb.append("    // --- NATIVES BENUTZER-SKRIPT (RAW JS) ---\n");
+            // Base64-Grafiken auch im Skript finden, im RAM registrieren und als dynamic: ID einsetzen
+            String processedScript = processBase64InScript(resolvedScript);
 
-		// 4. Scope-Abschluss
-		sb.append("})();\n");
-		return sb.toString();
-	}
+            for (String line : processedScript.split("\\r?\\n")) {
+                sb.append("    ").append(line).append("\n");
+            }
+        } else {
+            JsonArray behaviors = json.getAsJsonArray("behaviors");
+            for (JsonElement bEl : behaviors) {
+                if (bEl.isJsonObject()) {
+                    transpileBehavior(baseRuneName, bEl.getAsJsonObject(), sb);
+                }
+            }
+        }
+
+        // 4. Scope-Abschluss
+        sb.append("})();\n");
+        return sb.toString();
+    }
 
     private static void transpileBehavior(String runeName, JsonObject behavior, StringBuilder sb) {
         if (!behavior.has("trigger")) {
@@ -268,6 +271,11 @@ public class StonesTranspiler {
 				if (!tag.contains(":")) tag = "minecraft:" + tag;
 				yield "global.Stones.hasDamageTag(ctx.event, '" + tag + "')";
 			}
+			case "stones:is_damage_type", "stones:damage_type" -> {
+				String damageType = getString(cond, "damage_type", getString(cond, "type_id", "minecraft:in_fire"));
+				if (!damageType.contains(":")) damageType = "minecraft:" + damageType;
+				yield "global.Stones.isDamageType(ctx.event, '" + damageType + "')";
+			}
             case "stones:damage_amount", "stones:damage_compare" -> {
                 String op = getString(cond, "operator", ">=");
                 String val = resolveVal(cond, "value", "0.0");
@@ -300,11 +308,13 @@ public class StonesTranspiler {
                 case "stones:add_velocity" -> transpileVelocityAction(act, sb, indent);
                 case "stones:heal" -> transpileHealAction(act, sb, indent);
                 case "stones:apply_effect" -> transpileApplyEffectAction(act, sb, indent);
+				case "stones:deal_damage" -> transpileDealDamageAction(act, sb, indent);
                 case "stones:modify_damage" -> transpileModifyDamageAction(act, sb, indent);
                 case "stones:cancel" -> sb.append(pad).append("if (ctx.event) ctx.event.cancel();\n");
                 case "stones:play_sound" -> transpilePlaySoundAction(act, sb, indent);
                 case "stones:spawn_particles" -> transpileSpawnParticlesAction(act, sb, indent);
 				case "stones:spawn_sprite" -> transpileSpawnSpriteAction(act, sb, indent);
+				case "stones:spawn_beam" -> transpileSpawnBeamAction(act, sb, indent);
                 case "stones:particle_orbit" -> transpileParticleOrbitAction(act, sb, indent);
                 case "stones:read_nbt" -> transpileReadNbtAction(act, sb, indent);
                 case "stones:cooldown" -> transpileCooldownAction(act, sb, indent);
@@ -442,6 +452,72 @@ public class StonesTranspiler {
 		sb.append(pad).append("    });\n");
 		sb.append(pad).append("}\n");
 	}
+
+	private static void transpileSpawnBeamAction(JsonObject act, StringBuilder sb, int indent) {
+		String pad = "    ".repeat(indent);
+
+		// 1. Vektoren & Parameter auflösen
+		String start = resolveVal(act, "start", "ctx.player.eyePosition");
+		String end = resolveVal(act, "end", "ctx.player.position()");
+
+		// Falls $player.eye_pos eingegeben wurde -> auf KubeJS eyePosition korrigieren
+		start = start.replace(".eye_pos", ".eyePosition");
+		end = end.replace(".eye_pos", ".eyePosition");
+
+		// Falls ctx.target direkt als Vektor übergeben wurde -> Koordinaten der Entity abfragen
+		if (start.equals("ctx.target")) {
+			start = "(ctx.target ? ctx.target.eyePosition : ctx.player.position())";
+		}
+		if (end.equals("ctx.target")) {
+			end = "(ctx.target ? ctx.target.position() : ctx.player.position())";
+		}
+
+		String beamType = getString(act, "beam_type", "LASER");
+
+		String rawTex = getString(act, "texture", "minecraft:textures/entity/beacon_beam.png");
+		String safeTex = rawTex.startsWith("data:") ? ServerTextureRegistry.processTextureForNetwork(rawTex) : rawTex;
+
+		String coreWidth = resolveVal(act, "core_width", "0.2");
+		String coronaWidth = resolveVal(act, "corona_width", "0.8");
+
+		// 2. Hex-Farbe (#RRGGBB) zu R, G, B floats umrechnen
+		String hex = getString(act, "color", "#FFFFFF").replace("#", "");
+		float r = 1.0f, g = 1.0f, b = 1.0f;
+		try {
+			int rgb = Integer.parseInt(hex, 16);
+			r = ((rgb >> 16) & 0xFF) / 255.0f;
+			g = ((rgb >> 8) & 0xFF) / 255.0f;
+			b = (rgb & 0xFF) / 255.0f;
+		} catch (Exception ignored) {}
+
+		String alpha = resolveVal(act, "alpha", "1.0");
+		String scrollSpeed = resolveVal(act, "uv_scroll_speed", "0.2");
+		String repeat = resolveVal(act, "uv_repeat", "1.0");
+
+		String helixRadius = resolveVal(act, "helix_radius", "0.0");
+		String helixFreq = resolveVal(act, "helix_frequency", "0.0");
+		String helixSpeed = resolveVal(act, "helix_speed", "0.0");
+		String lifetime = resolveVal(act, "lifetime", "40");
+
+		// 3. Generierung des Aufrufs (ohne Java 'f'-Suffixes für sauberes JS!)
+		sb.append(pad).append("global.Stones.spawnBeam(ctx.player, ")
+		  .append(start).append(", ")
+		  .append(end).append(", '")
+		  .append(beamType).append("', '")
+		  .append(safeTex).append("', ")
+		  .append(coreWidth).append(", ")
+		  .append(coronaWidth).append(", ")
+		  .append(r).append(", ")
+		  .append(g).append(", ")
+		  .append(b).append(", ")
+		  .append(alpha).append(", ")
+		  .append(scrollSpeed).append(", ")
+		  .append(repeat).append(", ")
+		  .append(helixRadius).append(", ")
+		  .append(helixFreq).append(", ")
+		  .append(helixSpeed).append(", ")
+		  .append(lifetime).append(");\n");
+	}
 	
     private static void transpileFindBlocksAction(JsonObject act, StringBuilder sb, int indent) {
         String pad = "    ".repeat(indent);
@@ -477,7 +553,25 @@ public class StonesTranspiler {
         String pos = resolveVal(act, "pos", "ctx.player.blockPosition()");
         sb.append(pad).append("global.Stones.setBlock(ctx.player.level, ").append(pos).append(", '").append(block).append("');\n");
     }
+	
+	private static void transpileDealDamageAction(JsonObject act, StringBuilder sb, int indent) {
+		String pad = "    ".repeat(indent);
+		String target = resolveTarget(act, "target");
+		String amount = resolveVal(act, "amount", "5.0");
+		String damageType = getString(act, "damage_type", "");
 
+		// Nutzt jetzt resolveEntityOrNull für Angreifer & Schadensquelle!
+		String direct = resolveEntityOrNull(act, "direct_attacker", "null");
+		String indirect = resolveEntityOrNull(act, "indirect_attacker", "ctx.player");
+
+		sb.append(pad).append("global.Stones.dealDamage(")
+		  .append(direct).append(", ")
+		  .append(indirect).append(", ")
+		  .append(target).append(", ")
+		  .append(amount).append(", '")
+		  .append(damageType).append("');\n");
+	}
+	
     private static void transpileExplodeAction(JsonObject act, StringBuilder sb, int indent) {
         String pad = "    ".repeat(indent);
         String radius = resolveVal(act, "radius", "3.0");
@@ -819,6 +913,15 @@ public class StonesTranspiler {
         String interpolated = m.replaceAll("\\${ctx['$1']}");
         sb.append(pad).append("ctx.player.server.runCommandSilent(`").append(interpolated).append("`);\n");
     }
+
+	private static String resolveEntityOrNull(JsonObject act, String key, String defaultExpr) {
+		if (!act.has(key)) return resolveVariable(defaultExpr);
+		String val = act.get(key).getAsString().trim();
+		if (val.isEmpty() || val.equals("null")) return "null";
+
+		// Reicht 'val' (egal ob "player", "$player", "victim", etc.) direkt an die zentrale Logik weiter
+		return resolveVariable(val);
+	}
 
 	private static String resolveVariable(String var) {
 		// Entfernt ein mögliches $ am Anfang

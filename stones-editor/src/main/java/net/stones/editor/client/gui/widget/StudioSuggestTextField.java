@@ -15,6 +15,7 @@ import net.stones.editor.client.gui.StonesStudioScreen;
 import net.stones.editor.client.gui.widget.StudioTextField;
 import net.stones.editor.client.gui.modal.IconEditModal;
 import net.stones.editor.client.gui.util.DamageTagRegistry;
+import net.stones.editor.client.gui.util.DamageTypeRegistry;
 /**
  * Eine abstrakte Elternklasse für Textfelder mit automatischer Vorschlagsliste (Auto-Complete).
  * Kapselt die gesamte komplexe Navigations-, Filter-, Scroll- und Rendering-Logik.
@@ -853,7 +854,19 @@ public abstract class StudioSuggestTextField extends StudioTextField {
             }
         }
     }
-	
+	public static class DamageTypeSuggestField extends StudioSuggestTextField {
+        public DamageTypeSuggestField(StonesStudioScreen screen, Font font, int x, int y, int width, int height, Component message) {
+            super(screen, font, x, y, width, height, message);
+            populateSuggestions();
+        }
+
+        @Override
+        protected void populateSuggestions() {
+            this.suggestions.clear();
+            this.suggestions.addAll(net.stones.editor.client.gui.util.DamageTypeRegistry.getAvailableDamageTypes());
+            updateFilteredSuggestions(this.getValue());
+        }
+    }
     public static class VariableSuggestField extends StudioSuggestTextField {
         private static final int TYPE_GLOBAL = 0;
         private static final int TYPE_CONTEXT = 1;

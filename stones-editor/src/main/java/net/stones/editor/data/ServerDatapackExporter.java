@@ -1,4 +1,4 @@
-package net.stones.util;
+package net.stones.editor.data;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
@@ -13,25 +13,16 @@ import net.minecraftforge.registries.ForgeRegistries;
 import net.stones.StonesMod;
 import net.stones.enchantment.RuneEnchantment;
 import net.stones.enchantment.RuneStat;
-
+import javax.annotation.Nullable;
 import java.io.File;
 import java.io.FileWriter;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 
-/**
- * Server-seitiger Datapack-Exporter für das Stones Studio.
- * Läuft sicher auf Dedicated Servern (ohne Client-Klassen) und schreibt
- * die Datapacks direkt in das Server-Verzeichnis.
- */
 public class ServerDatapackExporter {
 
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create();
 
-    /**
-     * Erstellt ein neues Datapack auf der Server-Festplatte und füllt es mit allen
-     * aktuell registrierten und erwachten RuneEnchantments.
-     */
     public static void createAndExportNewPack(ServerPlayer player, String packName) {
         try {
             File datapacksDir = FMLPaths.GAMEDIR.get().resolve("datapacks").toFile();
@@ -51,14 +42,14 @@ public class ServerDatapackExporter {
 
             Files.writeString(metaFile.toPath(), GSON.toJson(meta), StandardCharsets.UTF_8);
 
-            // 2. data/stones_workspace/enchantments Ordner anlegen
+            // 2. data/stones_workspace/enchantments und data/stones_workspace/scripts anlegen
             File enchantmentsDir = new File(packDir, "data/stones_workspace/enchantments");
-            if (!enchantmentsDir.exists()) {
-                enchantmentsDir.mkdirs();
-            }
+            File scriptsDir = new File(packDir, "data/stones_workspace/scripts");
+            if (!enchantmentsDir.exists()) enchantmentsDir.mkdirs();
+            if (!scriptsDir.exists()) scriptsDir.mkdirs();
 
             // 3. Alle registrierten, erwachten Hüllen serialisieren und speichern
-            int exportCount = exportAllRunesToDir(enchantmentsDir);
+            int exportCount = exportAllRunesToDir(enchantmentsDir, scriptsDir);
 
             player.sendSystemMessage(Component.literal("§a[Stones Server] Datapack '" + packName + "' erfolgreich erstellt! (" + exportCount + " Enchantments)"));
             StonesMod.LOGGER.info("[Stones Server] Datapack '{}' wurde von Spieler {} erstellt ({} Enchantments).", packName, player.getName().getString(), exportCount);
@@ -69,27 +60,39 @@ public class ServerDatapackExporter {
         }
     }
 
-    /**
-     * Schreibt alle registrierten RuneEnchantments in das angegebene Verzeichnis.
-     * Server-safe Hilfsmethode, die auch beim initialen Setup des Standard-Packs verwendet werden kann.
-     */
-    public static int exportAllRunesToDir(File enchantmentsDir) {
+    public static int exportAllRunesToDir(File enchantmentsDir, File scriptsDir) {
         int exportCount = 0;
-        if (!enchantmentsDir.exists()) {
-            enchantmentsDir.mkdirs();
-        }
+        if (!enchantmentsDir.exists()) enchantmentsDir.mkdirs();
+        if (!scriptsDir.exists()) scriptsDir.mkdirs();
 
         for (Enchantment enchantment : ForgeRegistries.ENCHANTMENTS.getValues()) {
             if (enchantment instanceof RuneEnchantment rune) {
                 ResourceLocation registryId = ForgeRegistries.ENCHANTMENTS.getKey(rune);
-                
                 if (registryId != null) {
                     // Prüft, ob ein Enchantment mit "stones:<enchantmentname>" existiert
                     ResourceLocation expectedStonesId = new ResourceLocation(StonesMod.MODID, registryId.getPath());
                     if (!ForgeRegistries.ENCHANTMENTS.containsKey(expectedStonesId)) {
-                        continue; // Existiert nicht -> JSON wird nicht geschrieben
+                        continue;
                     }
 
+                    // 1. Skripte exportieren: stones: und stones_workspace: gehören zu uns!
+                    // Echte Dritt-Mods (z. B. other_mod:kube_js/...) werden nicht angefasst.
+                    ResourceLocation originalScriptLoc = rune.getRawScriptPath() != null ? ResourceLocation.tryParse(rune.getRawScriptPath()) : null;
+                    boolean isForeignNamespace = originalScriptLoc != null 
+                        && !originalScriptLoc.getNamespace().equalsIgnoreCase(StonesMod.MODID) 
+                        && !originalScriptLoc.getNamespace().equalsIgnoreCase("stones_workspace");
+
+                    if (!isForeignNamespace && rune.getRawScriptContent() != null && !rune.getRawScriptContent().isBlank()) {
+                        String scriptFileName = resolveScriptFileName(rune, registryId);
+                        File scriptFile = new File(scriptsDir, scriptFileName + ".js");
+                        try {
+                            Files.writeString(scriptFile.toPath(), rune.getRawScriptContent(), StandardCharsets.UTF_8);
+                        } catch (Exception e) {
+                            StonesMod.LOGGER.error("[Stones] Fehler beim Schreiben des Skripts für " + registryId + ": ", e);
+                        }
+                    }
+
+                    // 2. Serialisiere das JSON
                     JsonObject serialized = serializeRune(rune);
                     File runeFile = new File(enchantmentsDir, registryId.getPath() + ".json");
                     
@@ -105,23 +108,16 @@ public class ServerDatapackExporter {
         return exportCount;
     }
 
-    /**
-     * Serialisiert ein Java-basiertes RuneEnchantment dynamisch in das exakte
-     * JSON-Format inklusive Hash-Einstempelung.
-     */
     public static JsonObject serializeRune(RuneEnchantment rune) {
         JsonObject json = new JsonObject();
         
-        // 1. Zwingende Registry-Signatur zur Identifikation im ReloadListener (Multiplayer & Cross-Mod Brücken)
         ResourceLocation trueId = ForgeRegistries.ENCHANTMENTS.getKey(rune);
         if (trueId != null) {
             json.addProperty("override_registry_id", trueId.toString());
         }
 
-        // Core-Typisierung
         json.addProperty("type", rune.type.name());
         
-        // Reflection-Lookups für private Feld-Eigenschaften
         String name = getPrivateFieldString(rune, "customName");
         if (name != null) json.addProperty("name", name);
         
@@ -134,7 +130,6 @@ public class ServerDatapackExporter {
         json.addProperty("required_level", rune.baseRequiredLevel);
         json.addProperty("factor", rune.factor);
         
-        // Boolean Flags
         if (rune.isCurse()) {
             json.addProperty("is_curse", true);
         }
@@ -146,7 +141,6 @@ public class ServerDatapackExporter {
 
         json.addProperty("max_level", rune.getMaxLevel());
 
-        // 2. Attribute / MobEffect Routing
         if (rune.targetAttribute != null) {
             ResourceLocation attrId = ForgeRegistries.ATTRIBUTES.getKey(rune.targetAttribute);
             if (attrId != null) {
@@ -162,7 +156,6 @@ public class ServerDatapackExporter {
             }
         }
 
-        // 3. Stats (Werte-Skalierung)
         if (!rune.getStats().isEmpty()) {
             JsonArray statsArray = new JsonArray();
             for (RuneStat stat : rune.getStats()) {
@@ -188,8 +181,20 @@ public class ServerDatapackExporter {
             json.add("stats", statsArray);
         }
 
-        // 4. Behaviors: 100% verlustfrei direkt aus dem gecachten JSON des Enchantments
-        if (rune.getRawBehaviors() != null && !rune.getRawBehaviors().isEmpty()) {
+        // 4. raw_script Verlinkung
+        ResourceLocation originalScriptLoc = rune.getRawScriptPath() != null ? ResourceLocation.tryParse(rune.getRawScriptPath()) : null;
+        boolean isForeignNamespace = originalScriptLoc != null 
+            && !originalScriptLoc.getNamespace().equalsIgnoreCase(StonesMod.MODID) 
+            && !originalScriptLoc.getNamespace().equalsIgnoreCase("stones_workspace");
+
+        if (rune.getRawScriptPath() != null) {
+            // Behält die originale ResourceLocation bei (z.B. "stones:scripts/milestone_necromancer.js")
+            json.addProperty("raw_script", rune.getRawScriptPath());
+        } else if (rune.getRawScriptContent() != null && !rune.getRawScriptContent().isBlank()) {
+            // Standard-Verlinkung auf den stones-Namespace
+            String scriptFileName = resolveScriptFileName(rune, trueId);
+            json.addProperty("raw_script", StonesMod.MODID + ":scripts/" + scriptFileName + ".js");
+        } else if (rune.getRawBehaviors() != null && !rune.getRawBehaviors().isEmpty()) {
             json.add("behaviors", rune.getRawBehaviors().deepCopy());
         }
 
@@ -199,6 +204,24 @@ public class ServerDatapackExporter {
         }
 
         return json;
+    }
+
+    private static String resolveScriptFileName(RuneEnchantment rune, @Nullable ResourceLocation fallbackId) {
+        if (rune.getRawScriptPath() != null) {
+            ResourceLocation loc = ResourceLocation.tryParse(rune.getRawScriptPath());
+            if (loc != null) {
+                String path = loc.getPath();
+                int lastSlash = path.lastIndexOf('/');
+                String fn = lastSlash != -1 ? path.substring(lastSlash + 1) : path;
+                if (fn.endsWith(".js")) {
+                    fn = fn.substring(0, fn.length() - 3);
+                }
+                if (!fn.isBlank()) {
+                    return fn;
+                }
+            }
+        }
+        return fallbackId != null ? fallbackId.getPath() : rune.getLogicalId();
     }
 
     private static String getPrivateFieldString(Object obj, String fieldName) {

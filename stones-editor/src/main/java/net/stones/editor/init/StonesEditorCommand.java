@@ -12,7 +12,7 @@ import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.loading.FMLPaths;
 import net.stones.editor.StonesEditorMod;
 import net.stones.editor.init.StonesEditorConfig;
-import net.stones.util.ServerDatapackExporter;
+import net.stones.editor.data.ServerDatapackExporter;
 
 import java.io.File;
 

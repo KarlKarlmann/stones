@@ -41,6 +41,7 @@ import net.stones.editor.client.gui.modal.ActionEditModal;
 import net.stones.editor.client.gui.modal.AbstractStudioModal;
 import net.stones.editor.client.gui.modal.TemplateUpdateModal;
 import net.stones.editor.client.gui.modal.FxEditModal;
+import net.stones.editor.client.gui.modal.BeamEditModal;
 
 /**
  * ARCHITEKTUR: STONES STUDIO ORCHESTRATOR
@@ -49,6 +50,7 @@ import net.stones.editor.client.gui.modal.FxEditModal;
 public class StonesStudioScreen extends Screen {
 
     public static final int LEFT_PANEL_WIDTH = 180;
+	public static final List<String> activePackScripts = new ArrayList<>();
     private boolean leftPanelOpen = true;
 
     // --- Accordion-Zustände auf dem Bildschirm ---
@@ -56,9 +58,10 @@ public class StonesStudioScreen extends Screen {
     public static boolean isStatsExpanded = true;
 
     // --- Raw JS Editor Komponenten ---
-    private Button btnToggleScriptMode;
-    public StudioMultiLineEditBox fldRawScript;
-
+	private Button btnToggleScriptMode;
+	public net.stones.editor.client.gui.widget.StudioTextField fldRawScriptLink;
+	public net.stones.editor.client.gui.widget.StudioMultiLineEditBox fldRawScriptContent; 
+	
     // --- Globaler Scroll-Offset für den gesamten rechten Workspace-Screen ---
     private double mainScrollY = 0;
 
@@ -115,10 +118,10 @@ public class StonesStudioScreen extends Screen {
         checkLocalWorldPacks();
     }
 
-    public boolean isRawJsMode() {
-        return currentRuneJson != null && currentRuneJson.has("raw_script") 
-            && !currentRuneJson.get("raw_script").getAsString().isEmpty();
-    }
+	public boolean isRawJsMode() {
+		return currentRuneJson != null && currentRuneJson.has("raw_script") 
+			&& !currentRuneJson.get("raw_script").getAsString().isEmpty();
+	}
 
     public Font getFont() { 
         return this.font; 
@@ -138,39 +141,65 @@ public class StonesStudioScreen extends Screen {
         this.deferredTooltipY = y;
     }
 
-    public static void receiveServerPackList(List<String> serverPacks, String activePackName, boolean authorized, List<String> files) {
-        isAuthorized = authorized;
-        discoveredPacks.clear();
-        serverActivePackName = activePackName;
+	public static void receiveServerPackList(List<String> serverPacks, String activePackName, boolean authorized, List<String> files, List<String> scripts) {
+		isAuthorized = authorized;
+		discoveredPacks.clear();
+		serverActivePackName = activePackName;
 
-        for (String name : serverPacks) {
-            discoveredPacks.add(new PackInfo(name, name.endsWith(".zip")));
-        }
+		for (String name : serverPacks) {
+			discoveredPacks.add(new PackInfo(name, name.endsWith(".zip")));
+		}
 
-        activePackIndex = 0;
-        for (int i = 0; i < discoveredPacks.size(); i++) {
-            if (discoveredPacks.get(i).name().equals(activePackName)) {
-                activePackIndex = i;
-                break;
-            }
-        }
+		activePackIndex = 0;
+		for (int i = 0; i < discoveredPacks.size(); i++) {
+			if (discoveredPacks.get(i).name().equals(activePackName)) {
+				activePackIndex = i;
+				break;
+			}
+		}
 
-        activePackFiles.clear();
-        activePackFiles.addAll(files);
-        isWaitingForServer = false;
-        waitStartTime = 0;
+		activePackFiles.clear();
+		activePackFiles.addAll(files);
+		
+		activePackScripts.clear();
+		activePackScripts.addAll(scripts);
+		
+		isWaitingForServer = false;
+		waitStartTime = 0;
 
-        currentFileName = "";
-        currentRuneJson = new JsonObject();
-        activeTree.clear();
-        activeStats.clear();
+		currentFileName = "";
+		currentRuneJson = new JsonObject();
+		activeTree.clear();
+		activeStats.clear();
 
-        if (authorized && discoveredPacks.isEmpty()) {
-            if (currentInstance != null) {
-                currentInstance.openNewProjectDialog();
-            }
-        }
-    }
+		if (authorized && discoveredPacks.isEmpty()) {
+			if (currentInstance != null) {
+				currentInstance.openNewProjectDialog();
+			}
+		}
+	}
+
+	public void loadScriptOnly(String fileName, String content) {
+		currentFileName = fileName;
+		isWaitingForServer = false;
+		waitStartTime = 0;
+		logicTree.resetScroll();
+		statsSection.resetScroll();
+		mainScrollY = 0;
+
+		// Simuliere einen Raw JS "Node" Zustand
+		currentRuneJson = new JsonObject();
+		currentRuneJson.addProperty("raw_script", "data/stones_workspace/scripts/" + fileName);
+
+		activeTree.clear();
+		activeStats.clear();
+
+		if (fldRawScriptLink != null) fldRawScriptLink.setValue("data/stones_workspace/scripts/" + fileName);
+		if (fldRawScriptContent != null) fldRawScriptContent.setValue(content);
+		
+		this.lastSavedJsonString = serializeActiveTree().toString();
+		updateHeaderVisibility();
+	}
 
     private void checkLocalWorldPacks() {
         Minecraft mc = Minecraft.getInstance();
@@ -228,89 +257,128 @@ public class StonesStudioScreen extends Screen {
         action.run();
     }
 
-    public void loadRuneFromJson(String fileName, String jsonStr, boolean hasConflict, String jarTemplateStr, String newJarHash) {
-        currentFileName = fileName;
-        isWaitingForServer = false;
-        waitStartTime = 0;
-        logicTree.resetScroll();
-        statsSection.resetScroll();
-        mainScrollY = 0;
+	public void loadRuneFromJson(String fileName, String jsonStr, boolean hasConflict, String jarTemplateStr, String newJarHash) {
+		currentFileName = fileName;
+		isWaitingForServer = false;
+		waitStartTime = 0;
+		logicTree.resetScroll();
+		statsSection.resetScroll();
+		mainScrollY = 0;
 
-        try {
-            JsonObject loadedJson = JsonParser.parseString(jsonStr).getAsJsonObject();
+		try {
+			JsonObject loadedJson = JsonParser.parseString(jsonStr).getAsJsonObject();
+			currentRuneJson = loadedJson;
+			this.propertiesSection.loadFrom(currentRuneJson);
 
-            currentRuneJson = loadedJson;
-            this.propertiesSection.loadFrom(currentRuneJson);
+			activeStats.clear();
+			if (currentRuneJson.has("stats")) {
+				for (JsonElement sEl : currentRuneJson.getAsJsonArray("stats")) {
+					activeStats.add(sEl.getAsJsonObject());
+				}
+			}
 
-            activeStats.clear();
-            if (currentRuneJson.has("stats")) {
-                for (JsonElement sEl : currentRuneJson.getAsJsonArray("stats")) {
-                    activeStats.add(sEl.getAsJsonObject());
-                }
-            }
+			activeTree.clear();
+			if (currentRuneJson.has("behaviors")) {
+				StudioSerializer.loadBehaviors(currentRuneJson.getAsJsonArray("behaviors"), activeTree);
+			}
 
-            activeTree.clear();
-            if (currentRuneJson.has("behaviors")) {
-                StudioSerializer.loadBehaviors(currentRuneJson.getAsJsonArray("behaviors"), activeTree);
-            }
+			// Link im Textfeld anzeigen
+			if (fldRawScriptLink != null && currentRuneJson.has("raw_script")) {
+				String scriptPath = currentRuneJson.get("raw_script").getAsString();
+				fldRawScriptLink.setValue(scriptPath);
+				
+				// Fordere den Inhalt des Skripts an / lade es aus der Workspace-Struktur
+				requestScriptContent(scriptPath);
+			}
 
-            if (fldRawScript != null && currentRuneJson.has("raw_script")) {
-                fldRawScript.setValue(currentRuneJson.get("raw_script").getAsString());
-            }
+			this.lastSavedJsonString = serializeActiveTree().toString();
 
-            this.lastSavedJsonString = serializeActiveTree().toString();
+			if (hasConflict && jarTemplateStr != null && !jarTemplateStr.isEmpty()) {
+				JsonObject jarTemplate = JsonParser.parseString(jarTemplateStr).getAsJsonObject();
+				this.activeModal = new TemplateUpdateModal(this, fileName, loadedJson, jarTemplate, newJarHash, () -> {});
+			}
 
-            if (hasConflict && jarTemplateStr != null && !jarTemplateStr.isEmpty()) {
-                JsonObject jarTemplate = JsonParser.parseString(jarTemplateStr).getAsJsonObject();
-                this.activeModal = new TemplateUpdateModal(this, fileName, loadedJson, jarTemplate, newJarHash, () -> {});
-            }
+		} catch (Exception e) {
+			Minecraft.getInstance().player.sendSystemMessage(Component.translatable("gui.stones.studio.stonesstudio.text_01" + fileName));
+		}
 
-        } catch (Exception e) {
-            Minecraft.getInstance().player.sendSystemMessage(net.minecraft.network.chat.Component.translatable("gui.stones.studio.stonesstudio.text_01" + fileName));
-        }
+		updateHeaderVisibility();
+	}
 
-        updateHeaderVisibility();
-    }
+	public JsonObject serializeActiveTree() {
+		StudioContextMenu.prepareTreeForSaving(activeTree);
 
-    public JsonObject serializeActiveTree() {
-        StudioContextMenu.prepareTreeForSaving(activeTree);
+		JsonObject root = currentRuneJson.deepCopy();
+		propertiesSection.saveTo(root);
 
-        JsonObject root = currentRuneJson.deepCopy();
-        propertiesSection.saveTo(root);
+		JsonArray statsArray = new JsonArray();
+		for (JsonObject s : activeStats) {
+			statsArray.add(s.deepCopy());
+		}
+		root.add("stats", statsArray);
 
-        JsonArray statsArray = new JsonArray();
-        for (JsonObject s : activeStats) {
-            statsArray.add(s.deepCopy());
-        }
-        root.add("stats", statsArray);
+		if (isRawJsMode()) {
+			String scriptLink = fldRawScriptLink != null ? fldRawScriptLink.getValue().trim() : "";
+			root.addProperty("raw_script", scriptLink);
+			root.remove("behaviors");
 
-        if (isRawJsMode() && fldRawScript != null) {
-            root.addProperty("raw_script", fldRawScript.getValue());
-            root.remove("behaviors");
-        } else {
-            root.remove("raw_script");
-            JsonArray behaviorsArray = StudioSerializer.serializeBehaviors(activeTree);
-            root.add("behaviors", behaviorsArray);
-        }
+			// Speichere auch den Inhalt der JS-Datei ab
+			if (fldRawScriptContent != null && !scriptLink.isEmpty()) {
+				saveScriptContent(scriptLink, fldRawScriptContent.getValue());
+			}
+		} else {
+			root.remove("raw_script");
+			JsonArray behaviorsArray = StudioSerializer.serializeBehaviors(activeTree);
+			root.add("behaviors", behaviorsArray);
+		}
 
-        currentRuneJson = root;
-        return root;
-    }
+		currentRuneJson = root;
+		return root;
+	}
+	
+	public void requestScriptContent(String scriptPath) {
+		if (scriptPath == null || scriptPath.trim().isEmpty()) return;
 
-    @Override
-    protected void init() {
-        super.init();
-        currentInstance = this;
+		String fileName = scriptPath;
+		if (fileName.contains("/")) {
+			fileName = fileName.substring(fileName.lastIndexOf('/') + 1);
+		} else if (fileName.contains("\\")) {
+			fileName = fileName.substring(fileName.lastIndexOf('\\') + 1);
+		}
 
-        int currentLeftWidth = leftPanelOpen ? LEFT_PANEL_WIDTH : 0;
-        int headerX = currentLeftWidth + 20;
-        int yStart = StudioMenuBar.HEIGHT + 45;
+		if (!fileName.isEmpty()) {
+			StudioNetwork.CHANNEL.sendToServer(new StudioNetwork.C2SRequestScriptFile(fileName));
+		}
+	}
 
-        this.propertiesSection.init(headerX, yStart);
+	public void saveScriptContent(String scriptPath, String content) {
+		if (scriptPath == null || scriptPath.trim().isEmpty()) return;
 
-        if (currentRuneJson != null && !currentFileName.isEmpty()) {
-            this.propertiesSection.loadFrom(currentRuneJson);
-        }
+		String fileName = scriptPath;
+		if (fileName.contains("/")) {
+			fileName = fileName.substring(fileName.lastIndexOf('/') + 1);
+		} else if (fileName.contains("\\")) {
+			fileName = fileName.substring(fileName.lastIndexOf('\\') + 1);
+		}
+
+		if (!fileName.isEmpty()) {
+			StudioNetwork.CHANNEL.sendToServer(new StudioNetwork.C2SSaveScriptFile(fileName, content));
+		}
+	}
+	
+	@Override
+	protected void init() {
+		super.init();
+
+		int currentLeftWidth = leftPanelOpen ? LEFT_PANEL_WIDTH : 0;
+		int headerX = currentLeftWidth + 20;
+		int yStart = StudioMenuBar.HEIGHT + 45;
+
+		this.propertiesSection.init(headerX, yStart);
+
+		if (currentRuneJson != null && !currentFileName.isEmpty()) {
+			this.propertiesSection.loadFrom(currentRuneJson);
+		}
 
 		// RAW JS SCHALTER INITIALISIERUNG
 		String initialLabel = isRawJsMode() ? "📜 Raw JS" : "🌲 Tree";
@@ -318,7 +386,7 @@ public class StonesStudioScreen extends Screen {
 				headerX + 180, getTreeStartY(), 75, 12, 
 				Component.literal(initialLabel), 
 				btn -> toggleScriptMode(), 
-				supplier -> supplier.get() // <-- Hier: Einfaches Lambda statt protected Constant
+				supplier -> supplier.get()
 		) {
 			@Override
 			public void renderWidget(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
@@ -334,42 +402,59 @@ public class StonesStudioScreen extends Screen {
 			}
 		});
 
-        fldRawScript = addRenderableWidget(new StudioMultiLineEditBox(
-            this, font, headerX, getTreeStartY() + 20, width - headerX - 20, 200,
-            Component.literal("Raw JS Code"), Component.literal("// Schreibe hier deinen rohen JavaScript-Code...")
-        ));
+		// 1. Link / Pfad-Eingabefeld
+		fldRawScriptLink = addRenderableWidget(new net.stones.editor.client.gui.widget.StudioTextField(
+			this, font, headerX + 80, getTreeStartY() + 20, width - headerX - 100, 14,
+			Component.literal("Skript Link"), Component.literal("z. B. data/stones_workspace/scripts/meine_rune.js")
+		));
 
-        if (currentRuneJson != null && currentRuneJson.has("raw_script")) {
-            fldRawScript.setValue(currentRuneJson.get("raw_script").getAsString());
-        }
+		// 2. Editor für den Inhalt des Skripts
+		fldRawScriptContent = addRenderableWidget(new net.stones.editor.client.gui.widget.StudioMultiLineEditBox(
+			this, font, headerX, getTreeStartY() + 40, width - headerX - 20, 180,
+			Component.literal("Raw JS Code"), Component.literal("// Schreibe hier deinen rohen JavaScript-Code...")
+		));
 
-        addRenderableWidget(Button.builder(net.minecraft.network.chat.Component.translatable("gui.stones.studio.stonesstudio.text_02"), btn -> toggleLeftPanel())
-                .bounds(5, StudioMenuBar.HEIGHT + 5, 20, 20).build());
+		// Werte laden falls vorhanden
+		if (currentRuneJson != null && currentRuneJson.has("raw_script")) {
+			fldRawScriptLink.setValue(currentRuneJson.get("raw_script").getAsString());
+		}
 
-        this.projectDialog.initDialog();
-        updateHeaderVisibility();
-    }
+		addRenderableWidget(Button.builder(Component.translatable("gui.stones.studio.stonesstudio.text_02"), btn -> toggleLeftPanel())
+				.bounds(5, StudioMenuBar.HEIGHT + 5, 20, 20).build());
+
+		this.projectDialog.initDialog();
+		updateHeaderVisibility();
+	}
 
 	private void toggleScriptMode() {
 		if (isRawJsMode()) {
-			// Wechsel zurück zum visuellen Baum (Warnung vor Löschen von Raw JS)
+			// Wechsel zurück zum visuellen Baum
 			this.activeModal = new ScriptModeWarningModal(this, false, () -> {
 				currentRuneJson.remove("raw_script");
-				fldRawScript.setValue("");
+				if (fldRawScriptLink != null) fldRawScriptLink.setValue("");
+				if (fldRawScriptContent != null) fldRawScriptContent.setValue("");
 				btnToggleScriptMode.setMessage(Component.literal("🌲 Tree Visual"));
 				updateHeaderVisibility();
 			});
 		} else {
-			// Wechsel zu Raw JS (Transpiliere den aktuellen visuellen Baum als Template!)
+			// Wechsel zu Raw JS
 			this.activeModal = new ScriptModeWarningModal(this, true, () -> {
-				// 1. Visuellen Baum sichern/synchronisieren
 				this.serializeActiveTree();
 
-				// 2. Transpiliere den bestehenden Baum mit aktuellem Dateinamen als Vorlage
+				// 1. Transpiliere den bestehenden Baum als JS-Code
 				String generatedJs = net.stones.transpiler.StonesTranspiler.transpile(currentFileName, currentRuneJson);
 
-				currentRuneJson.addProperty("raw_script", generatedJs);
-				fldRawScript.setValue(generatedJs);
+				// 2. Erzeuge den relativen Standard-Link im Workspace
+				String baseName = currentFileName.contains(".") 
+					? currentFileName.substring(0, currentFileName.lastIndexOf('.')) 
+					: currentFileName;
+				String defaultScriptLink = "data/stones_workspace/scripts/" + baseName + ".js";
+
+				currentRuneJson.addProperty("raw_script", defaultScriptLink);
+				
+				if (fldRawScriptLink != null) fldRawScriptLink.setValue(defaultScriptLink);
+				if (fldRawScriptContent != null) fldRawScriptContent.setValue(generatedJs);
+
 				btnToggleScriptMode.setMessage(Component.literal("📜 Raw JS"));
 				updateHeaderVisibility();
 			});
@@ -387,32 +472,42 @@ public class StonesStudioScreen extends Screen {
         updateHeaderVisibility();
     }
 
-    public void updateHeaderVisibility() {
-        int currentLeftWidth = leftPanelOpen ? LEFT_PANEL_WIDTH : 0;
-        int headerX = currentLeftWidth + 20;
-        int propContentY = getPropContentY() - (int)mainScrollY;
+	public void updateHeaderVisibility() {
+		int currentLeftWidth = leftPanelOpen ? LEFT_PANEL_WIDTH : 0;
+		int headerX = currentLeftWidth + 20;
+		int propContentY = getPropContentY() - (int)mainScrollY;
 
-        this.propertiesSection.updateVisibility(headerX, propContentY, height, !currentFileName.isEmpty());
+		this.propertiesSection.updateVisibility(headerX, propContentY, height, !currentFileName.isEmpty());
 
-        boolean isFileLoaded = !currentFileName.isEmpty();
-        int treeY = getTreeStartY() - (int)mainScrollY;
+		boolean isFileLoaded = !currentFileName.isEmpty();
+		int treeY = getTreeStartY() - (int)mainScrollY;
 
-        if (btnToggleScriptMode != null) {
-            btnToggleScriptMode.visible = isFileLoaded;
-            btnToggleScriptMode.setX(headerX + 180);
-            btnToggleScriptMode.setY(treeY);
-        } 
+		if (btnToggleScriptMode != null) {
+			btnToggleScriptMode.visible = isFileLoaded;
+			btnToggleScriptMode.setX(headerX + 180);
+			btnToggleScriptMode.setY(treeY);
+		} 
 
-        if (fldRawScript != null) {
-            boolean rawActive = isFileLoaded && isRawJsMode();
-            fldRawScript.visible = rawActive;
-            if (rawActive) {
-                fldRawScript.setX(headerX);
-                fldRawScript.setY(treeY + 18);
-                fldRawScript.setWidth(width - headerX - 20);
-            }
-        }
-    }
+		boolean rawActive = isFileLoaded && isRawJsMode();
+
+		if (fldRawScriptLink != null) {
+			fldRawScriptLink.visible = rawActive;
+			if (rawActive) {
+				fldRawScriptLink.setX(headerX + 80);
+				fldRawScriptLink.setY(treeY + 18);
+				fldRawScriptLink.setWidth(width - headerX - 100);
+			}
+		}
+
+		if (fldRawScriptContent != null) {
+			fldRawScriptContent.visible = rawActive;
+			if (rawActive) {
+				fldRawScriptContent.setX(headerX);
+				fldRawScriptContent.setY(treeY + 38);
+				fldRawScriptContent.setWidth(width - headerX - 20);
+			}
+		}
+	}
 
     public boolean isBackgroundActive() {
         return activeModal == null && activeStatModal == null && !projectDialog.isOpen() && !contextMenu.isOpen && (!propertiesSection.isEditingIcon || propertiesSection.getIconModal() == null);
@@ -494,11 +589,11 @@ public class StonesStudioScreen extends Screen {
             int treeStartY = getTreeStartY();
             
             // RENDERING WEICHE (RAW JS vs. VISUELLER BAUM)
-            if (isRawJsMode()) {
-                graphics.drawString(font, "📜 Direct JS Script Editor", editorX, treeStartY + 3, 0xFFFFAA00);
-            } else {
-                logicTree.render(graphics, editorX, treeStartY, bgMouseX, bgScrolledMouseY);
-            }
+			if (isRawJsMode()) {
+				graphics.drawString(font, "📜 Script Link:", editorX, treeStartY + 22, 0xFFFFAA00);
+			} else {
+				logicTree.render(graphics, editorX, treeStartY, bgMouseX, bgScrolledMouseY);
+			}
 
             graphics.pose().popPose();
             graphics.disableScissor();
@@ -686,18 +781,22 @@ public class StonesStudioScreen extends Screen {
     @Override
     public boolean isPauseScreen() { return true; }
 
-    public void openEditModal(TreeNode node) {
-        if (node.type == TreeNode.Type.ACTION && node.jsonData != null && node.jsonData.has("type")) {
-            String type = node.jsonData.get("type").getAsString();
-            if ("stones:spawn_sprite".equals(type)) {
-                activeModal = new FxEditModal(this, node);
-                return;
-            }
-        }
-        if (node.type == TreeNode.Type.ACTION || node.type == TreeNode.Type.CONDITION) {
-            activeModal = new ActionEditModal(this, node);
-        }
-    }
+	public void openEditModal(TreeNode node) {
+		if (node.type == TreeNode.Type.ACTION && node.jsonData != null && node.jsonData.has("type")) {
+			String type = node.jsonData.get("type").getAsString();
+			if ("stones:spawn_sprite".equals(type)) {
+				activeModal = new FxEditModal(this, node);
+				return;
+			}
+			if ("stones:spawn_beam".equals(type)) {
+				activeModal = new BeamEditModal(this, node);
+				return;
+			}
+		}
+		if (node.type == TreeNode.Type.ACTION || node.type == TreeNode.Type.CONDITION) {
+			activeModal = new ActionEditModal(this, node);
+		}
+	}
 
     public void openEditModal(AbstractStudioModal modal) {
         this.activeModal = modal;

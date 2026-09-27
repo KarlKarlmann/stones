@@ -46,6 +46,7 @@ public class StudioSerializer {
                 case "stones:read_nbt" -> Component.translatable("gui.stones.studio.serializer.action.read_nbt", 
                         json.has("path") ? json.get("path").getAsString() : "").getString();
                 case "stones:spawn_sprite" -> "✨ Sprite FX (" + (json.has("texture") ? json.get("texture").getAsString() : "") + ")";
+				case "stones:spawn_beam" -> "⚡ Beam FX (" + (json.has("beam_type") ? json.get("beam_type").getAsString() : "LASER") + ")";
                 default -> {
                     String actionKey = "gui.stones.studio.actionselection.action." + t.replace("stones:", "") + ".name";
                     String name = Component.translatable(actionKey).getString();

@@ -1,7 +1,9 @@
 package net.stones.visuals;
 
+import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.fml.ModList;
 import net.minecraftforge.fml.common.Mod;
+import net.minecraftforge.fml.loading.FMLEnvironment;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -11,25 +13,24 @@ public class StonesVisuals {
     private static final Logger LOGGER = LogManager.getLogger();
 
     public StonesVisuals() {
+        // Stop auf Dedicated Servern vor jeglichem Klassen-Laden
+        if (FMLEnvironment.dist != Dist.CLIENT) {
+            LOGGER.info("[Stones Visuals] Dedicated Server erkannt. Client-Mod pausiert.");
+            return;
+        }
+
         boolean hasStones = ModList.get().isLoaded("stones");
         boolean hasKube = ModList.get().isLoaded("stoneskube");
 
-        // Split-Package-Schutz bleibt bestehen!
         if (hasStones && hasKube) {
-            throw new IllegalStateException("[Stones Visuals] Kritischer Fehler: 'stones' und 'stonesKube' duerfen niemals gleichzeitig installiert sein!");
+            throw new IllegalStateException("[Stones Visuals] 'stones' und 'stonesKube' duerfen nicht gleichzeitig installiert sein!");
         }
 
-        // DEINE LOGIK: Ist eine der beiden da?
         if (hasStones || hasKube) {
-            LOGGER.info("[Stones Visuals] Core-Mod gefunden! Lade visuelle Overhauls...");
-            
-            // WICHTIG: Wir rufen eine separate Klasse auf!
-            // Hier oben bei den Imports darf NICHTS von net.stones... stehen.
+            LOGGER.info("[Stones Visuals] Core-Mod gefunden! Lade Client-Features...");
             VisualsInitializer.start();
         } else {
-            // Keine Core-Mod da? Dann endet der Spaß hier.
-            // Die Mod stürzt nicht ab, sie macht einfach gar nichts.
-            LOGGER.warn("[Stones Visuals] Keine Stones Core-Mod (stones/stonesKube) gefunden. Visuals gehen in den Standby-Modus.");
+            LOGGER.warn("[Stones Visuals] Keine Core-Mod gefunden. Standby.");
         }
     }
 }

@@ -1,4 +1,4 @@
-package net.stones.util;
+package net.stones.editor.data;
 
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
