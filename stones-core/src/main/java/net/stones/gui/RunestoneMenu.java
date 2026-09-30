@@ -243,10 +243,10 @@ public class RunestoneMenu extends AbstractContainerMenu {
     @Override
     public boolean stillValid(Player player) { return true; }
 
-    private void addPlayerInventory(Inventory playerInv) {
-        int xOffset = 48;
-        int yStartMain = 140; 
-        int yStartHotbar = 198;
+	private void addPlayerInventory(Inventory playerInv) {
+        int xOffset = 79;
+        int yStartMain = 153; 
+        int yStartHotbar = 211;
 
         for (int i = 0; i < 3; ++i) {
             for (int j = 0; j < 9; ++j) {

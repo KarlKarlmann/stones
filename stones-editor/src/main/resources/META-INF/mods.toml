@@ -10,7 +10,7 @@ displayURL="https://www.n3g.de"
 credits="luv <3"
 logoFile="stones-editor.png"
 authors="KarlKarlmann"
-description="Der visuelle Behavior-Tree & Visual-Scripting-Editor als eigenständiges Addon für Stones."
+description="The Visual Behavior Tree & Visual Scripting Editor as a standalone add-on for Stones."
 displayTest="IGNORE_ALL_VERSION"
 # --- Optional ---
 issueTrackerURL="https://github.com/KarlKarlmann/stones/issues"

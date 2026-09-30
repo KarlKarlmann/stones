@@ -343,7 +343,7 @@ public class StoneItem extends Item {
 
         double percentBonus = (multiplier - 1.0) * 100;
         tooltip.add(Component.literal(" ➤ ").withStyle(ChatFormatting.DARK_GRAY)
-            .append(Component.literal("Potenzial: ").withStyle(ChatFormatting.GRAY))
+            .append(Component.translatable("gui.stones.potential").withStyle(ChatFormatting.GRAY))
             .append(Component.literal(String.format("+%.1f%%", percentBonus)).withStyle(rarityColor)));
         
         tooltip.add(Component.empty());

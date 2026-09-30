@@ -6,14 +6,18 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import net.minecraft.client.Minecraft;
+import net.minecraft.network.Connection;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.fml.DistExecutor;
+import net.minecraftforge.fml.ModList;
 import net.minecraftforge.fml.loading.FMLPaths;
+import net.minecraftforge.network.ConnectionData;
 import net.minecraftforge.network.NetworkEvent;
+import net.minecraftforge.network.NetworkHooks;
 import net.minecraftforge.network.NetworkRegistry;
 import net.minecraftforge.network.PacketDistributor;
 import net.minecraftforge.network.simple.SimpleChannel;
@@ -32,12 +36,19 @@ import java.util.function.Supplier;
 
 public class StudioNetwork {
 
-    private static final String PROTOCOL_VERSION = "3";
+    // Liest die Mod-Version automatisch aus den Forge-Metadaten (mods.toml / build.gradle)
+    public static final String PROTOCOL_VERSION = ModList.get()
+        .getModContainerById(StonesEditorMod.MODID)
+        .map(container -> container.getModInfo().getVersion().toString())
+        .orElse("3");
+        
+    public static final ResourceLocation CHANNEL_NAME = new ResourceLocation(StonesEditorMod.MODID, "studio_channel");
+
     public static final SimpleChannel CHANNEL = NetworkRegistry.newSimpleChannel(
-            new ResourceLocation(StonesEditorMod.MODID, "studio_channel"),
+            CHANNEL_NAME,
             () -> PROTOCOL_VERSION,
-            PROTOCOL_VERSION::equals,
-            PROTOCOL_VERSION::equals
+            version -> true, // ACCEPT_ALL: Kicked niemanden beim Joinen!
+            version -> true  // ACCEPT_ALL: Kicked niemanden beim Joinen!
     );
 
     private static int packetId = 0;
@@ -56,6 +67,42 @@ public class StudioNetwork {
         CHANNEL.registerMessage(packetId++, S2CSyncScriptFile.class,    S2CSyncScriptFile::encode,    S2CSyncScriptFile::decode,    S2CSyncScriptFile::handle);
         CHANNEL.registerMessage(packetId++, C2SSaveScriptFile.class,    C2SSaveScriptFile::encode,    C2SSaveScriptFile::decode,    C2SSaveScriptFile::handle);
     }
+
+    // =========================================================================
+    // VERSION CHECK METHODEN (Aufruf beim /stonesstudio Befehl)
+    // =========================================================================
+
+    public enum Status { NOT_CONNECTED, MOD_MISSING, VERSION_MISMATCH, MATCH }
+    public record VersionCheckResult(Status status, String serverVersion) {}
+
+    public static VersionCheckResult checkServerVersion() {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.getConnection() == null) {
+            return new VersionCheckResult(Status.NOT_CONNECTED, null);
+        }
+
+        Connection connection = mc.getConnection().getConnection();
+        ConnectionData data = NetworkHooks.getConnectionData(connection);
+
+        // Server hat den Kanal gar nicht registriert (Vanilla oder Mod fehlt)
+        if (data == null || !data.getChannels().containsKey(CHANNEL_NAME)) {
+            return new VersionCheckResult(Status.MOD_MISSING, null);
+        }
+
+        String serverVersion = data.getChannels().get(CHANNEL_NAME);
+        
+        // Prüft auf exakte Versionsgleichheit
+        if (PROTOCOL_VERSION.equals(serverVersion)) {
+            return new VersionCheckResult(Status.MATCH, serverVersion);
+        } else {
+            return new VersionCheckResult(Status.VERSION_MISMATCH, serverVersion);
+        }
+    }
+
+
+    // =========================================================================
+    // BESTEHENDE METHODEN 
+    // =========================================================================
 
     public static String sanitizeProjectName(String name) {
         return name.replaceAll("[^a-zA-Z0-9_-]", "");

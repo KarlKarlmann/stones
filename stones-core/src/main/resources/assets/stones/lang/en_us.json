@@ -86,7 +86,11 @@
 "runes.stones.major_camouflage.description": "Slightly reduces your visibility to enemies by blending into your surroundings.",
 "runes.stones.major_muffling.title": "Major Muffling Rune",
 "runes.stones.major_muffling.description": "Slightly dampens the noise of your movements, making it harder for enemies to hear you.",
-
+"gui.stones.not_bound": "(Not bound)",
+  "gui.stones.active_bonuses": "Active Bonuses",
+  "gui.stones.no_runes": "No Runes",
+  "gui.stones.potential": "Potential: ",
+  "enchantment.stones.extinguished_resonance": "Extinguished Resonance",
   "milestone.stones.drowned_warrior.name": "Drowned Warrior",
   "milestone.stones.drowned_warrior.description": "Channel the crushing pressure of the deep. Your strikes consume oxygen to deal massive damage.",
   "milestone.stones.pyromancer.name": "Pyromancer",

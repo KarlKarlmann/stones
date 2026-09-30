@@ -353,7 +353,7 @@ public class RuneEnchantment extends Enchantment {
     @Override
     public Component getFullname(int level) {
         if (!this.isAwake) {
-            return Component.literal("Erloschene Resonanz").withStyle(ChatFormatting.DARK_GRAY, ChatFormatting.STRIKETHROUGH);
+            return Component.translatable("enchantment.stones.extinguished_resonance").withStyle(ChatFormatting.DARK_GRAY, ChatFormatting.STRIKETHROUGH);
         }
         MutableComponent name = resolveComponent(this.customName).copy();
         
