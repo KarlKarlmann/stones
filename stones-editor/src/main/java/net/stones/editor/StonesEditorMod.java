@@ -6,7 +6,6 @@ import net.minecraftforge.fml.ModLoadingContext;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.event.lifecycle.FMLCommonSetupEvent;
 import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
-import net.minecraftforge.network.NetworkConstants;
 import net.stones.editor.network.StudioNetwork;
 import org.slf4j.Logger;
 
@@ -19,17 +18,14 @@ public class StonesEditorMod {
         var modBus = FMLJavaModLoadingContext.get().getModEventBus();
         modBus.addListener(this::commonSetup);
 
-        // 1. Handshake-Toleranz: Erlaubt Verbindungen auf Server ohne Editor oder mit anderer Version
+        // Korrekter Forge 1.20.1 Aufruf (ohne fehlerhaftes NetworkConstants)
         ModLoadingContext.get().registerExtensionPoint(
             IExtensionPoint.DisplayTest.class,
             () -> new IExtensionPoint.DisplayTest(
-                () -> NetworkConstants.IGNORESERVERONLY,
+                () -> IExtensionPoint.DisplayTest.IGNORESERVERONLY,
                 (remoteVersion, isFromServer) -> true
             )
         );
-
-        // HINWEIS: StonesEditorConfig wurde entfernt, da das aktive Projekt
-        // jetzt weltgebunden direkt in <world>/datapacks/stones_runtime/pack.mcmeta verwaltet wird.
     }
 
     private void commonSetup(final FMLCommonSetupEvent event) {

@@ -273,8 +273,7 @@ public class StonesTranspiler {
 			}
 			case "stones:is_damage_type", "stones:damage_type" -> {
 				String damageType = getString(cond, "damage_type", getString(cond, "type_id", "minecraft:in_fire"));
-				if (!damageType.contains(":")) damageType = "minecraft:" + damageType;
-				yield "global.Stones.isDamageType(ctx.event, '" + damageType + "')";
+				yield "global.Stones.isDamageType(ctx.event.source, '" + damageType + "')";
 			}
             case "stones:damage_amount", "stones:damage_compare" -> {
                 String op = getString(cond, "operator", ">=");

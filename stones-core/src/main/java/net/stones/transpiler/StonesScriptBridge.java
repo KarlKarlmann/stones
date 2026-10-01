@@ -890,6 +890,7 @@ public static void spawnBeam(
 
 		return source.is(key);
 	}	
+	
     private static String getString(Object obj, String fallback) {
         return obj != null ? obj.toString() : fallback;
     }
