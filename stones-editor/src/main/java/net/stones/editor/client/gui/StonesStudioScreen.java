@@ -72,6 +72,10 @@ public class StonesStudioScreen extends Screen {
 
     // --- Snapshot-Speicher für ungespeicherte Änderungen ---
     private String lastSavedJsonString = "";
+    private String lastSavedScriptContent = "";
+
+    // --- Zentraler Handshake-Status für diese Screen-Instanz ---
+    public static StudioNetwork.VersionCheckResult connectionStatus = new StudioNetwork.VersionCheckResult(StudioNetwork.Status.MATCH, "");
 
     // --- Globale Statics (vom Model / Serializer genutzt) ---
     public static final List<PackInfo> discoveredPacks = new ArrayList<>();
@@ -111,10 +115,18 @@ public class StonesStudioScreen extends Screen {
 
     public StonesStudioScreen() {
         super(Component.translatable("gui.stones.studio.title"));
+        
+        // EIN SCHALTER: Handshake prüfen BEVOR irgendwas initialisiert wird
+        connectionStatus = StudioNetwork.checkServerVersion();
+        if (connectionStatus.status() != StudioNetwork.Status.MATCH) {
+            isWaitingForServer = false;
+            return; // Totalsperre: Kein C2SRequestPackList, kein Netzwerkverkehr!
+        }
+
         isWaitingForServer = true;
         waitStartTime = System.currentTimeMillis();
         discoveredPacks.clear();
-        StudioNetwork.CHANNEL.sendToServer(new StudioNetwork.C2SRequestPackList());
+        StudioNetwork.sendToServer(new StudioNetwork.C2SRequestPackList());
         checkLocalWorldPacks();
     }
 
@@ -187,7 +199,7 @@ public class StonesStudioScreen extends Screen {
 		statsSection.resetScroll();
 		mainScrollY = 0;
 
-		// Simuliere einen Raw JS "Node" Zustand
+		// Simuliere einen Raw JS "Node" Zustand für isolierte Skripte
 		currentRuneJson = new JsonObject();
 		currentRuneJson.addProperty("raw_script", "data/stones_workspace/scripts/" + fileName);
 
@@ -198,7 +210,31 @@ public class StonesStudioScreen extends Screen {
 		if (fldRawScriptContent != null) fldRawScriptContent.setValue(content);
 		
 		this.lastSavedJsonString = serializeActiveTree().toString();
+		this.lastSavedScriptContent = content != null ? content : "";
 		updateHeaderVisibility();
+	}
+
+	/**
+	 * Empfängt den Inhalt eines Skripts vom Server.
+	 * Prüft, ob aktuell eine Rune geöffnet ist, die dieses Skript referenziert,
+	 * oder ob es sich um eine isolierte Skript-Datei handelt.
+	 */
+	public void receiveScriptContent(String fileName, String content) {
+		isWaitingForServer = false;
+		waitStartTime = 0;
+
+		// Fall A: Wir haben eine Rune geladen, die dieses Skript referenziert -> Nur Textfeld befüllen!
+		if (!currentFileName.isEmpty() && !currentFileName.endsWith(".js") && isRawJsMode()) {
+			if (fldRawScriptContent != null) {
+				fldRawScriptContent.setValue(content != null ? content : "");
+			}
+			this.lastSavedJsonString = serializeActiveTree().toString();
+			this.lastSavedScriptContent = content != null ? content : "";
+			return;
+		}
+
+		// Fall B: Es wurde tatsächlich eine reine .js Datei aus der Seitenleiste geöffnet
+		loadScriptOnly(fileName, content != null ? content : "");
 	}
 
     private void checkLocalWorldPacks() {
@@ -246,12 +282,25 @@ public class StonesStudioScreen extends Screen {
         this.lastSavedJsonString = json;
     }
 
+    public void setLastSavedScript(String content) {
+        this.lastSavedScriptContent = content;
+    }
+
     public void requestActionWithUnsavedWarning(Runnable action) {
         if (!currentFileName.isEmpty()) {
-            String currentJson = serializeActiveTree().toString();
-            if (!currentJson.equals(lastSavedJsonString)) {
-                this.activeModal = new UnsavedChangesModal(this, action);
-                return;
+            if (currentFileName.endsWith(".js")) {
+                String currentScript = fldRawScriptContent != null ? fldRawScriptContent.getValue() : "";
+                if (!currentScript.equals(lastSavedScriptContent)) {
+                    this.activeModal = new UnsavedChangesModal(this, action);
+                    return;
+                }
+            } else {
+                String currentJson = serializeActiveTree().toString();
+                String currentScript = (isRawJsMode() && fldRawScriptContent != null) ? fldRawScriptContent.getValue() : "";
+                if (!currentJson.equals(lastSavedJsonString) || (isRawJsMode() && !currentScript.equals(lastSavedScriptContent))) {
+                    this.activeModal = new UnsavedChangesModal(this, action);
+                    return;
+                }
             }
         }
         action.run();
@@ -289,9 +338,13 @@ public class StonesStudioScreen extends Screen {
 				
 				// Fordere den Inhalt des Skripts an / lade es aus der Workspace-Struktur
 				requestScriptContent(scriptPath);
+			} else {
+				if (fldRawScriptLink != null) fldRawScriptLink.setValue("");
+				if (fldRawScriptContent != null) fldRawScriptContent.setValue("");
 			}
 
 			this.lastSavedJsonString = serializeActiveTree().toString();
+			this.lastSavedScriptContent = "";
 
 			if (hasConflict && jarTemplateStr != null && !jarTemplateStr.isEmpty()) {
 				JsonObject jarTemplate = JsonParser.parseString(jarTemplateStr).getAsJsonObject();
@@ -321,11 +374,7 @@ public class StonesStudioScreen extends Screen {
 			String scriptLink = fldRawScriptLink != null ? fldRawScriptLink.getValue().trim() : "";
 			root.addProperty("raw_script", scriptLink);
 			root.remove("behaviors");
-
-			// Speichere auch den Inhalt der JS-Datei ab
-			if (fldRawScriptContent != null && !scriptLink.isEmpty()) {
-				saveScriptContent(scriptLink, fldRawScriptContent.getValue());
-			}
+			// WICHTIG: Keine Netzwerk-Pakete oder I/O im Serializer ausführen!
 		} else {
 			root.remove("raw_script");
 			JsonArray behaviorsArray = StudioSerializer.serializeBehaviors(activeTree);
@@ -347,7 +396,7 @@ public class StonesStudioScreen extends Screen {
 		}
 
 		if (!fileName.isEmpty()) {
-			StudioNetwork.CHANNEL.sendToServer(new StudioNetwork.C2SRequestScriptFile(fileName));
+			StudioNetwork.sendToServer(new StudioNetwork.C2SRequestScriptFile(fileName));
 		}
 	}
 
@@ -362,12 +411,19 @@ public class StonesStudioScreen extends Screen {
 		}
 
 		if (!fileName.isEmpty()) {
-			StudioNetwork.CHANNEL.sendToServer(new StudioNetwork.C2SSaveScriptFile(fileName, content));
+			StudioNetwork.sendToServer(new StudioNetwork.C2SSaveScriptFile(fileName, content));
 		}
 	}
 	
 	@Override
 	protected void init() {
+		// FALLS DER HANDSHAKE FEHLSCHLUG: Nur den Schließen-Button anbieten
+		if (connectionStatus.status() != StudioNetwork.Status.MATCH) {
+			addRenderableWidget(Button.builder(Component.literal("Schließen"), b -> this.closeScreenDirectly())
+					.bounds(width / 2 - 50, height / 2 + 55, 100, 20).build());
+			return;
+		}
+
 		super.init();
 
 		int currentLeftWidth = leftPanelOpen ? LEFT_PANEL_WIDTH : 0;
@@ -528,6 +584,27 @@ public class StonesStudioScreen extends Screen {
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         renderBackground(graphics);
+
+        // FEHLER-FEEDBACK: Wenn der Server den Editor nicht hat oder die Version nicht stimmt
+        if (connectionStatus.status() != StudioNetwork.Status.MATCH) {
+            int centerX = width / 2;
+            int centerY = height / 2;
+
+            if (connectionStatus.status() == StudioNetwork.Status.MOD_MISSING) {
+                graphics.drawCenteredString(this.font, "§cDer Stones Editor ist auf diesem Server nicht installiert.", centerX, centerY - 25, 0xFFFF5555);
+                graphics.drawCenteredString(this.font, "§7Netzwerkverkehr & Bearbeitung wurden vollständig deaktiviert.", centerX, centerY - 5, 0xFFAAAAAA);
+                graphics.drawCenteredString(this.font, "§8Bitte wenden Sie sich an Ihren Serveradministrator.", centerX, centerY + 15, 0xFF888888);
+            } else if (connectionStatus.status() == StudioNetwork.Status.VERSION_MISMATCH) {
+                graphics.drawCenteredString(this.font, "§cFalsche Editorversion auf dem Server!", centerX, centerY - 30, 0xFFFF5555);
+                String srvVer = connectionStatus.serverVersion() != null ? connectionStatus.serverVersion() : "Unbekannt";
+                graphics.drawCenteredString(this.font, "§7Server-Version: §e" + srvVer + " §7| Deine Version: §a" + StudioNetwork.PROTOCOL_VERSION, centerX, centerY - 10, 0xFFFFAA00);
+                graphics.drawCenteredString(this.font, "§7Netzwerkverkehr wurde zum Schutz vor Datenfehlern blockiert.", centerX, centerY + 10, 0xFFAAAAAA);
+                graphics.drawCenteredString(this.font, "§8Bitte wenden Sie sich an Ihren Serveradministrator.", centerX, centerY + 28, 0xFF888888);
+            }
+
+            super.render(graphics, mouseX, mouseY, partialTick);
+            return;
+        }
 
         if (isWaitingForServer) {
             if (waitStartTime == 0) {

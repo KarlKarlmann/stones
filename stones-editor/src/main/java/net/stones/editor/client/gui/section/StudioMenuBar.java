@@ -137,7 +137,7 @@ public class StudioMenuBar {
             return true;
         }
 
-        // --- SPEICHERN LOGIK ---
+        // --- SPEICHERN LOGIK (LOKALE DATEI-AKTION) ---
         if (mouseX >= menuSaveX && mouseX < menuSaveX + saveWidth && mouseY >= 16 && mouseY < 32) {
             if (!StonesStudioScreen.currentFileName.isEmpty()) {
                 
@@ -145,7 +145,7 @@ public class StudioMenuBar {
                 if (StonesStudioScreen.currentFileName.endsWith(".js")) {
                     String jsContent = screen.fldRawScriptContent != null ? screen.fldRawScriptContent.getValue() : "";
                     StudioNetwork.CHANNEL.sendToServer(new StudioNetwork.C2SSaveScriptFile(StonesStudioScreen.currentFileName, jsContent));
-                    screen.setLastSavedJson(screen.serializeActiveTree().toString());
+                    screen.setLastSavedScript(jsContent);
                 } 
                 // Fall 2: Benutzer bearbeitet eine normale Rune JSON
                 else {
@@ -153,7 +153,7 @@ public class StudioMenuBar {
                     screen.setLastSavedJson(savedJson.toString()); 
                     StudioNetwork.CHANNEL.sendToServer(new StudioNetwork.C2SSaveRuneFile(StonesStudioScreen.currentFileName, savedJson.toString()));
                     
-                    // Falls Raw-JS Modus aktiv ist, speichern wir das verlinkte Skript in scripts/ direkt mit
+                    // Falls Raw-JS Modus aktiv ist, speichern wir das verlinkte Skript in scripts/ mit ab
                     if (screen.isRawJsMode() && screen.fldRawScriptLink != null && screen.fldRawScriptContent != null) {
                         String link = screen.fldRawScriptLink.getValue().trim();
                         String jsContent = screen.fldRawScriptContent.getValue();
@@ -164,6 +164,7 @@ public class StudioMenuBar {
                         
                         if (!jsFileName.isEmpty()) {
                             StudioNetwork.CHANNEL.sendToServer(new StudioNetwork.C2SSaveScriptFile(jsFileName, jsContent));
+                            screen.setLastSavedScript(jsContent);
                         }
                     }
                 }
@@ -171,6 +172,7 @@ public class StudioMenuBar {
             return true;
         }
 
+        // --- APPLY LOGIK (GLOBALE PROJEKT-AKTION) ---
         if (mouseX >= menuReloadX && mouseX < menuReloadX + reloadWidth && mouseY >= 16 && mouseY < 32) {
             screen.requestActionWithUnsavedWarning(() -> {
                 StudioNetwork.CHANNEL.sendToServer(new StudioNetwork.C2STriggerReload());

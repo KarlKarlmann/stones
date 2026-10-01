@@ -10,6 +10,7 @@ import net.minecraft.network.Connection;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.fml.DistExecutor;
@@ -23,7 +24,6 @@ import net.minecraftforge.network.PacketDistributor;
 import net.minecraftforge.network.simple.SimpleChannel;
 import net.stones.editor.StonesEditorMod;
 import net.stones.editor.client.gui.StonesStudioScreen;
-import net.stones.editor.init.StonesEditorConfig;
 import net.stones.editor.data.ServerDatapackExporter;
 import net.stones.editor.data.TemplateHashHelper;
 
@@ -36,7 +36,6 @@ import java.util.function.Supplier;
 
 public class StudioNetwork {
 
-    // Liest die Mod-Version automatisch aus den Forge-Metadaten (mods.toml / build.gradle)
     public static final String PROTOCOL_VERSION = ModList.get()
         .getModContainerById(StonesEditorMod.MODID)
         .map(container -> container.getModInfo().getVersion().toString())
@@ -47,8 +46,8 @@ public class StudioNetwork {
     public static final SimpleChannel CHANNEL = NetworkRegistry.newSimpleChannel(
             CHANNEL_NAME,
             () -> PROTOCOL_VERSION,
-            version -> true, // ACCEPT_ALL: Kicked niemanden beim Joinen!
-            version -> true  // ACCEPT_ALL: Kicked niemanden beim Joinen!
+            version -> true,
+            version -> true
     );
 
     private static int packetId = 0;
@@ -62,15 +61,10 @@ public class StudioNetwork {
         CHANNEL.registerMessage(packetId++, S2CSyncRuneFile.class,    S2CSyncRuneFile::encode,    S2CSyncRuneFile::decode,    S2CSyncRuneFile::handle);
         CHANNEL.registerMessage(packetId++, C2SSaveRuneFile.class,    C2SSaveRuneFile::encode,    C2SSaveRuneFile::decode,    C2SSaveRuneFile::handle);
         
-        // SCRIPT-PAKETE
         CHANNEL.registerMessage(packetId++, C2SRequestScriptFile.class, C2SRequestScriptFile::encode, C2SRequestScriptFile::decode, C2SRequestScriptFile::handle);
         CHANNEL.registerMessage(packetId++, S2CSyncScriptFile.class,    S2CSyncScriptFile::encode,    S2CSyncScriptFile::decode,    S2CSyncScriptFile::handle);
         CHANNEL.registerMessage(packetId++, C2SSaveScriptFile.class,    C2SSaveScriptFile::encode,    C2SSaveScriptFile::decode,    C2SSaveScriptFile::handle);
     }
-
-    // =========================================================================
-    // VERSION CHECK METHODEN (Aufruf beim /stonesstudio Befehl)
-    // =========================================================================
 
     public enum Status { NOT_CONNECTED, MOD_MISSING, VERSION_MISMATCH, MATCH }
     public record VersionCheckResult(Status status, String serverVersion) {}
@@ -81,17 +75,19 @@ public class StudioNetwork {
             return new VersionCheckResult(Status.NOT_CONNECTED, null);
         }
 
+        // Im Singleplayer / Lokalen Server sind Client und Server immer identisch
+        if (mc.isLocalServer()) {
+            return new VersionCheckResult(Status.MATCH, PROTOCOL_VERSION);
+        }
+
         Connection connection = mc.getConnection().getConnection();
         ConnectionData data = NetworkHooks.getConnectionData(connection);
 
-        // Server hat den Kanal gar nicht registriert (Vanilla oder Mod fehlt)
         if (data == null || !data.getChannels().containsKey(CHANNEL_NAME)) {
             return new VersionCheckResult(Status.MOD_MISSING, null);
         }
 
         String serverVersion = data.getChannels().get(CHANNEL_NAME);
-        
-        // Prüft auf exakte Versionsgleichheit
         if (PROTOCOL_VERSION.equals(serverVersion)) {
             return new VersionCheckResult(Status.MATCH, serverVersion);
         } else {
@@ -99,87 +95,60 @@ public class StudioNetwork {
         }
     }
 
-
-    // =========================================================================
-    // BESTEHENDE METHODEN 
-    // =========================================================================
+    /**
+     * DER EINE ZENTRALE KILLSWITCH:
+     * Sämtlicher Client-zu-Server-Netzwerkverkehr läuft über diese Methode.
+     * Passt der Handshake nicht zu 100 %, wird das Paket sofort fallen gelassen.
+     */
+    public static void sendToServer(Object msg) {
+        if (checkServerVersion().status() != Status.MATCH) {
+            StonesEditorMod.LOGGER.warn("[Stones Studio] Netzwerkverkehr blockiert: Handshake-Status ist {}", checkServerVersion().status());
+            return;
+        }
+        CHANNEL.sendToServer(msg);
+    }
 
     public static String sanitizeProjectName(String name) {
         return name.replaceAll("[^a-zA-Z0-9_-]", "");
     }
+    
+    public static String sanitizeFileName(String fileName) {
+        if (fileName == null) return "unnamed";
+        String clean = fileName.replaceAll("[\\\\/:*?\"<>|]", "_");
+        while (clean.contains("..")) {
+            clean = clean.replace("..", "");
+        }
+        return clean;
+    }
+
+    public static boolean isSafePath(File baseDir, File targetFile) {
+        try {
+            return targetFile.getCanonicalPath().startsWith(baseDir.getCanonicalPath());
+        } catch (Exception e) {
+            return false;
+        }
+    }
 
     private static String resolveFileName(String rawName) {
-        if (rawName.endsWith(".json") || rawName.endsWith(".bak")) {
-            return rawName;
+        String safeName = sanitizeFileName(rawName);
+        if (safeName.endsWith(".json") || safeName.endsWith(".bak")) {
+            return safeName;
         }
-        return rawName + ".json";
+        return safeName + ".json";
     }
 
-    // === HILFSMETHODEN FÜR DIRECT KUBEJS EXPORT ===
-
-    private static void exportKubeJsScript(String rawFileName, JsonElement parsedJson, String activePack) {
-        try {
-            if (!parsedJson.isJsonObject()) return;
-            JsonObject json = parsedJson.getAsJsonObject();
-
-            String logicalId = rawFileName.replace(".json", "").replace(".bak", "");
-            String jsCode = null;
-
-            if (json.has("raw_script")) {
-                String scriptLink = json.get("raw_script").getAsString().trim();
-                if (!scriptLink.isEmpty()) {
-                    String scriptFileName = scriptLink;
-                    if (scriptFileName.contains("/")) scriptFileName = scriptFileName.substring(scriptFileName.lastIndexOf('/') + 1);
-                    if (scriptFileName.contains("\\")) scriptFileName = scriptFileName.substring(scriptFileName.lastIndexOf('\\') + 1);
-                    if (!scriptFileName.endsWith(".js")) scriptFileName += ".js";
-
-                    File scriptFile = new File(FMLPaths.GAMEDIR.get().resolve("datapacks/" + activePack + "/data/stones_workspace/scripts").toFile(), scriptFileName);
-                    if (scriptFile.exists()) {
-                        jsCode = Files.readString(scriptFile.toPath(), StandardCharsets.UTF_8);
-                    }
-                }
-            } else if (json.has("behaviors")) {
-                jsCode = net.stones.transpiler.StonesTranspiler.transpile(logicalId, json);
-            }
-
-            if (jsCode != null && !jsCode.isBlank()) {
-                File scriptDir = FMLPaths.GAMEDIR.get().resolve("kubejs/server_scripts/stones_generated").toFile();
-                File scriptFile = new File(scriptDir, logicalId + ".js");
-                if (scriptFile.getParentFile() != null) {
-                    scriptFile.getParentFile().mkdirs();
-                }
-                Files.writeString(scriptFile.toPath(), jsCode, StandardCharsets.UTF_8);
-            }
-        } catch (Exception e) {
-            StonesEditorMod.LOGGER.error("Fehler beim sofortigen KubeJS Export in StudioNetwork: ", e);
-        }
-    }
-
-    private static void exportDirectScriptToKubeJs(String fName, String content) {
-        try {
-            if (content == null || content.isBlank()) return;
-            String logicalId = fName.endsWith(".js") ? fName.substring(0, fName.length() - 3) : fName;
-            File scriptDir = FMLPaths.GAMEDIR.get().resolve("kubejs/server_scripts/stones_generated").toFile();
-            File scriptFile = new File(scriptDir, logicalId + ".js");
-            if (scriptFile.getParentFile() != null) {
-                scriptFile.getParentFile().mkdirs();
-            }
-            Files.writeString(scriptFile.toPath(), content, StandardCharsets.UTF_8);
-        } catch (Exception e) {
-            StonesEditorMod.LOGGER.error("Fehler beim direkten KubeJS Export in StudioNetwork: ", e);
-        }
-    }
-
-    private static S2CSyncPackList buildSyncPacket() {
+    private static S2CSyncPackList buildSyncPacket(MinecraftServer server) {
         File datapacksDir = FMLPaths.GAMEDIR.get().resolve("datapacks").toFile();
         List<String> packs = new ArrayList<>();
         List<String> activeFiles = new ArrayList<>();
         List<String> activeScripts = new ArrayList<>();
-        String activePack = StonesEditorConfig.ACTIVE_WORKSPACE_PACK.get();
+        
+        // Liest das aktive Projekt direkt aus der mcmeta der aktuellen Welt
+        String activePack = ServerDatapackExporter.getActiveProjectForWorld(server);
 
         if (datapacksDir.exists() && datapacksDir.listFiles() != null) {
             for (File file : datapacksDir.listFiles()) {
-                if (!file.getName().startsWith(".") && (file.isDirectory() || file.getName().endsWith(".zip"))) {
+                if (!file.getName().startsWith(".") && !file.getName().equals(ServerDatapackExporter.RUNTIME_PACK_NAME) && (file.isDirectory() || file.getName().endsWith(".zip"))) {
                     packs.add(file.getName());
 
                     if (file.getName().equals(activePack)) {
@@ -224,7 +193,7 @@ public class StudioNetwork {
                             new S2CSyncPackList(new ArrayList<>(), "", false, new ArrayList<>(), new ArrayList<>()));
                     return;
                 }
-                CHANNEL.send(PacketDistributor.PLAYER.with(() -> player), buildSyncPacket());
+                CHANNEL.send(PacketDistributor.PLAYER.with(() -> player), buildSyncPacket(player.getServer()));
             });
             ctx.setPacketHandled(true);
         }
@@ -293,12 +262,10 @@ public class StudioNetwork {
         
         public static void handleScriptLoad(String fileName, String content) {
             if (Minecraft.getInstance().screen instanceof StonesStudioScreen sss) {
-                sss.loadScriptOnly(fileName, content);
+                sss.receiveScriptContent(fileName, content);
             }
         }
     }
-
-    // --- JSON RUNE PACKETS ---
 
     public static class C2SRequestRuneFile {
         private final String fileName;
@@ -311,13 +278,14 @@ public class StudioNetwork {
             ctx.enqueueWork(() -> {
                 ServerPlayer player = ctx.getSender();
                 if (player == null || !player.hasPermissions(2)) return;
-                String activePack = StonesEditorConfig.ACTIVE_WORKSPACE_PACK.get();
+                String activePack = ServerDatapackExporter.getActiveProjectForWorld(player.getServer());
                 if (activePack.isEmpty()) return;
 
                 String fileNameWithExt = resolveFileName(msg.fileName);
-                File file = new File(FMLPaths.GAMEDIR.get().resolve("datapacks/" + activePack + "/data/stones_workspace/enchantments").toFile(), fileNameWithExt);
+                File baseDir = FMLPaths.GAMEDIR.get().resolve("datapacks/" + activePack + "/data/stones_workspace/enchantments").toFile();
+                File file = new File(baseDir, fileNameWithExt);
 
-                if (file.exists()) {
+                if (isSafePath(baseDir, file) && file.exists()) {
                     try {
                         String content = Files.readString(file.toPath());
                         TemplateHashHelper.CheckResult result = TemplateHashHelper.verifyServerFile(msg.fileName, content);
@@ -332,6 +300,8 @@ public class StudioNetwork {
                     } catch (Exception e) {
                         player.sendSystemMessage(Component.translatable("chat.stones.studio.server.file_read_error"));
                     }
+                } else {
+                     StonesEditorMod.LOGGER.warn("Illegal file read request from player {}: {}", player.getName().getString(), msg.fileName);
                 }
             });
             ctx.setPacketHandled(true);
@@ -373,20 +343,24 @@ public class StudioNetwork {
             ctx.enqueueWork(() -> {
                 ServerPlayer player = ctx.getSender();
                 if (player == null || !player.hasPermissions(2)) return;
-                String activePack = StonesEditorConfig.ACTIVE_WORKSPACE_PACK.get();
+                String activePack = ServerDatapackExporter.getActiveProjectForWorld(player.getServer());
                 if (activePack.isEmpty()) return;
 
                 try {
                     String fileNameWithExt = resolveFileName(msg.fileName);
-                    File file = new File(FMLPaths.GAMEDIR.get().resolve("datapacks/" + activePack + "/data/stones_workspace/enchantments").toFile(), fileNameWithExt);
+                    File baseDir = FMLPaths.GAMEDIR.get().resolve("datapacks/" + activePack + "/data/stones_workspace/enchantments").toFile();
+                    File file = new File(baseDir, fileNameWithExt);
+                    
+                    if (!isSafePath(baseDir, file)) {
+                        StonesEditorMod.LOGGER.warn("Path traversal Versuch von Spieler {} blockiert (Rune: {})!", player.getName().getString(), msg.fileName);
+                        return;
+                    }
+
                     JsonElement parsed = JsonParser.parseString(msg.jsonContent);
                     TemplateHashHelper.ensureHashExists(parsed, msg.fileName);
                     Gson prettyGson = new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create();
                     file.getParentFile().mkdirs();
                     Files.writeString(file.toPath(), prettyGson.toJson(parsed), StandardCharsets.UTF_8);
-
-                    // KubeJS Skript sofort auf Server-Ebene aktualisieren
-                    exportKubeJsScript(msg.fileName, parsed, activePack);
 
                     player.sendSystemMessage(Component.translatable("chat.stones.studio.server.file_saved", fileNameWithExt));
                 } catch (Exception e) {
@@ -396,8 +370,6 @@ public class StudioNetwork {
             ctx.setPacketHandled(true);
         }
     }
-
-    // --- JS SCRIPT PACKETS ---
 
     public static class C2SRequestScriptFile {
         private final String fileName;
@@ -410,17 +382,21 @@ public class StudioNetwork {
             ctx.enqueueWork(() -> {
                 ServerPlayer player = ctx.getSender();
                 if (player == null || !player.hasPermissions(2)) return;
-                String activePack = StonesEditorConfig.ACTIVE_WORKSPACE_PACK.get();
+                String activePack = ServerDatapackExporter.getActiveProjectForWorld(player.getServer());
                 if (activePack.isEmpty()) return;
 
-                String fName = msg.fileName.endsWith(".js") ? msg.fileName : msg.fileName + ".js";
-                File file = new File(FMLPaths.GAMEDIR.get().resolve("datapacks/" + activePack + "/data/stones_workspace/scripts").toFile(), fName);
+                String safeName = sanitizeFileName(msg.fileName);
+                String fName = safeName.endsWith(".js") ? safeName : safeName + ".js";
+                File baseDir = FMLPaths.GAMEDIR.get().resolve("datapacks/" + activePack + "/data/stones_workspace/scripts").toFile();
+                File file = new File(baseDir, fName);
 
-                if (file.exists()) {
+                if (isSafePath(baseDir, file) && file.exists()) {
                     try {
                         String content = Files.readString(file.toPath(), StandardCharsets.UTF_8);
                         CHANNEL.send(PacketDistributor.PLAYER.with(() -> player), new S2CSyncScriptFile(fName, content));
                     } catch (Exception e) {}
+                } else {
+                    StonesEditorMod.LOGGER.warn("Illegal script read request from player {}: {}", player.getName().getString(), msg.fileName);
                 }
             });
             ctx.setPacketHandled(true);
@@ -451,26 +427,28 @@ public class StudioNetwork {
             ctx.enqueueWork(() -> {
                 ServerPlayer player = ctx.getSender();
                 if (player == null || !player.hasPermissions(2)) return;
-                String activePack = StonesEditorConfig.ACTIVE_WORKSPACE_PACK.get();
+                String activePack = ServerDatapackExporter.getActiveProjectForWorld(player.getServer());
                 if (activePack.isEmpty()) return;
 
                 try {
-                    String fName = msg.fileName.endsWith(".js") ? msg.fileName : msg.fileName + ".js";
-                    File file = new File(FMLPaths.GAMEDIR.get().resolve("datapacks/" + activePack + "/data/stones_workspace/scripts").toFile(), fName);
+                    String safeName = sanitizeFileName(msg.fileName);
+                    String fName = safeName.endsWith(".js") ? safeName : safeName + ".js";
+                    File baseDir = FMLPaths.GAMEDIR.get().resolve("datapacks/" + activePack + "/data/stones_workspace/scripts").toFile();
+                    File file = new File(baseDir, fName);
+                    
+                    if (!isSafePath(baseDir, file)) {
+                        StonesEditorMod.LOGGER.warn("Path traversal Versuch von Spieler {} blockiert (Script: {})!", player.getName().getString(), msg.fileName);
+                        return;
+                    }
+
                     file.getParentFile().mkdirs();
                     Files.writeString(file.toPath(), msg.content, StandardCharsets.UTF_8);
-
-                    // KubeJS Skript sofort auf Server-Ebene aktualisieren
-                    exportDirectScriptToKubeJs(fName, msg.content);
-
                     player.sendSystemMessage(Component.translatable("chat.stones.studio.server.file_saved", fName));
                 } catch (Exception e) {}
             });
             ctx.setPacketHandled(true);
         }
     }
-
-    // --- SYSTEM PACKETS ---
 
     public static class C2SProjectAction {
         private final String actionType;
@@ -484,20 +462,25 @@ public class StudioNetwork {
                 ServerPlayer player = ctx.getSender();
                 if (player == null || !player.hasPermissions(2)) return;
                 String sanitizedName = sanitizeProjectName(msg.projectName);
+                
                 if (msg.actionType.equals("CREATE") && !sanitizedName.isEmpty()) {
                     ServerDatapackExporter.createAndExportNewPack(player, sanitizedName);
-                    StonesEditorConfig.ACTIVE_WORKSPACE_PACK.set(sanitizedName);
-                    StonesEditorConfig.SPEC.save();
                 } else if (msg.actionType.equals("ACTIVATE") && !sanitizedName.isEmpty()) {
-                    StonesEditorConfig.ACTIVE_WORKSPACE_PACK.set(sanitizedName);
-                    StonesEditorConfig.SPEC.save();
+                    // Aktiviert das Projekt direkt für diese Welt und kompiliert es in <world>/datapacks/stones_runtime
+                    ServerDatapackExporter.buildAndEnableDatapack(player, sanitizedName);
                     player.sendSystemMessage(Component.translatable("chat.stones.studio.server.project_activated", sanitizedName));
                 } else if (msg.actionType.equals("DEACTIVATE")) {
-                    StonesEditorConfig.ACTIVE_WORKSPACE_PACK.set("");
-                    StonesEditorConfig.SPEC.save();
+                    // Runtime-Datapack aus der Welt löschen
+                    File worldDatapacksDir = player.getServer().getWorldPath(net.minecraft.world.level.storage.LevelResource.DATAPACK_DIR).toFile();
+                    File runtimePackDir = new File(worldDatapacksDir, ServerDatapackExporter.RUNTIME_PACK_NAME);
+                    if (runtimePackDir.exists()) {
+                        for (File f : runtimePackDir.listFiles()) f.delete();
+                        runtimePackDir.delete();
+                    }
+                    player.getServer().getPackRepository().reload();
                     player.sendSystemMessage(Component.translatable("chat.stones.studio.server.project_deactivated"));
                 }
-                CHANNEL.send(PacketDistributor.PLAYER.with(() -> player), buildSyncPacket());
+                CHANNEL.send(PacketDistributor.PLAYER.with(() -> player), buildSyncPacket(player.getServer()));
             });
             ctx.setPacketHandled(true);
         }
@@ -512,8 +495,15 @@ public class StudioNetwork {
             ctx.enqueueWork(() -> {
                 ServerPlayer player = ctx.getSender();
                 if (player == null || !player.hasPermissions(2)) return;
+                
+                String activePack = ServerDatapackExporter.getActiveProjectForWorld(player.getServer());
+                if (!activePack.isEmpty()) {
+                    ServerDatapackExporter.buildAndEnableDatapack(player, activePack);
+                }
+                
                 player.getServer().getCommands().performPrefixedCommand(
-                        player.getServer().createCommandSourceStack().withSuppressedOutput().withPermission(4), "reload");
+                        player.createCommandSourceStack().withSuppressedOutput(), "reload");
+                        
                 player.sendSystemMessage(Component.translatable("chat.stones.studio.server.reload_success"));
             });
             ctx.setPacketHandled(true);

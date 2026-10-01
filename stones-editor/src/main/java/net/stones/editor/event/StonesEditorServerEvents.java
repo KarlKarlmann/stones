@@ -13,7 +13,7 @@ import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.loading.FMLPaths;
 import net.stones.editor.StonesEditorMod;
-import net.stones.editor.init.StonesEditorConfig;
+import net.stones.editor.data.ServerDatapackExporter;
 import net.stones.editor.data.TemplateHashHelper;
 
 import java.io.File;
@@ -33,12 +33,13 @@ public class StonesEditorServerEvents {
         File datapacksDir = FMLPaths.GAMEDIR.get().resolve("datapacks").toFile();
         if (!datapacksDir.exists() || datapacksDir.listFiles() == null) return;
 
-        String activeConfigPack = StonesEditorConfig.ACTIVE_WORKSPACE_PACK.get();
+        // Liest das aktive Quellprojekt direkt aus der pack.mcmeta der aktuellen Welt
+        String activeWorldPack = ServerDatapackExporter.getActiveProjectForWorld(player.getServer());
 
         boolean foundInactivePack = false;
         for (File file : datapacksDir.listFiles()) {
             String name = file.getName();
-            if ((name.contains("stone") || name.contains("rune")) && !name.equals(activeConfigPack)) {
+            if ((name.contains("stone") || name.contains("rune")) && !name.equals(activeWorldPack)) {
                 foundInactivePack = true;
                 break;
             }
@@ -52,9 +53,9 @@ public class StonesEditorServerEvents {
             );
         }
 
-        if (activeConfigPack == null || activeConfigPack.isEmpty()) return;
+        if (activeWorldPack == null || activeWorldPack.isEmpty()) return;
 
-        File enchantmentsDir = new File(datapacksDir, activeConfigPack + "/data/stones_workspace/enchantments");
+        File enchantmentsDir = new File(datapacksDir, activeWorldPack + "/data/stones_workspace/enchantments");
         if (!enchantmentsDir.exists() || enchantmentsDir.listFiles() == null) return;
 
         boolean hasUpdatedCoreTemplates = false;

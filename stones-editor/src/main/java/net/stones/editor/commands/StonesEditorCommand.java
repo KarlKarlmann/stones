@@ -1,4 +1,4 @@
-package net.stones.editor.init;
+package net.stones.editor.commands;
 
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.context.CommandContext;
@@ -11,7 +11,6 @@ import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.loading.FMLPaths;
 import net.stones.editor.StonesEditorMod;
-import net.stones.editor.init.StonesEditorConfig;
 import net.stones.editor.data.ServerDatapackExporter;
 
 import java.io.File;
@@ -36,18 +35,17 @@ public class StonesEditorCommand {
     private static int executeAutoUpdate(CommandContext<CommandSourceStack> context) {
         CommandSourceStack source = context.getSource();
         if (source.getEntity() instanceof ServerPlayer player) {
-            String activePack = StonesEditorConfig.ACTIVE_WORKSPACE_PACK.get();
+            String activePack = ServerDatapackExporter.getActiveProjectForWorld(player.getServer());
             String newPackName = generateNextPackName(activePack);
 
+            // createAndExportNewPack exportiert die neuen Templates und schaltet
+            // das neue Projekt direkt für die aktuelle Welt in stones_runtime scharf!
             ServerDatapackExporter.createAndExportNewPack(player, newPackName);
-
-            StonesEditorConfig.ACTIVE_WORKSPACE_PACK.set(newPackName);
-            StonesEditorConfig.SPEC.save();
 
             player.sendSystemMessage(Component.translatable("chat.stones.studio.templates_updated.success", newPackName));
 
             player.getServer().getCommands().performPrefixedCommand(
-                player.createCommandSourceStack().withPermission(4).withSuppressedOutput(),
+                player.createCommandSourceStack().withSuppressedOutput(),
                 "reload"
             );
             return 1;

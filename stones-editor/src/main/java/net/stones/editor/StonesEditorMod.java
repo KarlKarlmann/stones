@@ -1,34 +1,38 @@
 package net.stones.editor;
 
-import net.minecraftforge.common.MinecraftForge;
-import net.minecraftforge.eventbus.api.IEventBus;
+import com.mojang.logging.LogUtils;
+import net.minecraftforge.fml.IExtensionPoint;
 import net.minecraftforge.fml.ModLoadingContext;
 import net.minecraftforge.fml.common.Mod;
-import net.minecraftforge.fml.config.ModConfig;
 import net.minecraftforge.fml.event.lifecycle.FMLCommonSetupEvent;
 import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
-import net.stones.editor.init.StonesEditorConfig;
+import net.minecraftforge.network.NetworkConstants;
 import net.stones.editor.network.StudioNetwork;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+import org.slf4j.Logger;
 
 @Mod(StonesEditorMod.MODID)
 public class StonesEditorMod {
     public static final String MODID = "stones_editor";
-    public static final Logger LOGGER = LogManager.getLogger(StonesEditorMod.class);
+    public static final Logger LOGGER = LogUtils.getLogger();
 
     public StonesEditorMod() {
-        IEventBus modEventBus = FMLJavaModLoadingContext.get().getModEventBus();
+        var modBus = FMLJavaModLoadingContext.get().getModEventBus();
+        modBus.addListener(this::commonSetup);
 
-        // Editor-Config registrieren
-        ModLoadingContext.get().registerConfig(ModConfig.Type.COMMON, StonesEditorConfig.SPEC);
+        // 1. Handshake-Toleranz: Erlaubt Verbindungen auf Server ohne Editor oder mit anderer Version
+        ModLoadingContext.get().registerExtensionPoint(
+            IExtensionPoint.DisplayTest.class,
+            () -> new IExtensionPoint.DisplayTest(
+                () -> NetworkConstants.IGNORESERVERONLY,
+                (remoteVersion, isFromServer) -> true
+            )
+        );
 
-        modEventBus.addListener(this::setup);
-        MinecraftForge.EVENT_BUS.register(this);
+        // HINWEIS: StonesEditorConfig wurde entfernt, da das aktive Projekt
+        // jetzt weltgebunden direkt in <world>/datapacks/stones_runtime/pack.mcmeta verwaltet wird.
     }
 
-    private void setup(final FMLCommonSetupEvent event) {
-        LOGGER.info("Registriere Netzwerk-Pakete für Stones Editor...");
-        StudioNetwork.registerPackets();
+    private void commonSetup(final FMLCommonSetupEvent event) {
+        event.enqueueWork(StudioNetwork::registerPackets);
     }
 }
