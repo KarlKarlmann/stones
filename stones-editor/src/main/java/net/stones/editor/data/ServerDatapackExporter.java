@@ -30,35 +30,11 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 
-/**
- * =========================================================================================
- * ARCHITEKTUR: WELT-GEBUNDENES RUNTIME-DATAPACK
- * =========================================================================================
- * 1. WORKSPACES (global in <gameDir>/datapacks/<ProjektName>/):
- *    - Beinhalten AUSSCHLIESSLICH 'data/stones_workspace/'.
- *    - Reines Staging / Sandbox. Werden von Minecraft niemals direkt als 'stones:' geladen.
- * 
- * 2. WELT-RUNTIME (<world>/datapacks/stones_runtime/):
- *    - Liegt nativ im Datapack-Ordner der aktuell laufenden Welt.
- *    - Hält in seiner 'pack.mcmeta' das Feld 'stones.source_project' fest.
- *    - Dadurch weiß jede Welt autark, welches Workspace-Projekt sie repräsentiert.
- *    - Keine globale Config mehr nötig!
- * 
- * 3. EXPORT / APPLY:
- *    - Leert 'data/stones/' in der Welt-Runtime vollständig.
- *    - Befüllt es frisch aus dem gewählten Workspace.
- *    - Aktiviert 'file/stones_runtime' nativ mit Top-Priorität im WorldData der Welt.
- * =========================================================================================
- */
 public class ServerDatapackExporter {
 
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create();
     public static final String RUNTIME_PACK_NAME = "stones_runtime";
 
-    /**
-     * Ermittelt das aktuell in dieser Welt verknüpfte Quell-Projekt direkt aus der pack.mcmeta
-     * des weltgebundenen Runtime-Packs.
-     */
     public static String getActiveProjectForWorld(MinecraftServer server) {
         if (server == null) return "";
         try {
@@ -77,10 +53,6 @@ public class ServerDatapackExporter {
         return "";
     }
 
-    /**
-     * Kompiliert das ausgewählte Workspace-Projekt in das weltgebundene Datapack
-     * '<world>/datapacks/stones_runtime/' und aktiviert es nativ im Server.
-     */
     public static void buildAndEnableDatapack(ServerPlayer player, String activePackName) {
         if (activePackName == null || activePackName.isBlank() || player.getServer() == null) return;
 
@@ -89,14 +61,13 @@ public class ServerDatapackExporter {
             File globalDatapacksDir = FMLPaths.GAMEDIR.get().resolve("datapacks").toFile();
             File sourcePackDir = new File(globalDatapacksDir, activePackName.replaceAll("[^a-zA-Z0-9_.-]", "_"));
 
-            // Ziel-Ordner ist der native Datapack-Ordner der Welt!
             File worldDatapacksDir = server.getWorldPath(LevelResource.DATAPACK_DIR).toFile();
             File runtimePackDir = new File(worldDatapacksDir, RUNTIME_PACK_NAME);
             if (!runtimePackDir.exists()) {
                 runtimePackDir.mkdirs();
             }
 
-            // 1. pack.mcmeta mit Quell-Referenz schreiben
+            // pack.mcmeta schreiben
             File metaFile = new File(runtimePackDir, "pack.mcmeta");
             JsonObject meta = new JsonObject();
             JsonObject pack = new JsonObject();
@@ -104,14 +75,13 @@ public class ServerDatapackExporter {
             pack.addProperty("description", "Stones Mod Runtime: " + activePackName);
             meta.add("pack", pack);
 
-            // Speichert die Verknüpfung direkt in der Datei des Spielstands
             JsonObject stonesMeta = new JsonObject();
             stonesMeta.addProperty("source_project", activePackName);
             meta.add("stones", stonesMeta);
 
             Files.writeString(metaFile.toPath(), GSON.toJson(meta), StandardCharsets.UTF_8);
 
-            // 2. data/stones/ im Ziel leeren & frisch aufsetzen
+            // data/stones/ leeren & neu strukturieren
             File targetEnchDir = new File(runtimePackDir, "data/stones/enchantments");
             File targetScriptsDir = new File(runtimePackDir, "data/stones/scripts");
             wipeDirectory(targetEnchDir);
@@ -119,7 +89,7 @@ public class ServerDatapackExporter {
             targetEnchDir.mkdirs();
             targetScriptsDir.mkdirs();
 
-            // 3. Workspace-Quelldaten kopieren
+            // Workspace-Dateien kopieren
             File sourceEnchDir = new File(sourcePackDir, "data/stones_workspace/enchantments");
             File sourceScriptsDir = new File(sourcePackDir, "data/stones_workspace/scripts");
 
@@ -138,6 +108,10 @@ public class ServerDatapackExporter {
                             String content = Files.readString(f.toPath(), StandardCharsets.UTF_8);
                             JsonObject json = JsonParser.parseString(content).getAsJsonObject();
 
+                            // DEBUG LOG: Prüfen, was der Exporter im Moment des Applys aus dem Workspace liest
+                            StonesMod.LOGGER.info("[DEBUG EXPORTER] Lese Workspace-Datei '{}' (Letzte Änderung: {} ms): {}", 
+                                f.getName(), f.lastModified(), content.replaceAll("\\s+", " "));
+
                             if (json.has("raw_script")) {
                                 String rawScript = json.get("raw_script").getAsString().trim();
                                 if (!rawScript.isEmpty()) {
@@ -152,6 +126,11 @@ public class ServerDatapackExporter {
 
                             File targetFile = new File(targetEnchDir, f.getName());
                             Files.writeString(targetFile.toPath(), GSON.toJson(json), StandardCharsets.UTF_8);
+
+                            // DEBUG LOG: Bestätigung, dass die Runtime-Datei geschrieben wurde
+                            StonesMod.LOGGER.info("[DEBUG EXPORTER] Nach Runtime geschrieben: '{}' (Größe: {} Bytes)", 
+                                targetFile.getAbsolutePath(), targetFile.length());
+
                         } catch (Exception e) {
                             StonesMod.LOGGER.error("[Stones Editor] Fehler beim Kompilieren der Rune " + f.getName(), e);
                         }
@@ -159,7 +138,6 @@ public class ServerDatapackExporter {
                 }
             }
 
-            // 4. Runtime-Datapack in dieser Welt scharfschalten
             enablePackWithTopPriority(server, RUNTIME_PACK_NAME);
             StonesMod.LOGGER.info("[Stones Editor] Workspace '{}' erfolgreich in Welt-Datapack '{}' kompiliert.", activePackName, RUNTIME_PACK_NAME);
 
@@ -248,7 +226,6 @@ public class ServerDatapackExporter {
 
             int exportCount = exportAllRunesToDir(enchantmentsDir, scriptsDir);
 
-            // Initial für diese Welt scharfschalten
             buildAndEnableDatapack(player, packName);
 
             player.sendSystemMessage(Component.literal("§a[Stones Server] Projekt '" + packName + "' erfolgreich erstellt! (" + exportCount + " Enchantments)"));
@@ -312,13 +289,14 @@ public class ServerDatapackExporter {
 
         json.addProperty("type", rune.type.name());
 
-        String name = getPrivateFieldString(rune, "customName");
+        // Direkte, typsichere Getter-Aufrufe statt invasive Reflection
+        String name = rune.getCustomName();
         if (name != null) json.addProperty("name", name);
 
-        String desc = getPrivateFieldString(rune, "customDescription");
+        String desc = rune.getRawDescription();
         if (desc != null) json.addProperty("description", desc);
 
-        String icon = getPrivateFieldString(rune, "iconPath");
+        String icon = rune.getIconPath();
         if (icon != null) json.addProperty("icon", icon);
 
         json.addProperty("required_level", rune.baseRequiredLevel);
@@ -328,7 +306,7 @@ public class ServerDatapackExporter {
             json.addProperty("is_curse", true);
         }
 
-        boolean discoverable = getPrivateFieldBoolean(rune, "discoverable", true);
+        boolean discoverable = rune.isRawDiscoverable();
         if (!discoverable) {
             json.addProperty("discoverable", false);
         }
@@ -407,26 +385,5 @@ public class ServerDatapackExporter {
             }
         }
         return fallbackId != null ? fallbackId.getPath() : rune.getLogicalId();
-    }
-
-    private static String getPrivateFieldString(Object obj, String fieldName) {
-        try {
-            java.lang.reflect.Field f = obj.getClass().getDeclaredField(fieldName);
-            f.setAccessible(true);
-            Object val = f.get(obj);
-            return val != null ? val.toString() : null;
-        } catch (Exception e) {
-            return null;
-        }
-    }
-
-    private static boolean getPrivateFieldBoolean(Object obj, String fieldName, boolean def) {
-        try {
-            java.lang.reflect.Field f = obj.getClass().getDeclaredField(fieldName);
-            f.setAccessible(true);
-            return f.getBoolean(obj);
-        } catch (Exception e) {
-            return def;
-        }
     }
 }

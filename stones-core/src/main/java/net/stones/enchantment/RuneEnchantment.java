@@ -33,12 +33,10 @@ public class RuneEnchantment extends Enchantment {
 
     public enum Type { MINOR, MAJOR, MILESTONE }
 
-    // Mutabel für das dynamische Datapack Loading
     public Type type;
     
-    // Server-spezifischer Bindungs-Zustand
     private boolean isAwake = false;
-    private boolean hasServerLogic = false; // Guard für den Singleplayer-Host
+    private boolean hasServerLogic = false;
     private String logicalId; 
     
     @Nullable public Attribute targetAttribute;
@@ -48,20 +46,18 @@ public class RuneEnchantment extends Enchantment {
     public double factor;
     public float baseRequiredLevel;
     private boolean discoverable;
-    private boolean isCurseFlag; // Bestimmt, ob diese Rune ein Fluch ist
+    private boolean isCurseFlag;
     private String customName;
     private String customDescription;
     private String iconPath;
     
     private final List<RuneStat> stats = new ArrayList<>();
     private final List<String> triggerIds = new ArrayList<>();
-    private JsonArray rawBehaviors = null; // Gecachtes Original-JSON für verlustfreien Re-Export
+    private JsonArray rawBehaviors = null;
     
-    // Skript-Referenz & Inhalt
-    @Nullable private String rawScriptPath = null; // Z.B. "stones:scripts/milestone_necromancer.js"
-    @Nullable private String rawScriptContent = null; // Der tatsächliche JS-Code
+    @Nullable private String rawScriptPath = null;
+    @Nullable private String rawScriptContent = null;
     
-    // Schlanke Metadaten für das ActionSystem (ohne doppelte Buchführung)
     private boolean isActionRune = false;
     @Nullable private String actionCooldownName = null;
     
@@ -70,14 +66,12 @@ public class RuneEnchantment extends Enchantment {
     private static final StackWalker STACK_WALKER = StackWalker.getInstance();
     public static final EnchantmentCategory RUNE_CATEGORY = EnchantmentCategory.create("RUNE_STONE", item -> item instanceof StoneItem);
 
-    // 1. Konstruktor: Parameterlose Hülle für dynamische Slots (startet im Schlaf)
     public RuneEnchantment(Type type) {
         super(Rarity.COMMON, RUNE_CATEGORY, EquipmentSlot.values());
         this.type = type;
         this.sleep(); 
     }
 
-    // 2. Konstruktor: Für programmatische Attribute-Verzauberungen
     public RuneEnchantment(Type type, Attribute attribute, AttributeModifier.Operation operation, double factor, @Nullable String customName, @Nullable String customDescription, @Nullable String iconPath, float baseRequiredLevel, boolean discoverable) {
         super(Rarity.COMMON, RUNE_CATEGORY, EquipmentSlot.values());
         this.type = type;
@@ -94,7 +88,6 @@ public class RuneEnchantment extends Enchantment {
         this.isAwake = true; 
     }
 
-    // 3. Konstruktor: Für programmatische MobEffect-Verzauberungen
     public RuneEnchantment(Type type, MobEffect effect, double amplifier, @Nullable String customName, @Nullable String customDescription, @Nullable String iconPath, float baseRequiredLevel, boolean discoverable) {
         super(Rarity.COMMON, RUNE_CATEGORY, new EquipmentSlot[]{EquipmentSlot.MAINHAND});
         this.type = type;
@@ -190,6 +183,21 @@ public class RuneEnchantment extends Enchantment {
         return getLogicalId();
     }
 
+    // Typsichere Getter für Serializer und Datapack-Exporter
+    @Nullable
+    public String getCustomName() {
+        return this.customName;
+    }
+
+    @Nullable
+    public String getRawDescription() {
+        return this.customDescription;
+    }
+
+    public boolean isRawDiscoverable() {
+        return this.discoverable;
+    }
+
     public void loadFromJson(String id, JsonObject json) {
         loadFromJson(id, json, null);
     }
@@ -275,12 +283,10 @@ public class RuneEnchantment extends Enchantment {
             }
         }
 
-        // Pfad im JSON merken (z.B. "stones:scripts/milestone_necromancer.js")
         if (json.has("raw_script")) {
             this.rawScriptPath = json.get("raw_script").getAsString().trim();
         }
 
-        // Gelösten Skriptinhalt annehmen (wurde vom ReloadListener aus der .js Datei geladen)
         if (resolvedScriptContent != null && !resolvedScriptContent.isBlank()) {
             this.applyScriptContent(resolvedScriptContent);
         }

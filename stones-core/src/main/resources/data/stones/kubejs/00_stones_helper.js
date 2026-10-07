@@ -89,12 +89,10 @@ global.Stones = {
         return StonesBridge.findBlocks(player, Number(rx), Number(ry), Number(rz), los, blockFilter, tagFilter, posOverride);
     },
 
-	checkBlock: function(level, pos, blocks, tags) {
-        return StonesBridge.checkBlock(level, pos, blocks || [], tags || []);
-    },
 	checkBlock: function(actor, distance, pos, blocks, tags) {
         return StonesBridge.checkBlock(actor, Number(distance || 0), pos, blocks || [], tags || []);
     },
+	
 	hasDamageTag: function(event, tag) {
         try {
             return StonesBridge.hasDamageTag(event, tag);
@@ -102,6 +100,7 @@ global.Stones = {
             return false;
         }
     },
+	
 	isDamageType: function(event, typeId) {
 		try {
 			return StonesBridge.isDamageType(event, typeId);
@@ -109,9 +108,11 @@ global.Stones = {
 			return false;
 		}
 	},
+	
 	spawnSprite: function(player, pos, velocity, config) {
         StonesBridge.spawnSprite(player, pos, velocity, config);
     },
+	
 	spawnBeam: function(player, start, end, type, texture, coreWidth, coronaWidth, r, g, b, a, scrollSpeed, repeat, helixRadius, helixFreq, helixSpeed, lifetime) {
 		if (!player || !start || !end) return;
 
@@ -132,21 +133,24 @@ global.Stones = {
 
 		StonesBridge.spawnBeam(player, start, end, bType, tex, cWidth, corWidth, cr, cg, cb, ca, spd, rep, hRad, hFreq, hSpd, lt);
 	},
+	
     readNbt: function(target, path) {
         return StonesBridge.readNbt(target, path);
     },
+	
     invoke: function(target, callStr, args) {
         return StonesBridge.invoke(target, callStr, args || []);
     },
+	
 	makeMinion: function(target, player) {
         return StonesBridge.makeMinion(target, player);
     },
+	
     setBlock: function(level, pos, blockId) {
         StonesBridge.setBlock(level, pos, blockId);
     },
+	
 	dealDamage: function(directAttacker, indirectAttacker, target, amount, damageTypeId) {
-		// Die Java-Methode validiert die Parameter selbst und wirft saubere Exceptions, 
-		// falls damageTypeId null, leer oder ungültig ist.
 		StonesBridge.dealDamage(
 			directAttacker, 
 			indirectAttacker, 
@@ -155,6 +159,7 @@ global.Stones = {
 			damageTypeId
 		);
 	},
+	
     explode: function(player, pos, radius, fire) {
         StonesBridge.explode(player, pos, Number(radius), fire === true || fire === 'true');
     },
@@ -202,7 +207,7 @@ function buildBaseContext(player, triggerName, target, event) {
 }
 
 // =============================================================================
-// VERBINDUNG ZUM JAVA DISPATCHER
+// VERBINDUNG ZUM JAVA DISPATCHER & IN-MEMORY SCRIPT-EVALUATOR
 // =============================================================================
 try {
     StonesBridge.setTriggerConsumer((player, runeId, triggerName, target, event) => {
@@ -220,7 +225,17 @@ try {
             }
         }
     });
-    console.info('[Stones KubeJS] Trigger-Pipeline erfolgreich mit Java gekoppelt!');
+
+    // Registriert den Script-Evaluator: Java kann transpilierte Skripte direkt im RAM ausfuehren!
+    StonesBridge.setScriptEvaluator((jsCode) => {
+        try {
+            eval(jsCode);
+        } catch (err) {
+            console.error('[Stones KubeJS] Fehler beim RAM-Evaluieren eines Runen-Skripts: ' + err);
+        }
+    });
+
+    console.info('[Stones KubeJS] Trigger-Pipeline & In-Memory Evaluator erfolgreich mit Java gekoppelt!');
 } catch (e) {
-    console.error('[Stones KubeJS] Fehler beim Koppeln des TriggerConsumers: ' + e);
+    console.error('[Stones KubeJS] Fehler beim Koppeln der Stones-Pipeline: ' + e);
 }

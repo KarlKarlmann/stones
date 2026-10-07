@@ -30,10 +30,10 @@ public class C2SRequestTexturePacket {
             ServerPlayer player = ctx.getSender();
             if (player == null) return;
 
-            String base64 = ServerTextureRegistry.getTextureBase64(msg.textureId);
-            if (base64 != null && !base64.isEmpty()) {
+            byte[] bytes = ServerTextureRegistry.getTextureBytes(msg.textureId);
+            if (bytes != null && bytes.length > 0) {
                 StonesMod.PACKET_HANDLER.sendTo(
-                    new S2CSendTexturePacket(msg.textureId, base64),
+                    new S2CSendTexturePacket(msg.textureId, bytes),
                     player.connection.connection,
                     NetworkDirection.PLAY_TO_CLIENT
                 );

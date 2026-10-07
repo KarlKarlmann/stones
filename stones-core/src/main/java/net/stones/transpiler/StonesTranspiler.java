@@ -618,6 +618,8 @@ public class StonesTranspiler {
         String pad = "    ".repeat(indent);
         String ticks = resolveVal(act, "ticks", "20");
         sb.append(pad).append("ctx.player.server.scheduleInTicks(").append(ticks).append(", callback => {\n");
+        // Bricht sofort ab, wenn der Spieler während des Timers den Server verlassen hat oder gestorben ist
+        sb.append(pad).append("    if (!ctx.player || ctx.player.isRemoved()) return;\n");
         transpileActions(act.get("actions"), sb, indent + 1);
         sb.append(pad).append("});\n");
     }

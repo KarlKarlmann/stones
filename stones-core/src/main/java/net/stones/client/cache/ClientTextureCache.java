@@ -32,16 +32,13 @@ public class ClientTextureCache {
         return FALLBACK;
     }
 
-    public static void registerTexture(String textureId, String base64Data) {
+    // Liest native PNG-Bytes direkt in Mojangs NativeImage ohne Base64-Umweg
+    public static void registerTexture(String textureId, byte[] imageBytes) {
+        if (imageBytes == null || imageBytes.length == 0) return;
+
         Minecraft.getInstance().execute(() -> {
             try {
-                String cleanBase64 = base64Data.contains("base64,") 
-                    ? base64Data.substring(base64Data.indexOf("base64,") + 7).trim() 
-                    : base64Data.trim();
-
-                byte[] bytes = Base64.getDecoder().decode(cleanBase64);
-                NativeImage image = NativeImage.read(new ByteArrayInputStream(bytes));
-                
+                NativeImage image = NativeImage.read(new ByteArrayInputStream(imageBytes));
                 DynamicTexture dynamicTexture = new DynamicTexture(image);
                 ResourceLocation location = new ResourceLocation(StonesMod.MODID, "dynamic_tex_" + Math.abs(textureId.hashCode()));
                 
@@ -50,7 +47,7 @@ public class ClientTextureCache {
                 CACHE.put(textureId, location);
                 PENDING.remove(textureId);
             } catch (Exception e) {
-                StonesMod.LOGGER.error("Fehler beim Laden der dynamischen Base64-Textur {}", textureId, e);
+                StonesMod.LOGGER.error("[Stones] Fehler beim Laden der dynamischen Textur {}", textureId, e);
                 PENDING.remove(textureId);
             }
         });

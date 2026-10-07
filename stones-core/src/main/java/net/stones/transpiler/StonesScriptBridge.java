@@ -70,7 +70,48 @@ public class StonesScriptBridge {
 
     private static TriggerConsumer triggerConsumer = null;
 
-    // --- INVERTED INDEX (Telefonbuch-Register) ---
+    // --- IN-MEMORY SCRIPT ENGINE (Beseitigt KubeJS-Dateisystem-Dropper & 2-Klick-Bug) ---
+    // Speichert den transpilierten JS-Code aller aktiven Runen direkt im JVM-Speicher
+    private static final Map<String, String> COMPILED_SCRIPTS = new ConcurrentHashMap<>();
+    private static Consumer<String> scriptEvaluator = null;
+
+    public static void setScriptEvaluator(Consumer<String> evaluator) {
+        scriptEvaluator = evaluator;
+        StonesMod.LOGGER.info("[Stones Bridge] KubeJS ScriptEvaluator erfolgreich registriert.");
+        // Bereits vorhandene Skripte sofort in die soeben initialisierte JS-Engine einspeisen
+        evaluateAllScripts();
+    }
+
+    public static void registerCompiledScript(String runeId, String jsCode) {
+        if (runeId == null || jsCode == null || jsCode.isBlank()) return;
+        COMPILED_SCRIPTS.put(runeId, jsCode);
+        if (scriptEvaluator != null) {
+            try {
+                scriptEvaluator.accept(jsCode);
+            } catch (Exception e) {
+                StonesMod.LOGGER.error("[Stones Bridge] Fehler beim RAM-Evaluieren der Rune " + runeId + ": ", e);
+            }
+        }
+    }
+
+    public static void clearCompiledScripts() {
+        COMPILED_SCRIPTS.clear();
+    }
+
+    public static void evaluateAllScripts() {
+        if (scriptEvaluator == null) return;
+        for (Map.Entry<String, String> entry : COMPILED_SCRIPTS.entrySet()) {
+            try {
+                scriptEvaluator.accept(entry.getValue());
+            } catch (Exception e) {
+                StonesMod.LOGGER.error("[Stones Bridge] Fehler beim RAM-Evaluieren von " + entry.getKey() + ": ", e);
+            }
+        }
+    }
+
+    public static Collection<String> getCompiledScripts() {
+        return Collections.unmodifiableCollection(COMPILED_SCRIPTS.values());
+    }
     // Map: TriggerName (z.B. "ON_TICK") -> Set aller Runen-IDs, die diesen Trigger wirklich nutzen
     private static final Map<String, Set<String>> RUNES_BY_TRIGGER = new ConcurrentHashMap<>();
 
