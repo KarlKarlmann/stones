@@ -3,6 +3,7 @@ package net.stones.visuals.client.renderer;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.mojang.math.Axis;
+import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.model.PlayerModel;
 import net.minecraft.client.model.geom.ModelLayers;
@@ -28,10 +29,6 @@ import org.joml.Matrix4f;
 import java.util.List;
 import java.util.UUID;
 
-/**
- * 3D Block Entity Renderer für das Skinpack 'stones_visuals'.
- * Rendert schwebende Glyphen, Blueprint-Sockelverbindungen und prozedurale Wächter.
- */
 public class VisualRunestoneRenderer implements BlockEntityRenderer<RunestoneBlockEntity> {
 
     private final PlayerModel<AbstractClientPlayer> playerModel;
@@ -47,26 +44,19 @@ public class VisualRunestoneRenderer implements BlockEntityRenderer<RunestoneBlo
         this.playerModel.rightPants.visible = false;
     }
 
-	private static boolean loggedOnce = false;
-
     @Override
     public void render(RunestoneBlockEntity be, float partialTick, PoseStack poseStack, MultiBufferSource buffer, int combinedLight, int combinedOverlay) {
         UUID shrineId = be.getShrineId();
         if (shrineId == null) return;
 
-        if (!loggedOnce) {
-            System.out.println("[StonesVisuals] VisualRunestoneRenderer ist aktiv für Schrein: " + shrineId);
-            loggedOnce = true;
-        }
-
-        renderHolographicLabel(shrineId, poseStack, buffer, combinedLight);
+        renderHolographicCoin(shrineId, be.getBlockPos(), poseStack, buffer);
         renderInventoryOverlay(be, poseStack, buffer);
         renderGuardians(be, partialTick, poseStack, buffer, combinedLight, combinedOverlay);
     }
 
     private void renderInventoryOverlay(RunestoneBlockEntity be, PoseStack stack, MultiBufferSource buffer) {
         ResourceLocation overlayTex = ClientRunestoneTextureManager.getOrCreate(be.getShrineId(), be.getClientMaxLevel());
-        if (overlayTex == null) return; 
+        if (overlayTex == null) return;
 
         int glowLight = 15728880;
         VertexConsumer vc = buffer.getBuffer(RenderType.entityTranslucentEmissive(overlayTex));
@@ -76,8 +66,8 @@ public class VisualRunestoneRenderer implements BlockEntityRenderer<RunestoneBlo
             stack.translate(0.5, 0.5, 0.5);
             stack.mulPose(Axis.YP.rotationDegrees(i * 90));
             stack.translate(-0.5, -0.5, -0.5);
-            stack.translate(0, 0, -0.001); 
-            
+            stack.translate(0, 0, -0.001);
+
             Matrix4f matrix = stack.last().pose();
             vc.vertex(matrix, 0, 0, 0).color(255, 255, 255, 255).uv(0, 1).overlayCoords(0).uv2(glowLight).normal(0, 0, -1).endVertex();
             vc.vertex(matrix, 0, 1, 0).color(255, 255, 255, 255).uv(0, 0).overlayCoords(0).uv2(glowLight).normal(0, 0, -1).endVertex();
@@ -87,24 +77,49 @@ public class VisualRunestoneRenderer implements BlockEntityRenderer<RunestoneBlo
         }
     }
 
-    private void renderHolographicLabel(UUID shrineId, PoseStack poseStack, MultiBufferSource buffer, int light) {
-        ResourceLocation labelTex = ClientDynamicLabelHandler.getOrGenerate(shrineId);
-        if (labelTex == null) return; 
+    private void renderHolographicCoin(UUID shrineId, BlockPos pos, PoseStack poseStack, MultiBufferSource buffer) {
+        ClientDynamicLabelHandler.LabelEntry entry = ClientDynamicLabelHandler.getOrGenerate(shrineId);
+        if (entry == null || entry.location() == null) return;
+
+        Camera camera = Minecraft.getInstance().gameRenderer.getMainCamera();
+        double dx = camera.getPosition().x - (pos.getX() + 0.5);
+        double dz = camera.getPosition().z - (pos.getZ() + 0.5);
+        // Zylindrische Ausrichtung: Dreht sich nur um Yaw zum Spieler und steht senkrecht in der Welt
+        float yaw = (float) (Mth.atan2(dz, dx) * (180.0 / Math.PI)) - 90.0f;
 
         long time = System.currentTimeMillis();
+        // 75 Sekunden fuer eine volle 360-Grad Drehung um die Z-Achse (im Uhrzeigersinn)
+        float rollAngle = ((time % 75000L) / 75000.0f) * 360.0f;
+        double bob = Math.sin((time % 4500) / 4500.0 * Math.PI * 2) * 0.035;
+        float pulse = 0.88f + 0.12f * (float) Math.sin((time % 2800) / 2800.0 * Math.PI * 2);
+
         poseStack.pushPose();
-        double bob = Math.sin((time % 4000) / 4000.0 * Math.PI * 2) * 0.03;
-        poseStack.translate(0.5, 2.0 + bob, 0.5); 
-        poseStack.mulPose(Minecraft.getInstance().getEntityRenderDispatcher().cameraOrientation());
-        float scale = 0.02f; 
-        poseStack.scale(-scale, -scale, scale);
-        VertexConsumer vertexConsumer = buffer.getBuffer(RenderType.entityTranslucentEmissive(labelTex));
-        float halfW = 64.0f; float halfH = 16.0f;
-        Matrix4f matrix = poseStack.last().pose();
-        vertexConsumer.vertex(matrix, -halfW, -halfH, 0.0f).color(255, 255, 255, 255).uv(0.0f, 0.0f).overlayCoords(0).uv2(light).normal(0, 1, 0).endVertex();
-        vertexConsumer.vertex(matrix, -halfW, halfH, 0.0f).color(255, 255, 255, 255).uv(0.0f, 1.0f).overlayCoords(0).uv2(light).normal(0, 1, 0).endVertex();
-        vertexConsumer.vertex(matrix, halfW, halfH, 0.0f).color(255, 255, 255, 255).uv(1.0f, 1.0f).overlayCoords(0).uv2(light).normal(0, 1, 0).endVertex();
-        vertexConsumer.vertex(matrix, halfW, -halfH, 0.0f).color(255, 255, 255, 255).uv(1.0f, 0.0f).overlayCoords(0).uv2(light).normal(0, 1, 0).endVertex();
+        poseStack.translate(0.5, 1.80 + bob, 0.5);
+        poseStack.mulPose(Axis.YP.rotationDegrees(-yaw));
+        poseStack.mulPose(Axis.ZP.rotationDegrees(rollAngle));
+
+        float coinDiameter = 1.05f;
+        float half = coinDiameter * 0.5f;
+        int fullBright = 15728880;
+
+        VertexConsumer vc = buffer.getBuffer(RenderType.entityTranslucentEmissive(entry.location()));
+
+        // Tiefe: Leicht nach hinten versetzter Schattenpass fuer Kontrast gegen helle Himmels-/Gelaendeflaechen
+        Matrix4f shadowMat = poseStack.last().pose();
+        float shadowOffset = 0.008f;
+        vc.vertex(shadowMat, -half + shadowOffset, -half - shadowOffset, -0.005f).color(15, 12, 10, 160).uv(0, 0).overlayCoords(0).uv2(fullBright).normal(0, 0, 1).endVertex();
+        vc.vertex(shadowMat, -half + shadowOffset,  half - shadowOffset, -0.005f).color(15, 12, 10, 160).uv(0, 1).overlayCoords(0).uv2(fullBright).normal(0, 0, 1).endVertex();
+        vc.vertex(shadowMat,  half + shadowOffset,  half - shadowOffset, -0.005f).color(15, 12, 10, 160).uv(1, 1).overlayCoords(0).uv2(fullBright).normal(0, 0, 1).endVertex();
+        vc.vertex(shadowMat,  half + shadowOffset, -half - shadowOffset, -0.005f).color(15, 12, 10, 160).uv(1, 0).overlayCoords(0).uv2(fullBright).normal(0, 0, 1).endVertex();
+
+        // Vordergrund: Volle Leuchtkraft mit Arkan-Gold und sanftem Helligkeitspuls
+        int alpha = (int) (255 * pulse);
+        Matrix4f mainMat = poseStack.last().pose();
+        vc.vertex(mainMat, -half, -half, 0.0f).color(255, 255, 255, alpha).uv(0, 0).overlayCoords(0).uv2(fullBright).normal(0, 0, 1).endVertex();
+        vc.vertex(mainMat, -half,  half, 0.0f).color(255, 255, 255, alpha).uv(0, 1).overlayCoords(0).uv2(fullBright).normal(0, 0, 1).endVertex();
+        vc.vertex(mainMat,  half,  half, 0.0f).color(255, 255, 255, alpha).uv(1, 1).overlayCoords(0).uv2(fullBright).normal(0, 0, 1).endVertex();
+        vc.vertex(mainMat,  half, -half, 0.0f).color(255, 255, 255, alpha).uv(1, 0).overlayCoords(0).uv2(fullBright).normal(0, 0, 1).endVertex();
+
         poseStack.popPose();
     }
 
@@ -120,40 +135,36 @@ public class VisualRunestoneRenderer implements BlockEntityRenderer<RunestoneBlo
             UUID ownerId = owners[i];
             Vec3 spot = spots.get(i);
             BlockPos spotPos = BlockPos.containing(spot);
-            
+
             int skyGeometry = be.getLevel().getBrightness(LightLayer.SKY, spotPos);
             int blockLight = be.getLevel().getBrightness(LightLayer.BLOCK, spotPos);
             float timeLightFactor = (isNight) ? 0.0f : 1.0f;
             int finalLightLevel = Math.max(blockLight, (int)(skyGeometry * timeLightFactor));
             boolean isDark = finalLightLevel < 7;
 
-            // Nutzt den umbenannten GuardianSkinPostProcessor
             GuardianSkinPostProcessor.getOrProcess(ownerId);
             ResourceLocation texture = isDark ? GuardianSkinPostProcessor.getNightSkin(ownerId) : GuardianSkinPostProcessor.getDaySkin(ownerId);
-            
-            if (texture == null) {
-                continue; 
-            }
+            if (texture == null) continue;
 
             RenderType renderType = isDark ? RenderType.entityTranslucentEmissive(texture) : RenderType.entityTranslucent(texture);
             int packedLight = isDark ? 15728880 : LevelRenderer.getLightColor(be.getLevel(), spotPos);
 
             poseStack.pushPose();
             poseStack.translate(spot.x - be.getBlockPos().getX(), spot.y - be.getBlockPos().getY(), spot.z - be.getBlockPos().getZ());
-            
+
             Vec3 dir = localPlayer.position().subtract(spot);
             float yaw = (float)(Mth.atan2(dir.z, dir.x) * (180 / Math.PI)) - 90;
             poseStack.mulPose(Axis.YP.rotationDegrees(180.0F - yaw));
 
             poseStack.pushPose();
             poseStack.scale(-0.9375F, -0.9375F, 0.9375F);
-            poseStack.translate(0, -1.501, 0); 
+            poseStack.translate(0, -1.501, 0);
 
-            playerModel.rightArm.xRot = -0.6f; 
+            playerModel.rightArm.xRot = -0.6f;
             playerModel.rightArm.yRot = -0.4f;
             playerModel.leftArm.xRot = -0.6f;
             playerModel.leftArm.yRot = 0.4f;
-            
+
             playerModel.renderToBuffer(poseStack, buffer.getBuffer(renderType), packedLight, overlay, 1.0f, 1.0f, 1.0f, 1.0f);
 
             if (!VisualsEventHandler.SHRINE_ARTIFACTS.isEmpty()) {
@@ -184,7 +195,6 @@ public class VisualRunestoneRenderer implements BlockEntityRenderer<RunestoneBlo
                     }
 
                     poseStack.translate(-0.5, -0.5, -0.5);
-
                     Minecraft.getInstance().getBlockRenderer().getModelRenderer().renderModel(
                         poseStack.last(),
                         buffer.getBuffer(RenderType.cutout()),
@@ -194,16 +204,15 @@ public class VisualRunestoneRenderer implements BlockEntityRenderer<RunestoneBlo
                         packedLight,
                         overlay
                     );
-                    
                     poseStack.popPose();
                 }
             }
 
             playerModel.rightArm.xRot = 0; playerModel.leftArm.xRot = 0;
             playerModel.rightArm.yRot = 0; playerModel.leftArm.yRot = 0;
-            
-            poseStack.popPose(); 
-            poseStack.popPose(); 
+
+            poseStack.popPose();
+            poseStack.popPose();
         }
     }
 
